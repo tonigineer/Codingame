@@ -113,7 +113,7 @@ fn main() {
     }
 
     let mut results = city_records.into_iter().collect::<Vec<_>>();
-    results.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    results.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
     for (city_name, record) in results {
         println!(

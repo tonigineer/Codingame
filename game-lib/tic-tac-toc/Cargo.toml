@@ -1,0 +1,14 @@
+[package]
+name = "tic-tac-toe"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "play"
+path = "bin/play.rs"
+
+[dependencies]
+games = { path = "../../game-lib" }
+
+[lints]
+workspace = true
