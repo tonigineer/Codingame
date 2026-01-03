@@ -1,14 +1,20 @@
-/// Generic trait for board games, to allow implementing other games in the future.
-pub trait Game {
-    type Player;
-    type Move;
+pub mod games;
+pub mod strategy;
 
-    fn first_move() -> Self;
-    fn get_possible_moves(&self) -> Vec<Self::Move>;
-    fn apply_move(&mut self, move_: Self::Move) -> Result<(), String>;
-    fn undo_move(&mut self) -> Result<(), String>;
-    fn current_player(&self) -> Self::Player;
+pub trait Game {
+    type PlayerMask;
+
+    fn get_current_player_index(&self) -> usize;
+
+    fn apply_move(&mut self, chosen_move: usize);
+
+    fn undo_move(&mut self, chosen_move: usize);
+
+    fn get_possible_moves(&self) -> impl Iterator<Item = usize>;
+
     fn is_finished(&self) -> bool;
-    fn get_winner(&self) -> Option<Self::Player>;
+
+    fn get_winner(&self) -> Option<Self::PlayerMask>;
+
     fn render(&self);
 }

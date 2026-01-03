@@ -18,8 +18,5 @@ brc-input:
 brc:
     cargo run --release -p one-billion-rows --bin solve
 
-ttt:
-    cargo run --release -p tic-tac-toe --bin play
-
-ttt-test:
-    cargo test -p tic-tac-toe
+play:
+    cargo run --release -p games --bin play

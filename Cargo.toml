@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "puzzles/one-billion-rows",
-    "game-lib/tic-tac-toc",
     "game-lib",
 ]
 resolver = "3"
