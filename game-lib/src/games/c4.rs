@@ -171,8 +171,9 @@ impl ConnectFour {
 
 impl Game for ConnectFour {
     type PlayerMask = PlayerMask;
+    type Move = usize;
 
-    fn get_possible_moves(&self) -> impl Iterator<Item = usize> {
+    fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
         const fn center_out_order() -> [usize; WIDTH] {
             let mut arr = [0; WIDTH];
             let center = WIDTH / 2;
@@ -193,7 +194,7 @@ impl Game for ConnectFour {
             .filter(move |&idx| self.board.both & Board::top_mask(idx) == 0)
     }
 
-    fn apply_move(&mut self, chosen_move: usize) {
+    fn apply_move(&mut self, chosen_move: Self::Move) {
         let mv =
             (self.board.both + Board::bottom_mask(chosen_move)) & Board::column_mask(chosen_move);
         self.board.single ^= self.board.both;
@@ -202,7 +203,7 @@ impl Game for ConnectFour {
         self.current_player = self.current_player.other();
     }
 
-    fn undo_move(&mut self, chosen_move: usize) {
+    fn undo_move(&mut self, chosen_move: Self::Move) {
         let next =
             (self.board.both + Board::bottom_mask(chosen_move)) & Board::column_mask(chosen_move);
         let mv = if next != 0 {

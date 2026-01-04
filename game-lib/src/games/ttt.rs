@@ -104,14 +104,15 @@ impl TicTacToe {
 
 impl Game for TicTacToe {
     type PlayerMask = PlayerMask;
+    type Move = usize;
 
-    fn get_possible_moves(&self) -> impl Iterator<Item = usize> {
+    fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
         const BITS: [u16; 9] = [1, 2, 4, 8, 16, 32, 64, 128, 256];
         let board = self.board.x_board | self.board.o_board;
         (0..=8).filter(move |&i| (board & BITS[i]) == 0)
     }
 
-    fn apply_move(&mut self, chosen_move: usize) {
+    fn apply_move(&mut self, chosen_move: Self::Move) {
         match self.current_player {
             PlayerMask::X => self.board.x_board |= 1 << chosen_move,
             PlayerMask::O => self.board.o_board |= 1 << chosen_move,
@@ -120,7 +121,7 @@ impl Game for TicTacToe {
         self.current_player = self.current_player.other();
     }
 
-    fn undo_move(&mut self, chosen_move: usize) {
+    fn undo_move(&mut self, chosen_move: Self::Move) {
         self.current_player = self.current_player.other();
 
         match self.current_player {

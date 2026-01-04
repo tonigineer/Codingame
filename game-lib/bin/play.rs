@@ -14,7 +14,7 @@ struct Competition<G: Game, S: Strategy> {
     second_player: PlayerType<S>,
 }
 
-impl<G: Game, S: Strategy> Competition<G, S> {
+impl<G: Game<Move = usize>, S: Strategy> Competition<G, S> {
     fn new(game: G, first_player: PlayerType<S>, second_player: PlayerType<S>) -> Self {
         Competition {
             game,
