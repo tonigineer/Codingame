@@ -1,2 +1,2 @@
 pub mod common;
-// pub mod minimax;
+pub mod minimax;

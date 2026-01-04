@@ -72,8 +72,8 @@ fn play_connect_four() {
 }
 
 fn main() {
-    // play_tictactoe();
-    play_connect_four();
+    play_tictactoe();
+    // play_connect_four();
 }
 
 #[cfg(test)]

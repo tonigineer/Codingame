@@ -226,6 +226,10 @@ impl Game for ConnectFour {
         self.current_player.symbol()
     }
 
+    fn get_current_player(&self) -> Self::PlayerMask {
+        self.current_player
+    }
+
     fn is_finished(&self) -> bool {
         (self.board.both & Board::top_mask_all()) == Board::top_mask_all()
             || self.get_winner().is_some()
@@ -309,6 +313,55 @@ impl Game for ConnectFour {
         }
 
         let _ = io::stdout().flush();
+    }
+
+    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+        // TODO: Implement heurisic
+        0f32
+    }
+
+    fn get_game_state_hash(&self) -> u64 {
+        const fn bit_to_cell_id(bit_index: usize) -> Option<usize> {
+            let col = bit_index / (HEIGHT + 1);
+            let row = bit_index % (HEIGHT + 1);
+            if col < WIDTH && row < HEIGHT {
+                Some(col * HEIGHT + row)
+            } else {
+                None // sentinel row or out of bounds
+            }
+        }
+
+        let mut side_to_check = self.current_player;
+        let mut h = 0u64;
+
+        let mut a = self.board.single;
+        while a != 0 {
+            let b = a & (!a + 1);
+            let idx = b.trailing_zeros() as usize;
+            if let Some(cell) = bit_to_cell_id(idx) {
+                h ^= ZOBRIST[side_to_check.index()][cell];
+            }
+            a ^= b;
+        }
+
+        // TODO: here could be an error !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        side_to_check = side_to_check.other();
+
+        let mut o = self.board.both ^ self.board.single;
+        while o != 0 {
+            let b = o & (!o + 1);
+            let idx = b.trailing_zeros() as usize;
+            if let Some(cell) = bit_to_cell_id(idx) {
+                h ^= ZOBRIST[side_to_check.index()][cell];
+            }
+            o ^= b;
+        }
+
+        if matches!(side_to_check, PlayerMask::Red) {
+            h ^= ZOBRIST_SIDE_TO_MOVE;
+        }
+
+        h
     }
 }
 

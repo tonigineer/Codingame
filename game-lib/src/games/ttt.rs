@@ -138,6 +138,10 @@ impl Game for TicTacToe {
         self.current_player.symbol()
     }
 
+    fn get_current_player(&self) -> Self::PlayerMask {
+        self.current_player
+    }
+
     fn is_finished(&self) -> bool {
         const FULL: u16 = (1 << 9) - 1; // 0b1_1111_1111 == 0x1FF
         ((self.board.x_board | self.board.o_board) == FULL) || self.get_winner().is_some()
@@ -206,6 +210,32 @@ impl Game for TicTacToe {
         }
 
         let _ = io::stdout().flush();
+    }
+
+    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+        // INFO: Tic-Tac-Toe is a solved game where perfect play can be achieved through
+        // exhaustive search. Therefore, heuristic evaluation of intermediate states
+        // is unnecessary, and we return a neutral score.
+
+        0f32
+    }
+
+    fn get_game_state_hash(&self) -> u64 {
+        let mut h = 0u64;
+        for i in 0..9 {
+            let bit = 1u16 << i;
+            if (self.board.x_board & bit) != 0 {
+                h ^= ZOBRIST_TABLE[PlayerMask::X.index()][i];
+            } else if (self.board.o_board & bit) != 0 {
+                h ^= ZOBRIST_TABLE[PlayerMask::O.index()][i];
+            }
+        }
+
+        if matches!(self.current_player, PlayerMask::X) {
+            h ^= ZOBRIST_SIDE_TO_MOVE;
+        }
+
+        h
     }
 }
 
