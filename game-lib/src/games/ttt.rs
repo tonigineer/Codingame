@@ -56,6 +56,13 @@ impl PlayerMask {
             PlayerMask::O => 'O',
         }
     }
+
+    pub fn colored_symbol(&self) -> String {
+        match self {
+            PlayerMask::X => format!("\x1b[34m{}\x1b[0m", self.symbol()),
+            PlayerMask::O => format!("\x1b[32m{}\x1b[0m", self.symbol()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -126,6 +133,10 @@ impl Game for TicTacToe {
         self.current_player.index()
     }
 
+    fn get_current_player_symbol(&self) -> char {
+        self.current_player.symbol()
+    }
+
     fn is_finished(&self) -> bool {
         const FULL: u16 = (1 << 9) - 1; // 0b1_1111_1111 == 0x1FF
         ((self.board.x_board | self.board.o_board) == FULL) || self.get_winner().is_some()
@@ -167,9 +178,9 @@ impl Game for TicTacToe {
                 line.push(' ');
 
                 if self.board.x_board & bit != 0 {
-                    line.push(PlayerMask::X.symbol());
+                    line.push_str(&PlayerMask::X.colored_symbol());
                 } else if self.board.o_board & bit != 0 {
-                    line.push(PlayerMask::O.symbol());
+                    line.push_str(&PlayerMask::O.colored_symbol());
                 } else {
                     line.push_str(&idx.to_string());
                 }
@@ -188,6 +199,10 @@ impl Game for TicTacToe {
             }
         }
         print!("\n");
+
+        if let Some(w) = self.get_winner() {
+            print!(" Winner: {}\n", w.colored_symbol());
+        }
 
         let _ = io::stdout().flush();
     }

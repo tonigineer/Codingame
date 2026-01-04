@@ -1,21 +1,21 @@
 use games::games::c4::ConnectFour;
 use games::games::ttt::TicTacToe;
-use games::strategy::common::{RandomMove, Strategy};
-use games::{strategy, Game};
+use games::strategy::common::{prompt_user_move, RandomMove, Strategy};
+use games::Game;
 
 pub enum PlayerType<S: Strategy> {
     Human,
     AI(S),
 }
 
-struct Competition<T: Game, S: Strategy> {
-    game: T,
+struct Competition<G: Game, S: Strategy> {
+    game: G,
     first_player: PlayerType<S>,
     second_player: PlayerType<S>,
 }
 
-impl<T: Game, S: Strategy> Competition<T, S> {
-    fn new(game: T, first_player: PlayerType<S>, second_player: PlayerType<S>) -> Self {
+impl<G: Game, S: Strategy> Competition<G, S> {
+    fn new(game: G, first_player: PlayerType<S>, second_player: PlayerType<S>) -> Self {
         Competition {
             game,
             first_player,
@@ -45,30 +45,96 @@ impl<T: Game, S: Strategy> Competition<T, S> {
 
     fn get_move_for_player(&self, player: &PlayerType<S>) -> usize {
         match player {
-            PlayerType::AI(strategy) => match strategy {
-                RandomMove => {
-                    let s = RandomMove;
-                    s.compute_move(&self.game)
-                }
-            },
-            PlayerType::Human => self.game.get_possible_moves().next().unwrap(),
+            PlayerType::AI(strategy) => strategy.compute_move(&self.game),
+            PlayerType::Human => prompt_user_move(&self.game),
         }
     }
 }
 
-fn main() {
+fn play_tictactoe() {
     let game = TicTacToe::new();
 
-    // let first_player = PlayerType::Human;
-    let first_player = PlayerType::AI(RandomMove);
+    let first_player = PlayerType::Human;
     let second_player = PlayerType::AI(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition.start(true);
+}
 
-    // let first_player = PlayerType::Human;
-    // let second_player = PlayerType::AI(Strategy::Random);
+fn play_connect_four() {
+    let game = ConnectFour::new();
 
-    // let game = ConnectFour::new();
-    // let competition = Competition::new(game, first_player, second_player);
+    let first_player = PlayerType::Human;
+    let second_player = PlayerType::AI(RandomMove);
+
+    let mut competition = Competition::new(game, first_player, second_player);
+    competition.start(true);
+}
+
+fn main() {
+    // play_tictactoe();
+    play_connect_four();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use games::games::c4::{self, ConnectFour};
+    use games::games::ttt::{self, TicTacToe};
+    use games::strategy::common::{FirstPossibleMove, RandomMove};
+    use games::Game;
+
+    #[test]
+    fn test_tictactoe_always_first_move() {
+        let game = TicTacToe::new();
+
+        let first_player = PlayerType::AI(FirstPossibleMove);
+        let second_player = PlayerType::AI(FirstPossibleMove);
+
+        let mut competition = Competition::new(game, first_player, second_player);
+        competition.start(true);
+
+        assert!(competition.game.get_winner().is_some());
+        assert!(competition.game.get_winner().unwrap() == ttt::PlayerMask::X);
+    }
+
+    #[test]
+    fn test_tictactoe_random_moves() {
+        let game = TicTacToe::new();
+
+        let first_player = PlayerType::AI(RandomMove);
+        let second_player = PlayerType::AI(RandomMove);
+
+        let mut competition = Competition::new(game, first_player, second_player);
+        competition.start(true);
+
+        assert!(competition.game.get_winner().is_some() || competition.game.get_winner().is_none());
+    }
+
+    #[test]
+    fn test_connect_four_always_first_move() {
+        let game = ConnectFour::new();
+
+        let first_player = PlayerType::AI(FirstPossibleMove);
+        let second_player = PlayerType::AI(FirstPossibleMove);
+        let mut competition = Competition::new(game, first_player, second_player);
+        competition.start(true);
+
+        assert!(competition.game.get_winner().is_some());
+        assert!(competition.game.get_winner().unwrap() == c4::PlayerMask::Red);
+    }
+
+    #[test]
+    fn test_connect_four_random_moves() {
+        let game = ConnectFour::new();
+
+        let first_player = PlayerType::AI(RandomMove);
+        let second_player = PlayerType::AI(RandomMove);
+
+        let mut competition = Competition::new(game, first_player, second_player);
+        competition.start(true);
+
+        assert!(competition.game.get_winner().is_some() || competition.game.get_winner().is_none());
+    }
 }
