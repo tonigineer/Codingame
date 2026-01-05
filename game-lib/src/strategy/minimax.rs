@@ -16,6 +16,7 @@ pub struct Minimax {
     n_cached_transposition: u64,
     n_eval_terminal_state: u64,
     n_eval_game_state: u64,
+    compute_time_ns: u128,
 }
 
 impl Minimax {
@@ -27,6 +28,7 @@ impl Minimax {
             n_cached_transposition: 0,
             n_eval_terminal_state: 0,
             n_eval_game_state: 0,
+            compute_time_ns: 0,
         }
     }
 
@@ -45,6 +47,7 @@ impl Minimax {
         self.n_eval_terminal_state = 0;
         self.n_eval_game_state = 0;
 
+        let start = std::time::Instant::now();
         for mv in game.get_possible_moves() {
             let mut next_game = game.clone();
             next_game.apply_move(mv);
@@ -62,6 +65,8 @@ impl Minimax {
                 }
             });
         }
+
+        self.compute_time_ns = start.elapsed().as_nanos();
 
         if let Some((score, mv)) = best_score {
             self.move_score = score;
@@ -196,25 +201,9 @@ impl Strategy for Minimax {
         let mut new_game = game.clone();
         let side = game.get_current_player();
 
-        let mut minimax = Minimax::new(9);
+        let mut minimax = Minimax::new(self.max_depth);
         let mv = minimax.get_move(&mut new_game, side);
 
         mv
-        // game.get_possible_moves()
-        //     .next()
-        //     .expect("No moves available, game's done. Should not be called.")
-
-        // let start = std::time::Instant::now();
-        // let duration = start.elapsed();
-
-        // if self.verbose {
-        //     println!("Minimax will play: {}", mv);
-        //     println!("- states cached = {}", minimax.transpositions.len());
-        //     println!("- duration = {:?}", duration);
-        //     println!("Press Enter to continue...");
-
-        //     let mut dummy = String::new();
-        //     std::io::stdin().read_line(&mut dummy).ok();
-        // }
     }
 }

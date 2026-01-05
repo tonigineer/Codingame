@@ -1,3 +1,6 @@
+use crate::strategy::common::prompt_user_move;
+use crate::strategy::Strategy;
+
 pub mod games;
 pub mod strategy;
 
@@ -29,4 +32,56 @@ pub trait Game {
     fn get_game_state_score(&self, player: &Self::PlayerMask) -> f32;
 
     fn get_game_state_hash(&self) -> u64;
+}
+
+pub enum PlayerType<S: Strategy> {
+    Human,
+    AI(S),
+}
+
+pub struct Competition<G: Game, S: Strategy> {
+    pub game: G,
+    first_player: PlayerType<S>,
+    second_player: PlayerType<S>,
+}
+
+impl<G: Game<Move = usize>, S: Strategy> Competition<G, S>
+where
+    G: Clone,
+    <G as Game>::PlayerMask: Eq,
+{
+    pub fn new(game: G, first_player: PlayerType<S>, second_player: PlayerType<S>) -> Self {
+        Competition {
+            game,
+            first_player,
+            second_player,
+        }
+    }
+
+    pub fn start(&mut self, render_game: bool) {
+        while !self.game.is_finished() {
+            if render_game {
+                self.game.render();
+            }
+
+            let player = self.determine_player();
+            let chosen_move = self.get_move_for_player(player);
+            self.game.apply_move(chosen_move);
+        }
+
+        if render_game {
+            self.game.render();
+        }
+    }
+
+    pub fn determine_player(&self) -> &PlayerType<S> {
+        [&self.first_player, &self.second_player][self.game.get_current_player_index()]
+    }
+
+    pub fn get_move_for_player(&self, player: &PlayerType<S>) -> usize {
+        match player {
+            PlayerType::AI(strategy) => strategy.compute_move(&self.game),
+            PlayerType::Human => prompt_user_move(&self.game),
+        }
+    }
 }
