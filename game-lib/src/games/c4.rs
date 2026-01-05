@@ -98,7 +98,7 @@ pub const ZOBRIST: [[u64; 42]; 2] = [
     ],
 ];
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerMask {
     Red,
     Yellow,
@@ -128,6 +128,7 @@ impl PlayerMask {
     }
 }
 
+#[derive(Clone)]
 pub struct Board {
     both: u64,
     single: u64,
@@ -155,6 +156,7 @@ impl Board {
     }
 }
 
+#[derive(Clone)]
 pub struct ConnectFour {
     board: Board,
     current_player: PlayerMask,

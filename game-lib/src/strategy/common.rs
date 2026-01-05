@@ -1,6 +1,5 @@
-use crate::strategy::minimax;
+use crate::strategy::Strategy;
 use crate::Game;
-
 use rand::seq::SliceRandom;
 use std::fmt::Display;
 use std::io::{self, Write};
@@ -30,45 +29,6 @@ impl Strategy for RandomMove {
             .map(|x| x.clone())
             .expect("No moves available, game's done. Should not be called.")
     }
-}
-
-pub struct MinimaxMove;
-
-impl Strategy for MinimaxMove {
-    fn compute_move<G: Game>(&self, game: &G) -> G::Move
-    where
-        G: Clone,
-        G::Move: Clone,
-        <G as Game>::PlayerMask: Eq,
-    {
-        let mut new_game = game.clone();
-        let side = game.get_current_player();
-
-        let mut minimax = minimax::Minimax::new(9);
-        let mv = minimax.get_move(&mut new_game, side);
-
-        mv
-        // game.get_possible_moves()
-        //     .next()
-        //     .expect("No moves available, game's done. Should not be called.")
-
-        // let start = std::time::Instant::now();
-        // let duration = start.elapsed();
-
-        // if self.verbose {
-        //     println!("Minimax will play: {}", mv);
-        //     println!("- states cached = {}", minimax.transpositions.len());
-        //     println!("- duration = {:?}", duration);
-        //     println!("Press Enter to continue...");
-
-        //     let mut dummy = String::new();
-        //     std::io::stdin().read_line(&mut dummy).ok();
-        // }
-    }
-}
-
-pub trait Strategy {
-    fn compute_move<G: Game>(&self, game: &G) -> G::Move;
 }
 
 pub fn prompt_user_move<G: Game>(game: &G) -> G::Move

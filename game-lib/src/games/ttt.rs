@@ -29,7 +29,7 @@ const ZOBRIST_TABLE: [[u64; 9]; 2] = [
     ],
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerMask {
     X,
     O,
@@ -87,7 +87,7 @@ impl Board {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TicTacToe {
     pub board: Board,
     pub current_player: PlayerMask,

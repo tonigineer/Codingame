@@ -1,6 +1,8 @@
 use games::games::c4::ConnectFour;
 use games::games::ttt::TicTacToe;
-use games::strategy::common::{prompt_user_move, RandomMove, Strategy};
+use games::strategy::common::{prompt_user_move, RandomMove};
+use games::strategy::minimax::Minimax;
+use games::strategy::Strategy;
 use games::Game;
 
 pub enum PlayerType<S: Strategy> {
@@ -14,7 +16,11 @@ struct Competition<G: Game, S: Strategy> {
     second_player: PlayerType<S>,
 }
 
-impl<G: Game<Move = usize>, S: Strategy> Competition<G, S> {
+impl<G: Game<Move = usize>, S: Strategy> Competition<G, S>
+where
+    G: Clone,
+    <G as Game>::PlayerMask: Eq,
+{
     fn new(game: G, first_player: PlayerType<S>, second_player: PlayerType<S>) -> Self {
         Competition {
             game,
@@ -55,7 +61,8 @@ fn play_tictactoe() {
     let game = TicTacToe::new();
 
     let first_player = PlayerType::Human;
-    let second_player = PlayerType::AI(RandomMove);
+    let second_player = PlayerType::AI(Minimax);
+    // let second_player = PlayerType::AI(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition.start(true);

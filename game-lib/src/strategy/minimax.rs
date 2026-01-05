@@ -1,3 +1,4 @@
+use crate::strategy::Strategy;
 use crate::Game;
 use ahash::AHashMap;
 
@@ -182,5 +183,38 @@ impl Minimax {
             .insert(game_state_hash, (best_score, depth, transposition_type));
 
         best_score
+    }
+}
+
+impl Strategy for Minimax {
+    fn compute_move<G: Game>(&self, game: &G) -> G::Move
+    where
+        G: Clone,
+        G::Move: Clone,
+        <G as Game>::PlayerMask: Eq,
+    {
+        let mut new_game = game.clone();
+        let side = game.get_current_player();
+
+        let mut minimax = Minimax::new(9);
+        let mv = minimax.get_move(&mut new_game, side);
+
+        mv
+        // game.get_possible_moves()
+        //     .next()
+        //     .expect("No moves available, game's done. Should not be called.")
+
+        // let start = std::time::Instant::now();
+        // let duration = start.elapsed();
+
+        // if self.verbose {
+        //     println!("Minimax will play: {}", mv);
+        //     println!("- states cached = {}", minimax.transpositions.len());
+        //     println!("- duration = {:?}", duration);
+        //     println!("Press Enter to continue...");
+
+        //     let mut dummy = String::new();
+        //     std::io::stdin().read_line(&mut dummy).ok();
+        // }
     }
 }
