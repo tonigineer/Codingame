@@ -79,11 +79,11 @@ impl Record {
 
 /// Stable helper: split a slice at the first element matching `pred`.
 /// Returns (left, right_without_sep). `None` if no separator found.
-fn split_once<T, F>(s: &[T], mut pred: F) -> Option<(&[T], &[T])>
+fn split_once<T, F>(s: &[T], pred: F) -> Option<(&[T], &[T])>
 where
     F: FnMut(&T) -> bool,
 {
-    let i = s.iter().position(|x| pred(x))?;
+    let i = s.iter().position(pred)?;
     let (left, right_with_sep) = s.split_at(i);
     Some((left, &right_with_sep[1..]))
 }
@@ -113,7 +113,7 @@ fn main() {
     }
 
     let mut results = city_records.into_iter().collect::<Vec<_>>();
-    results.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    results.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
     for (city_name, record) in results {
         println!(

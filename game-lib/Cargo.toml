@@ -1,0 +1,12 @@
+[package]
+name = "games"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "play"
+path = "bin/play.rs"
+
+[dependencies]
+ahash = "0.8.12"
+rand = "0.8"
