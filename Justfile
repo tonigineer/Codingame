@@ -1,16 +1,19 @@
 default:
     @just --list
 
+format:
+    cargo fmt --check -- `find . -name "*.rs"`
+
+clippy:
+    cargo clippy --all-targets --all-features -- --deny warnings
+
 build:
     cargo build --workspace
 
 test:
     cargo test --workspace
 
-clippy:
-    cargo clippy --workspace --all-targets -- -D warnings
-
-ci: build test clippy
+ci: format clippy build test
 
 brc-input:
     cargo run --release -p one-billion-rows --bin create-input 1_000_000

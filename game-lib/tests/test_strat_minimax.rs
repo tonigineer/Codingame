@@ -67,8 +67,8 @@ mod tests {
         let second_player = PlayerType::AI(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
-        let mut player = competition.determine_player();
-        let mut chosen_move = competition
+        let player = competition.determine_player();
+        let chosen_move = competition
             .get_move_for_player(player)
             .expect("Should be able to get a move");
         competition.game.apply_move(chosen_move);

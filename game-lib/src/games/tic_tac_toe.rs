@@ -234,6 +234,8 @@ impl Game for TicTacToe {
 
     fn get_game_state_hash(&self) -> u64 {
         let mut h = 0u64;
+
+        #[allow(clippy::needless_range_loop)]
         for i in 0..9 {
             let bit = 1u16 << i;
             if (self.board.x_board & bit) != 0 {
