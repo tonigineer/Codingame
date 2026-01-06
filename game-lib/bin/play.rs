@@ -12,14 +12,14 @@ fn play_tictactoe() {
     // let second_player = PlayerType::AI(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
-    competition.start(true);
+    competition.start(false);
 }
 
 fn play_connect_four() {
     let game = ConnectFour::new();
 
-    let first_player = PlayerType::Human;
-    let second_player = PlayerType::AI(Minimax::new(9));
+    let first_player = PlayerType::AI(Minimax::new(15));
+    let second_player = PlayerType::Human;
     // let second_player = PlayerType::AI(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
@@ -27,6 +27,6 @@ fn play_connect_four() {
 }
 
 fn main() {
-    play_tictactoe();
-    // play_connect_four();
+    // play_tictactoe();
+    play_connect_four();
 }

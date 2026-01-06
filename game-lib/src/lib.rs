@@ -43,6 +43,7 @@ pub struct Competition<G: Game, S: Strategy> {
     pub game: G,
     first_player: PlayerType<S>,
     second_player: PlayerType<S>,
+    pub turn: u32,
 }
 
 impl<G: Game<Move = usize>, S: Strategy> Competition<G, S>
@@ -55,22 +56,25 @@ where
             game,
             first_player,
             second_player,
+            turn: 0,
         }
     }
 
     pub fn start(&mut self, render_game: bool) {
-        while !self.game.is_finished() {
-            if render_game {
-                self.game.render();
-            }
+        if render_game {
+            self.game.render();
+        }
 
+        while !self.game.is_finished() {
             let player = self.determine_player();
             let chosen_move = self.get_move_for_player(player);
             self.game.apply_move(chosen_move);
-        }
 
-        if render_game {
-            self.game.render();
+            self.turn += 1;
+
+            if render_game {
+                self.game.render();
+            }
         }
     }
 

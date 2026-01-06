@@ -269,6 +269,7 @@ impl Game for ConnectFour {
         if has_won(self.board.single) {
             return Some(self.current_player);
         }
+
         if has_won(self.board.both ^ self.board.single) {
             return Some(self.current_player.other());
         }
@@ -317,9 +318,61 @@ impl Game for ConnectFour {
         let _ = io::stdout().flush();
     }
 
-    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
-        // TODO: Implement heurisic
-        0f32
+    fn get_game_state_score(&self, player: &Self::PlayerMask) -> f32 {
+        fn count_sequences(p: u64) -> (u32, u32) {
+            let mut n_two = 0u32;
+            let mut n_three = 0u32;
+
+            // vertical (↑)
+            let m = p & (p >> 1);
+            n_two += m.count_ones();
+            let n = m & (m >> 1);
+            n_three += n.count_ones();
+
+            // horizontal (→) : shift by (7)
+            let m = p & (p >> (HEIGHT + 1));
+            n_two += m.count_ones();
+            let n = m & (m >> (HEIGHT + 1));
+            n_three += n.count_ones();
+
+            // diagonal (↗) : shift by (8)
+            let m = p & (p >> (HEIGHT + 2));
+            n_two += m.count_ones();
+            let n = m & (m >> (HEIGHT + 2));
+            n_three += n.count_ones();
+
+            // Diagonal ↘ (shift by 6)
+            let m = p & (p >> HEIGHT);
+            n_two += m.count_ones();
+            let n = m & (m >> HEIGHT);
+            n_three += n.count_ones();
+            (n_two, n_three)
+        }
+
+        let (n_two, n_three) = count_sequences(self.board.single);
+        let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single);
+
+        // ((n_two - n_two_other) as f32 / (n_two + n_two_other) as f32 * 1.0 / 3.0
+        //     + (n_three - n_three_other) as f32 / (n_three + n_three_other) as f32 * 2.0 / 3.0)
+        //     / 2.0
+
+        const TWO_WEIGHT: f32 = 1.0 / 3.0;
+        const THREE_WEIGHT: f32 = 2.0 / 3.0;
+
+        fn normalized_diff(player: u32, other: u32) -> f32 {
+            let total = player + other;
+            if total == 0 {
+                0.0
+            } else {
+                (player as f32 - other as f32) / total as f32
+            }
+        }
+
+        let n_two_score = normalized_diff(n_two, n_two_other);
+        let n_three_score = normalized_diff(n_three, n_three_other);
+
+        let combined_score = n_two_score * TWO_WEIGHT + n_three_score * THREE_WEIGHT;
+        combined_score / 2.0
     }
 
     fn get_game_state_hash(&self) -> u64 {
@@ -346,7 +399,6 @@ impl Game for ConnectFour {
             a ^= b;
         }
 
-        // TODO: here could be an error !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         side_to_check = side_to_check.other();
 
         let mut o = self.board.both ^ self.board.single;

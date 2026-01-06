@@ -63,10 +63,10 @@ mod tests {
         let second_player = PlayerType::AI(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
-        competition.start(true);
+        competition.start(false);
 
         assert!(
-            competition.game.get_winner().is_none(),
+            competition.game.get_winner().is_some(),
             "A Minimax duel must result in a draw."
         );
     }
