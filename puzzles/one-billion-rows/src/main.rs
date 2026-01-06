@@ -79,7 +79,7 @@ impl Record {
 
 /// Stable helper: split a slice at the first element matching `pred`.
 /// Returns (left, right_without_sep). `None` if no separator found.
-fn split_once<T, F>(s: &[T], mut pred: F) -> Option<(&[T], &[T])>
+fn split_once<T, F>(s: &[T], pred: F) -> Option<(&[T], &[T])>
 where
     F: FnMut(&T) -> bool,
 {

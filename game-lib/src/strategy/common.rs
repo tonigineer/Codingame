@@ -1,5 +1,5 @@
 use crate::strategy::Strategy;
-use crate::Game;
+use crate::{Game, GameError};
 use rand::seq::SliceRandom;
 use std::fmt::Display;
 use std::io::{self, Write};
@@ -8,17 +8,17 @@ use std::str::FromStr;
 pub struct FirstPossibleMove;
 
 impl Strategy for FirstPossibleMove {
-    fn compute_move<G: Game>(&self, game: &G) -> G::Move {
+    fn compute_move<G: Game>(&self, game: &G) -> Result<G::Move, GameError> {
         game.get_possible_moves()
             .next()
-            .expect("No moves available, game's done. Should not be called.")
+            .ok_or(GameError::NoMovesAvailable)
     }
 }
 
 pub struct RandomMove;
 
 impl Strategy for RandomMove {
-    fn compute_move<G: Game>(&self, game: &G) -> G::Move
+    fn compute_move<G: Game>(&self, game: &G) -> Result<G::Move, GameError>
     where
         G::Move: Clone,
     {
@@ -27,7 +27,7 @@ impl Strategy for RandomMove {
             .collect::<Vec<G::Move>>()
             .choose(&mut rng)
             .copied()
-            .expect("No moves available, game's done. Should not be called.")
+            .ok_or(GameError::NoMovesAvailable)
     }
 }
 

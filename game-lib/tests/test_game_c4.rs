@@ -11,7 +11,9 @@ mod tests {
         let first_player = PlayerType::AI(FirstPossibleMove);
         let second_player = PlayerType::AI(FirstPossibleMove);
         let mut competition = Competition::new(game, first_player, second_player);
-        competition.start(false);
+        competition
+            .start(false)
+            .expect("Game should complete without errors");
 
         assert!(competition.game.get_winner().is_some());
         assert!(competition.game.get_winner().unwrap() == c4::PlayerMask::Red);
@@ -25,8 +27,11 @@ mod tests {
         let second_player = PlayerType::AI(RandomMove);
 
         let mut competition = Competition::new(game, first_player, second_player);
-        competition.start(false);
+        competition
+            .start(false)
+            .expect("Game should complete without errors");
 
-        assert!(competition.game.get_winner().is_some() || competition.game.get_winner().is_none());
+        // Game should have finished with a winner or draw
+        assert!(competition.game.is_finished());
     }
 }

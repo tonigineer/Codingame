@@ -1,5 +1,5 @@
 use crate::strategy::Strategy;
-use crate::Game;
+use crate::{Game, GameError};
 use ahash::AHashMap;
 
 #[derive(PartialEq)]
@@ -32,7 +32,7 @@ impl Minimax {
         }
     }
 
-    pub fn get_move<G>(&mut self, game: &mut G, side: G::PlayerMask) -> G::Move
+    pub fn get_move<G>(&mut self, game: &mut G, side: G::PlayerMask) -> Result<G::Move, GameError>
     where
         G: Game + Clone,
         G::Move: Clone,
@@ -70,9 +70,9 @@ impl Minimax {
 
         if let Some((score, mv)) = best_score {
             self.move_score = score;
-            mv
+            Ok(mv)
         } else {
-            unreachable!("Game's already finished. Why was minimax still called?")
+            Err(GameError::NoMovesAvailable)
         }
     }
 
@@ -192,7 +192,7 @@ impl Minimax {
 }
 
 impl Strategy for Minimax {
-    fn compute_move<G>(&self, game: &G) -> G::Move
+    fn compute_move<G>(&self, game: &G) -> Result<G::Move, GameError>
     where
         G: Game + Clone,
         G::Move: Clone,

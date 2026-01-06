@@ -4,6 +4,25 @@ use crate::strategy::Strategy;
 pub mod games;
 pub mod strategy;
 
+#[derive(Debug)]
+pub enum GameError {
+    InvalidMove(String),
+    NoMovesAvailable,
+    ParseError(String),
+}
+
+impl std::fmt::Display for GameError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GameError::InvalidMove(msg) => write!(f, "Invalid move: {}", msg),
+            GameError::NoMovesAvailable => write!(f, "No moves available"),
+            GameError::ParseError(msg) => write!(f, "Parse error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for GameError {}
+
 pub trait Game {
     type PlayerMask;
     type Move: Copy + Clone;
@@ -60,14 +79,14 @@ where
         }
     }
 
-    pub fn start(&mut self, render_game: bool) {
+    pub fn start(&mut self, render_game: bool) -> Result<(), GameError> {
         if render_game {
             self.game.render();
         }
 
         while !self.game.is_finished() {
             let player = self.determine_player();
-            let chosen_move = self.get_move_for_player(player);
+            let chosen_move = self.get_move_for_player(player)?;
             self.game.apply_move(chosen_move);
 
             self.turn += 1;
@@ -76,16 +95,17 @@ where
                 self.game.render();
             }
         }
+        Ok(())
     }
 
     pub fn determine_player(&self) -> &PlayerType<S> {
         [&self.first_player, &self.second_player][self.game.get_current_player_index()]
     }
 
-    pub fn get_move_for_player(&self, player: &PlayerType<S>) -> usize {
+    pub fn get_move_for_player(&self, player: &PlayerType<S>) -> Result<usize, GameError> {
         match player {
             PlayerType::AI(strategy) => strategy.compute_move(&self.game),
-            PlayerType::Human => prompt_user_move(&self.game),
+            PlayerType::Human => Ok(prompt_user_move(&self.game)),
         }
     }
 }

@@ -1,5 +1,4 @@
 use crate::Game;
-
 use std::io::{self, Write};
 
 const WIDTH: usize = 7;
@@ -311,7 +310,12 @@ impl Game for ConnectFour {
         }
 
         let bottom_line = (0..WIDTH)
-            .map(|i| format!(" {} +", std::char::from_u32(0xFF10 + i as u32).unwrap()))
+            .map(|i| {
+                format!(
+                    " {} +",
+                    std::char::from_u32(0xFF10 + i as u32).unwrap_or('?')
+                )
+            })
             .collect::<Vec<_>>()
             .join("");
 
@@ -358,10 +362,6 @@ impl Game for ConnectFour {
         let (n_two, n_three) = count_sequences(self.board.single);
         let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single);
 
-        // ((n_two - n_two_other) as f32 / (n_two + n_two_other) as f32 * 1.0 / 3.0
-        //     + (n_three - n_three_other) as f32 / (n_three + n_three_other) as f32 * 2.0 / 3.0)
-        //     / 2.0
-
         const TWO_WEIGHT: f32 = 1.0 / 3.0;
         const THREE_WEIGHT: f32 = 2.0 / 3.0;
 
@@ -385,6 +385,7 @@ impl Game for ConnectFour {
         const fn bit_to_cell_id(bit_index: usize) -> Option<usize> {
             let col = bit_index / (HEIGHT + 1);
             let row = bit_index % (HEIGHT + 1);
+
             if col < WIDTH && row < HEIGHT {
                 Some(col * HEIGHT + row)
             } else {
@@ -399,6 +400,7 @@ impl Game for ConnectFour {
         while a != 0 {
             let b = a & (!a + 1);
             let idx = b.trailing_zeros() as usize;
+
             if let Some(cell) = bit_to_cell_id(idx) {
                 h ^= ZOBRIST[side_to_check.index()][cell];
             }
@@ -411,6 +413,7 @@ impl Game for ConnectFour {
         while o != 0 {
             let b = o & (!o + 1);
             let idx = b.trailing_zeros() as usize;
+
             if let Some(cell) = bit_to_cell_id(idx) {
                 h ^= ZOBRIST[side_to_check.index()][cell];
             }

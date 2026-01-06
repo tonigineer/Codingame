@@ -1,10 +1,10 @@
 pub mod common;
 pub mod minimax;
 
-use crate::Game;
+use crate::{Game, GameError};
 
 pub trait Strategy {
-    fn compute_move<G>(&self, game: &G) -> G::Move
+    fn compute_move<G>(&self, game: &G) -> Result<G::Move, GameError>
     where
         G: Game + Clone,
         G::Move: Clone,

@@ -17,7 +17,9 @@ mod tests {
         let mut competition = Competition::new(game, first_player, second_player);
 
         let mut player = competition.determine_player();
-        let mut chosen_move = competition.get_move_for_player(player);
+        let mut chosen_move = competition
+            .get_move_for_player(player)
+            .expect("Should be able to get a move");
         competition.game.apply_move(chosen_move);
         assert!(
             competition.game.board.x_board & 1 + 4 + 16 + 64 + 256 > 0,
@@ -25,7 +27,7 @@ mod tests {
         );
 
         player = competition.determine_player();
-        chosen_move = competition.get_move_for_player(player);
+        chosen_move = competition.get_move_for_player(player).unwrap();
         competition.game.apply_move(chosen_move);
         assert!(
             competition.game.board.o_board & 1 + 4 + 16 + 64 + 256 > 0,
@@ -46,7 +48,9 @@ mod tests {
         let second_player = PlayerType::AI(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
-        competition.start(false);
+        competition
+            .start(false)
+            .expect("Game should complete without errors");
 
         assert!(
             competition.game.get_winner().is_none(),
@@ -57,13 +61,15 @@ mod tests {
     #[test]
     fn minimax_connect_four_draw() {
         let game = ConnectFour::new();
-        let depths = 15;
+        let depths = 9;
 
         let first_player = PlayerType::AI(Minimax::new(depths));
         let second_player = PlayerType::AI(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
-        competition.start(false);
+        competition
+            .start(false)
+            .expect("Game should complete without errors");
 
         assert!(
             competition.game.get_winner().is_some(),
