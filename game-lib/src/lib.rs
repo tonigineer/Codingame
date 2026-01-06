@@ -1,5 +1,5 @@
-use crate::strategy::common::prompt_user_move;
 use crate::strategy::Strategy;
+use crate::strategy::common::prompt_user_move;
 
 pub mod games;
 pub mod strategy;

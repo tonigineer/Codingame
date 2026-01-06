@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use games::games::c4::{self, ConnectFour};
+    use games::games::connect_four::{self, ConnectFour};
     use games::strategy::common::{FirstPossibleMove, RandomMove};
     use games::{Competition, Game, PlayerType};
 
@@ -16,7 +16,7 @@ mod tests {
             .expect("Game should complete without errors");
 
         assert!(competition.game.get_winner().is_some());
-        assert!(competition.game.get_winner().unwrap() == c4::PlayerMask::Red);
+        assert!(competition.game.get_winner().unwrap() == connect_four::PlayerMask::Red);
     }
 
     #[test]

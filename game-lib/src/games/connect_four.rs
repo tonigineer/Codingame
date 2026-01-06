@@ -129,8 +129,8 @@ impl PlayerMask {
 
 #[derive(Clone)]
 pub struct Board {
-    both: u64,
-    single: u64,
+    pub both: u64,
+    pub single: u64,
 }
 
 impl Board {
@@ -157,8 +157,8 @@ impl Board {
 
 #[derive(Clone)]
 pub struct ConnectFour {
-    board: Board,
-    current_player: PlayerMask,
+    pub board: Board,
+    pub current_player: PlayerMask,
 }
 
 impl Default for ConnectFour {
@@ -430,8 +430,7 @@ impl Game for ConnectFour {
 
 #[cfg(test)]
 mod tests {
-    use crate::games::c4::*;
-    use crate::Game;
+    use crate::games::connect_four::*;
 
     #[test]
     fn test_connect_four_initial_state() {

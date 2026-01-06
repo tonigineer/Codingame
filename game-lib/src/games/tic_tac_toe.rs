@@ -253,8 +253,7 @@ impl Game for TicTacToe {
 
 #[cfg(test)]
 mod tests {
-    use crate::games::ttt::*;
-    use crate::Game;
+    use crate::games::tic_tac_toe::*;
 
     #[test]
     fn test_tictactoe_initial_state() {

@@ -1,9 +1,8 @@
-use games::games::c4::ConnectFour;
-use games::games::ttt::TicTacToe;
+use games::games::{connect_four::ConnectFour, tic_tac_toe::TicTacToe};
 use games::strategy::minimax::Minimax;
 use games::{Competition, PlayerType};
 
-fn play_tictactoe() -> Result<(), Box<dyn std::error::Error>> {
+fn play_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
     let game = TicTacToe::new();
 
     let first_player = PlayerType::AI(Minimax::new(9));
@@ -32,15 +31,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let game = if args.len() > 2 && args[1] == "--game" {
         &args[2]
     } else {
-        "tictactoe"
+        "tic-tac-toe"
     };
 
     match game {
         "connect-four" => play_connect_four()?,
-        "tictactoe" => play_tictactoe()?,
+        "tic-tac-toe" => play_tic_tac_toe()?,
         _ => {
             eprintln!("Usage: {} [--game <game>]", args[0]);
-            eprintln!("Games: connect-four, tictactoe");
+            eprintln!("Games: connect-four, tic-tac-toe");
             std::process::exit(1);
         }
     }

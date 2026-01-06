@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use games::games::c4::ConnectFour;
-    use games::games::ttt::TicTacToe;
+    use games::games::connect_four::ConnectFour;
+    use games::games::tic_tac_toe::TicTacToe;
     // use games::strategy::common::{FirstPossibleMove, RandomMove};
     use games::strategy::minimax::Minimax;
     use games::{Competition, Game, PlayerType};
@@ -56,6 +56,27 @@ mod tests {
             competition.game.get_winner().is_none(),
             "A Minimax duel must result in a draw."
         );
+    }
+
+    #[test]
+    fn minimax_connect_four_first_move() {
+        let game = ConnectFour::new();
+        let depths = 15;
+
+        let first_player = PlayerType::AI(Minimax::new(depths));
+        let second_player = PlayerType::AI(Minimax::new(depths));
+
+        let mut competition = Competition::new(game, first_player, second_player);
+        let mut player = competition.determine_player();
+        let mut chosen_move = competition
+            .get_move_for_player(player)
+            .expect("Should be able to get a move");
+        competition.game.apply_move(chosen_move);
+
+        assert!(
+            competition.game.board.both & 1 << 21 > 0,
+            "First move of first player must be in the center (3) column."
+        )
     }
 
     #[test]

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use games::games::ttt::{self, TicTacToe};
+    use games::games::tic_tac_toe::{self, TicTacToe};
     use games::strategy::common::{FirstPossibleMove, RandomMove};
     use games::{Competition, Game, PlayerType};
 
@@ -17,7 +17,7 @@ mod tests {
             .expect("Game should complete without errors");
 
         assert!(competition.game.get_winner().is_some());
-        assert!(competition.game.get_winner().unwrap() == ttt::PlayerMask::X);
+        assert!(competition.game.get_winner().unwrap() == tic_tac_toe::PlayerMask::X);
     }
 
     #[test]
