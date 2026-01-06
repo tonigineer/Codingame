@@ -22,7 +22,7 @@ mod tests {
             .expect("Should be able to get a move");
         competition.game.apply_move(chosen_move);
         assert!(
-            competition.game.board.x_board & 1 + 4 + 16 + 64 + 256 > 0,
+            competition.game.board.x_board & (1 + 4 + 16 + 64 + 256) > 0,
             "First move of first player must be either a corner or the center."
         );
 
@@ -30,7 +30,7 @@ mod tests {
         chosen_move = competition.get_move_for_player(player).unwrap();
         competition.game.apply_move(chosen_move);
         assert!(
-            competition.game.board.o_board & 1 + 4 + 16 + 64 + 256 > 0,
+            competition.game.board.o_board & (1 + 4 + 16 + 64 + 256) > 0,
             "First move of second player must be either a corner or the center."
         );
         assert!(
