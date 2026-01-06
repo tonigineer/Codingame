@@ -1,0 +1,10 @@
+[package]
+name = "ultimate-tic-tac-toe"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+game-lib = { path = "../../game-lib" }
+
+[lints]
+workspace = true

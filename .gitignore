@@ -1,9 +1,5 @@
 # Folder
-legacy
-target
+target/
 
 # Files
 Cargo.lock
-flamegraph.svg
-input.in
-perf.data*

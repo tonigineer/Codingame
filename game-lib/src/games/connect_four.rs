@@ -2,9 +2,6 @@ use crate::Game;
 use std::io::{self, Write};
 use crate::Player;
 
-const WIDTH: usize = 7;
-const HEIGHT: usize = 6;
-
 pub const ZOBRIST_SIDE_TO_MOVE: u64 = 0x8A24_B6DF_19E4_7C90;
 
 pub const ZOBRIST: [[u64; 42]; 2] = [
@@ -138,73 +135,73 @@ impl Board {
     fn new() -> Self {
         Self { both: 0, single: 0 }
     }
-
-    const fn bottom_mask(col: usize) -> u64 {
-        1u64 << (col * (HEIGHT + 1))
-    }
-
-    const fn top_mask(col: usize) -> u64 {
-        1u64 << (col * (HEIGHT + 1) + (HEIGHT - 1))
-    }
-
-    const fn column_mask(col: usize) -> u64 {
-        ((1u64 << HEIGHT) - 1) << (col * (HEIGHT + 1))
-    }
-
-    fn top_mask_all() -> u64 {
-        (0..WIDTH).map(Board::top_mask).sum()
-    }
 }
 
 #[derive(Clone)]
-pub struct ConnectFour {
+pub struct ConnectFour<const W: usize, const H: usize> {
     pub board: Board,
     pub current_player: PlayerMask,
 }
 
-impl Default for ConnectFour {
+impl<const W: usize, const H: usize> Default for ConnectFour<W, H> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ConnectFour {
+impl<const W: usize, const H: usize> ConnectFour<W, H> {
     pub fn new() -> Self {
         Self {
             board: Board::new(),
             current_player: PlayerMask::Red,
         }
     }
+
+    const fn bottom_mask(col: usize) -> u64 {
+        1u64 << (col * (H + 1))
+    }
+
+    const fn top_mask(col: usize) -> u64 {
+        1u64 << (col * (H + 1) + (H - 1))
+    }
+
+    const fn column_mask(col: usize) -> u64 {
+        ((1u64 << H) - 1) << (col * (H + 1))
+    }
+
+    fn top_mask_all() -> u64 {
+        (0..W).fold(0, |acc, col| acc | Self::top_mask(col))
+    }
 }
 
-impl Game for ConnectFour {
+impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
     type PlayerMask = PlayerMask;
     type Move = usize;
 
     fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
-        const fn center_out_order() -> [usize; WIDTH] {
-            let mut arr = [0; WIDTH];
-            let center = WIDTH / 2;
+        fn center_out_order(w: usize) -> Vec<usize> {
+            let mut arr = vec![];
+            let center = w / 2;
             let mut i = 0;
-            while i < WIDTH {
-                arr[i] = if i % 2 == 0 {
+            while i < w {
+                arr.push(if i % 2 == 0 {
                     center - (i / 2)
                 } else {
                     center + i.div_ceil(2)
-                };
+                });
                 i += 1;
             }
             arr
         }
 
-        center_out_order()
+        center_out_order(W)
             .into_iter()
-            .filter(move |&idx| self.board.both & Board::top_mask(idx) == 0)
+            .filter(move |idx| self.board.both & Self::top_mask(*idx) == 0)
     }
 
     fn apply_move(&mut self, chosen_move: Self::Move) {
         let mv =
-            (self.board.both + Board::bottom_mask(chosen_move)) & Board::column_mask(chosen_move);
+            (self.board.both + Self::bottom_mask(chosen_move)) & Self::column_mask(chosen_move);
         self.board.single ^= self.board.both;
         self.board.both |= mv;
 
@@ -213,11 +210,11 @@ impl Game for ConnectFour {
 
     fn undo_move(&mut self, chosen_move: Self::Move) {
         let next =
-            (self.board.both + Board::bottom_mask(chosen_move)) & Board::column_mask(chosen_move);
+            (self.board.both + Self::bottom_mask(chosen_move)) & Self::column_mask(chosen_move);
         let mv = if next != 0 {
             next >> 1
         } else {
-            Board::top_mask(chosen_move)
+            Self::top_mask(chosen_move)
         };
 
         self.board.both ^= mv;
@@ -239,12 +236,12 @@ impl Game for ConnectFour {
     }
 
     fn is_finished(&self) -> bool {
-        (self.board.both & Board::top_mask_all()) == Board::top_mask_all()
+        (self.board.both & Self::top_mask_all()) == Self::top_mask_all()
             || self.get_winner().is_some()
     }
 
     fn get_winner(&self) -> Option<PlayerMask> {
-        fn has_won(p: u64) -> bool {
+        fn has_won(p: u64, h: usize) -> bool {
             // vertical (↑)
             let mut m = p & (p >> 1);
             if (m & (m >> 2)) != 0 {
@@ -252,31 +249,31 @@ impl Game for ConnectFour {
             }
 
             // horizontal (→) : shift by (7)
-            m = p & (p >> (HEIGHT + 1));
-            if (m & (m >> (2 * (HEIGHT + 1)))) != 0 {
+            m = p & (p >> (h + 1));
+            if (m & (m >> (2 * (h + 1)))) != 0 {
                 return true;
             }
 
             // diagonal (↗) : shift by (8)
-            m = p & (p >> (HEIGHT + 2));
-            if (m & (m >> (2 * (HEIGHT + 2)))) != 0 {
+            m = p & (p >> (h + 2));
+            if (m & (m >> (2 * (h + 2)))) != 0 {
                 return true;
             }
 
             // diagonal (↘) : shift by (6)
-            m = p & (p >> HEIGHT);
-            if (m & (m >> (2 * HEIGHT))) != 0 {
+            m = p & (p >> h);
+            if (m & (m >> (2 * h))) != 0 {
                 return true;
             }
 
             false
         }
 
-        if has_won(self.board.single) {
+        if has_won(self.board.single, H) {
             return Some(self.current_player);
         }
 
-        if has_won(self.board.both ^ self.board.single) {
+        if has_won(self.board.both ^ self.board.single, H) {
             return Some(self.current_player.other());
         }
 
@@ -286,14 +283,14 @@ impl Game for ConnectFour {
     fn render(&self) {
         print!("\x1B[2J\x1B[H"); // clear screen
 
-        for r in (0..HEIGHT).rev() {
-            let mut line = String::with_capacity(WIDTH * 2 - 1);
+        for r in (0..H).rev() {
+            let mut line = String::with_capacity(W * 2 - 1);
 
-            for c in 0..WIDTH {
+            for c in 0..W {
                 line.push('|');
                 line.push(' ');
 
-                let bit = 1u64 << (c * (HEIGHT + 1) + r);
+                let bit = 1u64 << (c * (H + 1) + r);
 
                 let chr = if (self.board.both & bit) == 0 {
                     '\u{3000}'
@@ -310,7 +307,7 @@ impl Game for ConnectFour {
             println!("{}|", line);
         }
 
-        let bottom_line = (0..WIDTH)
+        let bottom_line = (0..W)
             .map(|i| {
                 format!(
                     " {} +",
@@ -330,7 +327,7 @@ impl Game for ConnectFour {
     }
 
     fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
-        fn count_sequences(p: u64) -> (u32, u32) {
+        fn count_sequences(p: u64, h: usize) -> (u32, u32) {
             let mut n_two = 0u32;
             let mut n_three = 0u32;
 
@@ -341,27 +338,27 @@ impl Game for ConnectFour {
             n_three += n.count_ones();
 
             // horizontal (→) : shift by (7)
-            let m = p & (p >> (HEIGHT + 1));
+            let m = p & (p >> (h + 1));
             n_two += m.count_ones();
-            let n = m & (m >> (HEIGHT + 1));
+            let n = m & (m >> (h + 1));
             n_three += n.count_ones();
 
             // diagonal (↗) : shift by (8)
-            let m = p & (p >> (HEIGHT + 2));
+            let m = p & (p >> (h + 2));
             n_two += m.count_ones();
-            let n = m & (m >> (HEIGHT + 2));
+            let n = m & (m >> (h + 2));
             n_three += n.count_ones();
 
             // Diagonal ↘ (shift by 6)
-            let m = p & (p >> HEIGHT);
+            let m = p & (p >> h);
             n_two += m.count_ones();
-            let n = m & (m >> HEIGHT);
+            let n = m & (m >> h);
             n_three += n.count_ones();
             (n_two, n_three)
         }
 
-        let (n_two, n_three) = count_sequences(self.board.single);
-        let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single);
+        let (n_two, n_three) = count_sequences(self.board.single, H);
+        let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single, H);
 
         const TWO_WEIGHT: f32 = 1.0 / 3.0;
         const THREE_WEIGHT: f32 = 2.0 / 3.0;
@@ -383,12 +380,12 @@ impl Game for ConnectFour {
     }
 
     fn get_game_state_hash(&self) -> u64 {
-        const fn bit_to_cell_id(bit_index: usize) -> Option<usize> {
-            let col = bit_index / (HEIGHT + 1);
-            let row = bit_index % (HEIGHT + 1);
+        fn bit_to_cell_id(bit_index: usize, h: usize, w: usize) -> Option<usize> {
+            let col = bit_index / (h + 1);
+            let row = bit_index % (h + 1);
 
-            if col < WIDTH && row < HEIGHT {
-                Some(col * HEIGHT + row)
+            if col < w && row < h {
+                Some(col * h + row)
             } else {
                 None // sentinel row or out of bounds
             }
@@ -402,7 +399,7 @@ impl Game for ConnectFour {
             let b = a & (!a + 1);
             let idx = b.trailing_zeros() as usize;
 
-            if let Some(cell) = bit_to_cell_id(idx) {
+            if let Some(cell) = bit_to_cell_id(idx, H, W) {
                 h ^= ZOBRIST[side_to_check.index()][cell];
             }
             a ^= b;
@@ -415,7 +412,7 @@ impl Game for ConnectFour {
             let b = o & (!o + 1);
             let idx = b.trailing_zeros() as usize;
 
-            if let Some(cell) = bit_to_cell_id(idx) {
+            if let Some(cell) = bit_to_cell_id(idx, H, W) {
                 h ^= ZOBRIST[side_to_check.index()][cell];
             }
             o ^= b;
@@ -435,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_connect_four_initial_state() {
-        let game = ConnectFour::new();
+        let game: ConnectFour<7, 6> = ConnectFour::new();
 
         assert_eq!(game.board.both, 0);
         assert_eq!(game.board.single, 0);

@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn minimax_connect_four_first_move() {
-        let game = ConnectFour::new();
+        let game = ConnectFour::<7, 6>::new();
         let depths = 15; // 10 moves are not enough to predict center move
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn minimax_connect_four_draw() {
-        let game = ConnectFour::new();
+        let game = ConnectFour::<7, 6>::new();
         let depths = 10;
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn minimax_connect_four_beat_first_possible_move() {
-        let game = ConnectFour::new();
+        let game = ConnectFour::<7, 6>::new();
         let depths = 10;
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn minimax_connect_four_beat_random() {
-        let game = ConnectFour::new();
+        let game = ConnectFour::<7, 6>::new();
         let depths = 10;
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));

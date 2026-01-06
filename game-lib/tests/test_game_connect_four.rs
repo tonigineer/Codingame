@@ -6,7 +6,7 @@ mod tests {
 
     #[test]
     fn test_connect_four_always_first_move() {
-        let game = ConnectFour::new();
+        let game: ConnectFour<7, 6> = ConnectFour::new();
 
         let first_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
         let second_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
@@ -21,7 +21,7 @@ mod tests {
 
     #[test]
     fn test_connect_four_random_moves() {
-        let game = ConnectFour::new();
+        let game: ConnectFour<7, 6> = ConnectFour::new();
 
         let first_player = PlayerType::RandomMove(RandomMove);
         let second_player = PlayerType::RandomMove(RandomMove);

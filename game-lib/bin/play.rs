@@ -7,22 +7,22 @@ fn play_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
 
     let first_player = PlayerType::Minimax(Minimax::new(9));
     let second_player = PlayerType::Human;
-    // let second_player = PlayerType::RandomMove(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition.start(true)?;
+
     Ok(())
 }
 
 fn play_connect_four() -> Result<(), Box<dyn std::error::Error>> {
-    let game = ConnectFour::new();
+    let game = ConnectFour::<7, 6>::new();
 
     let first_player = PlayerType::Minimax(Minimax::new(15));
     let second_player = PlayerType::Human;
-    // let second_player = PlayerType::RandomMove(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition.start(true)?;
+
     Ok(())
 }
 
@@ -43,5 +43,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
     }
+
     Ok(())
 }
