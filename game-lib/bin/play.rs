@@ -5,9 +5,9 @@ use games::{Competition, PlayerType};
 fn play_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
     let game = TicTacToe::new();
 
-    let first_player = PlayerType::AI(Minimax::new(9));
+    let first_player = PlayerType::Minimax(Minimax::new(9));
     let second_player = PlayerType::Human;
-    // let second_player = PlayerType::AI(RandomMove);
+    // let second_player = PlayerType::RandomMove(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition.start(true)?;
@@ -17,9 +17,9 @@ fn play_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
 fn play_connect_four() -> Result<(), Box<dyn std::error::Error>> {
     let game = ConnectFour::new();
 
-    let first_player = PlayerType::AI(Minimax::new(15));
+    let first_player = PlayerType::Minimax(Minimax::new(15));
     let second_player = PlayerType::Human;
-    // let second_player = PlayerType::AI(RandomMove);
+    // let second_player = PlayerType::RandomMove(RandomMove);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition.start(true)?;

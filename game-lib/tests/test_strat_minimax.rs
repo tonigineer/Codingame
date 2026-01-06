@@ -16,9 +16,13 @@ mod tests {
 
         let mut competition = Competition::new(game, first_player, second_player);
 
-        let mut player = competition.determine_player();
-        let mut chosen_move = competition
-            .get_move_for_player(player)
+        let player_index = competition.determine_player_index();
+        let player = if player_index == 0 {
+            &mut competition.first_player
+        } else {
+            &mut competition.second_player
+        };
+        let mut chosen_move = Competition::get_move_for_player(player, &competition.game)
             .expect("Should be able to get a move");
         competition.game.apply_move(chosen_move);
 
@@ -27,8 +31,13 @@ mod tests {
             "First move of first player must be either a corner or the center."
         );
 
-        player = competition.determine_player();
-        chosen_move = competition.get_move_for_player(player).unwrap();
+        let player_index = competition.determine_player_index();
+        let player = if player_index == 0 {
+            &mut competition.first_player
+        } else {
+            &mut competition.second_player
+        };
+        chosen_move = Competition::get_move_for_player(player, &competition.game).unwrap();
         competition.game.apply_move(chosen_move);
 
         assert!(
@@ -64,15 +73,19 @@ mod tests {
     #[test]
     fn minimax_connect_four_first_move() {
         let game = ConnectFour::new();
-        let depths = 15;
+        let depths = 15; // 10 moves are not enough to predict center move
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
         let second_player = PlayerType::Minimax(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
-        let player = competition.determine_player();
-        let chosen_move = competition
-            .get_move_for_player(player)
+        let player_index = competition.determine_player_index();
+        let player = if player_index == 0 {
+            &mut competition.first_player
+        } else {
+            &mut competition.second_player
+        };
+        let chosen_move = Competition::get_move_for_player(player, &competition.game)
             .expect("Should be able to get a move");
         competition.game.apply_move(chosen_move);
 
@@ -85,7 +98,7 @@ mod tests {
     #[test]
     fn minimax_connect_four_draw() {
         let game = ConnectFour::new();
-        let depths = 9;
+        let depths = 10;
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
         let second_player = PlayerType::Minimax(Minimax::new(depths));
@@ -104,7 +117,7 @@ mod tests {
     #[test]
     fn minimax_connect_four_beat_first_possible_move() {
         let game = ConnectFour::new();
-        let depths = 9;
+        let depths = 10;
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
         let second_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
@@ -123,7 +136,7 @@ mod tests {
     #[test]
     fn minimax_connect_four_beat_random() {
         let game = ConnectFour::new();
-        let depths = 9;
+        let depths = 10;
 
         let first_player = PlayerType::Minimax(Minimax::new(depths));
         let second_player = PlayerType::RandomMove(RandomMove);

@@ -192,7 +192,7 @@ impl Minimax {
 }
 
 impl Strategy for Minimax {
-    fn compute_move<G>(&self, game: &G) -> Result<G::Move, GameError>
+    fn compute_move<G>(&mut self, game: &G) -> Result<G::Move, GameError>
     where
         G: Game + Clone,
         G::Move: Clone,
@@ -201,8 +201,6 @@ impl Strategy for Minimax {
         let mut new_game = game.clone();
         let side = game.get_current_player();
 
-        let mut minimax = Minimax::new(self.max_depth);
-
-        minimax.get_move(&mut new_game, side)
+        self.get_move(&mut new_game, side)
     }
 }

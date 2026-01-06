@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 
 use crate::Game;
+use crate::Player;
 
 const ZOBRIST_SIDE_TO_MOVE: u64 = 0x8A24_B6DF_19E4_7C90;
 
@@ -35,28 +36,30 @@ pub enum PlayerMask {
     O,
 }
 
-impl PlayerMask {
-    pub fn other(&self) -> Self {
+impl crate::Player for PlayerMask {
+    fn other(&self) -> Self {
         match &self {
             PlayerMask::X => PlayerMask::O,
             PlayerMask::O => PlayerMask::X,
         }
     }
 
-    pub fn index(&self) -> usize {
+    fn index(&self) -> usize {
         match &self {
             PlayerMask::X => 0,
             PlayerMask::O => 1,
         }
     }
 
-    pub fn symbol(&self) -> char {
+    fn symbol(&self) -> char {
         match &self {
             PlayerMask::X => 'X',
             PlayerMask::O => 'O',
         }
     }
+}
 
+impl PlayerMask {
     pub fn colored_symbol(&self) -> String {
         match self {
             PlayerMask::X => format!("\x1b[34m{}\x1b[0m", self.symbol()),

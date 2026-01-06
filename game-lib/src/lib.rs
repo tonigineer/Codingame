@@ -68,8 +68,8 @@ pub enum PlayerType {
 
 pub struct Competition<G: Game> {
     pub game: G,
-    first_player: PlayerType,
-    second_player: PlayerType,
+    pub first_player: PlayerType,
+    pub second_player: PlayerType,
     pub turn: u32,
 }
 
@@ -93,8 +93,14 @@ where
         }
 
         while !self.game.is_finished() {
-            let player = self.determine_player();
-            let chosen_move = self.get_move_for_player(player)?;
+            let game_ref = &self.game;
+            let player_index = self.determine_player_index();
+            let player = if player_index == 0 {
+                &mut self.first_player
+            } else {
+                &mut self.second_player
+            };
+            let chosen_move = Self::get_move_for_player(player, game_ref)?;
             self.game.apply_move(chosen_move);
 
             self.turn += 1;
@@ -106,16 +112,16 @@ where
         Ok(())
     }
 
-    pub fn determine_player(&self) -> &PlayerType {
-        [&self.first_player, &self.second_player][self.game.get_current_player_index()]
+    pub fn determine_player_index(&self) -> usize {
+        self.game.get_current_player_index()
     }
 
-    pub fn get_move_for_player(&self, player: &PlayerType) -> Result<usize, GameError> {
+    pub fn get_move_for_player(player: &mut PlayerType, game: &G) -> Result<usize, GameError> {
         match player {
-            PlayerType::Minimax(strategy) => strategy.compute_move(&self.game),
-            PlayerType::FirstPossibleMove(strategy) => strategy.compute_move(&self.game),
-            PlayerType::RandomMove(strategy) => strategy.compute_move(&self.game),
-            PlayerType::Human => Ok(prompt_user_move(&self.game)),
+            PlayerType::Minimax(ref mut strategy) => strategy.compute_move(game),
+            PlayerType::FirstPossibleMove(ref mut strategy) => strategy.compute_move(game),
+            PlayerType::RandomMove(ref mut strategy) => strategy.compute_move(game),
+            PlayerType::Human => Ok(prompt_user_move(game)),
         }
     }
 }

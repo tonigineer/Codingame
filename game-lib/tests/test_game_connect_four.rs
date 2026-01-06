@@ -8,8 +8,8 @@ mod tests {
     fn test_connect_four_always_first_move() {
         let game = ConnectFour::new();
 
-        let first_player = PlayerType::AI(FirstPossibleMove);
-        let second_player = PlayerType::AI(FirstPossibleMove);
+        let first_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
+        let second_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
         let mut competition = Competition::new(game, first_player, second_player);
         competition
             .start(false)
@@ -23,8 +23,8 @@ mod tests {
     fn test_connect_four_random_moves() {
         let game = ConnectFour::new();
 
-        let first_player = PlayerType::AI(RandomMove);
-        let second_player = PlayerType::AI(RandomMove);
+        let first_player = PlayerType::RandomMove(RandomMove);
+        let second_player = PlayerType::RandomMove(RandomMove);
 
         let mut competition = Competition::new(game, first_player, second_player);
         competition

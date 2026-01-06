@@ -8,7 +8,7 @@ use std::str::FromStr;
 pub struct FirstPossibleMove;
 
 impl Strategy for FirstPossibleMove {
-    fn compute_move<G: Game>(&self, game: &G) -> Result<G::Move, GameError> {
+    fn compute_move<G: Game>(&mut self, game: &G) -> Result<G::Move, GameError> {
         game.get_possible_moves()
             .next()
             .ok_or(GameError::NoMovesAvailable)
@@ -18,7 +18,7 @@ impl Strategy for FirstPossibleMove {
 pub struct RandomMove;
 
 impl Strategy for RandomMove {
-    fn compute_move<G: Game>(&self, game: &G) -> Result<G::Move, GameError>
+    fn compute_move<G: Game>(&mut self, game: &G) -> Result<G::Move, GameError>
     where
         G::Move: Clone,
     {
