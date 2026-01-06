@@ -1,0 +1,34 @@
+STATEMENT
+Win the water fight by controlling the most territory, or out-soak your opponent!
+
+read myId:int
+read agentDataCount:int
+loop agentDataCount read agentId:int player:int shootCooldown:int optimalRange:int soakingPower:int splashBombs:int
+read width:int height:int
+loop height loopline width x:int y:int tileType:int
+gameloop
+read agentCount:int
+loop agentCount read agentId:int x:int y:int cooldown:int splashBombs:int wetness:int
+read myAgentCount:int
+loop myAgentCount write HUNKER_DOWN
+
+INPUT
+myId: Your player id (0 or 1)
+agentCount: Total number of agents still in the game
+agentDataCount: Total number of agents in the game
+agentId: Unique identifier for this agent
+player: Player id of this agent
+shootCooldown: Number of turns between each of this agent's shots
+optimalRange: Maximum manhattan distance for greatest damage output
+soakingPower: Damage output within optimal conditions
+splashBombs: Number of splash bombs this can throw this game
+width: Width of the game map
+height: Height of the game map
+x: X coordinate, 0 is left edge
+y: Y coordinate, 0 is top edge
+cooldown: Number of turns before this agent can shoot
+wetness: Damage (0-100) this agent has taken
+myAgentCount: Number of alive agents controlled by you
+
+OUTPUT
+One line per agent: <agentId>;<action1;action2;...> actions are "MOVE x y | SHOOT id | THROW x y | HUNKER_DOWN | MESSAGE text"

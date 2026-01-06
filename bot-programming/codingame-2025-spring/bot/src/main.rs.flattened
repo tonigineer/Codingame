@@ -1,0 +1,787 @@
+mod bot {
+    use std::cmp::Ordering;
+    use std::collections::{HashMap, HashSet};
+    
+    use crate::game::{Game, MAX_GRADE_DISTANCE};
+    use crate::types::{Agent, Command, PlayingSide, Position, TileType};
+    
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct Bot {
+        player_id: u8,
+        my_agents: HashSet<Agent>,
+        opp_agents: HashSet<Agent>,
+        agent_commands: HashMap<Agent, Vec<(f32, Command, Command)>>,
+    }
+    
+    impl Bot {
+        pub fn new(playing_side: &PlayingSide, game: &Game) -> Self {
+            let player_id = if matches!(playing_side, PlayingSide::Player) {
+                game.my_id
+            } else {
+                game.my_id + 1 % 2
+            };
+    
+            let my_agents: HashSet<Agent> = game
+                .agents
+                .iter()
+                .filter(|(_, a)| a.player_id == game.my_id && a.alive)
+                .map(|(_, agent)| (agent.clone()))
+                .collect();
+    
+            let opp_agents: HashSet<Agent> = game
+                .agents
+                .iter()
+                .filter(|(_, a)| a.player_id != game.my_id && a.alive)
+                .map(|(_, agent)| (agent.clone()))
+                .collect();
+    
+            let agent_commands = HashMap::with_capacity(my_agents.len());
+    
+            Bot {
+                player_id,
+                my_agents,
+                opp_agents,
+                agent_commands,
+            }
+        }
+    
+        pub fn play(&mut self, game: &Game) -> HashMap<Agent, (Command, Command)> {
+            self.decide_on_moving(game);
+            self.decide_on_grenades(game);
+    
+            self.evaluate_moves_for_points(game);
+            // self.evaluate_grenades_for_damage(game);
+    
+            self.last_resort(game);
+    
+            let mut best_commands = HashMap::new();
+    
+            for agent in self.my_agents.iter() {
+                if let Some(commands) = self.agent_commands.get_mut(&agent) {
+                    commands.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+    
+                    eprintln!("{}", agent.agent_id);
+                    for (score, cmd1, cmd2) in commands.iter() {
+                        eprintln!("{} {} {}", score, cmd1, cmd2);
+                    }
+    
+                    let (_, cmd1, cmd2) = commands.first().unwrap();
+                    best_commands.insert(*agent, (*cmd1, *cmd2));
+                }
+            }
+    
+            best_commands
+        }
+    
+        fn last_resort(&mut self, game: &Game) {
+            for agent in self.my_agents.iter() {
+                let commands = self.agent_commands.entry(*agent).or_default();
+    
+                // Move towards enemies
+                commands.push((
+                    1.0,
+                    Command::Move {
+                        position: game.get_enemy_center(),
+                    },
+                    Command::HunkerDown,
+                ));
+            }
+        }
+    
+        fn decide_on_moving(&mut self, game: &Game) {
+            for agent in self.my_agents.iter() {
+                let mut commands = vec![(-1.0, Command::HunkerDown, Command::None)];
+    
+                for position in &agent.position.cardinal_dirs() {
+                    if !game.is_valid(position) {
+                        continue;
+                    }
+                    if game.get_tile(position).tile_type != TileType::Empty {
+                        continue;
+                    }
+    
+                    commands.push((
+                        0.0,
+                        Command::Move {
+                            position: *position,
+                        },
+                        Command::HunkerDown,
+                    ));
+                }
+    
+                self.agent_commands.insert(*agent, commands);
+            }
+        }
+    
+        fn decide_on_grenades(&mut self, game: &Game) {
+            for r in 1..game.height - 1 {
+                for c in 1..game.width - 1 {
+                    let tile = game.get_tile(&Position {
+                        x: c as i16,
+                        y: r as i16,
+                    });
+    
+                    let (n_my_agents, n_opp_agents) = game.surrounding_agents(&tile.position, true);
+    
+                    // enemy found and prevent friendly fire
+                    if n_my_agents > 0 || n_opp_agents == 0 {
+                        continue;
+                    }
+    
+                    for agent in self.my_agents.iter() {
+                        eprintln!("{} {} {}", agent.agent_id, tile.position.x, tile.position.y);
+                        if agent.splash_bombs == 0 {
+                            continue;
+                        }
+    
+                        let commands = self.agent_commands.entry(*agent).or_default();
+                        let temp_commands = commands.clone();
+                        for (score, cmd1, _) in temp_commands.iter() {
+                            eprintln!("{}", cmd1);
+                            let agent_position = if let Some(position) = cmd1.position() {
+                                position
+                            } else {
+                                continue;
+                            };
+    
+                            let distance = agent_position.distance_to(&tile.position);
+                            if distance > MAX_GRADE_DISTANCE {
+                                continue;
+                            }
+    
+                            let mut new_score = score + n_opp_agents as f32;
+                            if tile.agent != None {
+                                new_score += n_opp_agents as f32;
+                            }
+    
+                            // commands.push((
+                            //     new_score,
+                            //     *cmd1,
+                            //     Command::Throw {
+                            //         position: tile.position,
+                            //     },
+                            // ));
+                        }
+                    }
+                }
+            }
+        }
+    
+        fn evaluate_moves_for_points(&mut self, game: &Game) {
+            let (my_area, opp_area) = game.controlled_area();
+            let ref_score = my_area - opp_area;
+    
+            for agent in self.my_agents.iter() {
+                let mut temp_game = game.clone();
+    
+                if let Some(commands) = self.agent_commands.get_mut(agent) {
+                    for (score, cmd1, _) in commands.iter_mut() {
+                        if let Some(position) = cmd1.position() {
+                            temp_game
+                                .agents
+                                .get_mut(&agent.agent_id)
+                                .unwrap()
+                                .position
+                                .change(position.x, position.y);
+    
+                            let (my_area, opp_area) = temp_game.controlled_area();
+                            *score = ((my_area - opp_area) - ref_score) as f32;
+                        }
+                    }
+    
+                    if commands.iter().all(|(s, _, _)| *s <= 0.0) {
+                        eprintln!("AAAAAA");
+                    }
+                }
+            }
+        }
+    }
+}
+mod game {
+    use std::collections::HashMap;
+    use std::io;
+    
+    pub use crate::types::{Agent, Command, Position, Tile};
+    
+    macro_rules! parse_input {
+        ($x:expr, $t:ident) => {
+            $x.trim().parse::<$t>().unwrap()
+        };
+    }
+    
+    pub const MAX_GRADE_DISTANCE: i16 = 4;
+    pub const GRANADE_DAMAGE: i16 = 30;
+    
+    pub const WETNESS_THRESHOLD_AREA_CONTROL: i16 = 50;
+    pub const WETNESS_AREA_CONTROL_DIST_MULT: i16 = 2;
+    
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Game {
+        pub my_id: u8,
+        pub width: u8,
+        pub height: u8,
+        pub grid: Vec<Vec<Tile>>,
+        pub init_agent_count: usize,
+        pub agents: HashMap<u8, Agent>,
+        pub my_points: i16,
+        pub opp_points: i16,
+        pub my_hp: i16,
+        pub opp_hp: i16,
+        pub my_bombs: i16,
+        pub opp_bombs: i16,
+        pub turn: i16,
+    }
+    
+    impl Game {
+        pub fn new() -> Self {
+            let mut input_line = String::new();
+    
+            io::stdin().read_line(&mut input_line).unwrap();
+            let my_id = parse_input!(input_line, u8);
+    
+            let mut input_line = String::new();
+            io::stdin().read_line(&mut input_line).unwrap();
+            let init_agent_count = parse_input!(input_line, usize);
+    
+            let mut agents = HashMap::new();
+            for _ in 0..init_agent_count {
+                let mut input_line = String::new();
+                io::stdin().read_line(&mut input_line).unwrap();
+    
+                let agent = Agent::new(&input_line);
+                agents.insert(agent.agent_id, agent);
+            }
+    
+            let mut input_line = String::new();
+            io::stdin().read_line(&mut input_line).unwrap();
+            let inputs: Vec<&str> = input_line.split_whitespace().collect();
+    
+            let width = parse_input!(inputs[0], u8); // Width of the game map
+            let height = parse_input!(inputs[1], u8); // Height of the game map
+    
+            let mut grid: Vec<Vec<Tile>> = Vec::new();
+    
+            for _ in 0..height as usize {
+                let mut input_line = String::new();
+                io::stdin().read_line(&mut input_line).unwrap();
+                let inputs = input_line.split_whitespace().collect::<Vec<_>>();
+    
+                let row: Vec<Tile> = inputs
+                    .chunks_exact(3)
+                    .take(width as usize)
+                    .map(|chunk| {
+                        let x = parse_input!(chunk[0], i16);
+                        let y = parse_input!(chunk[1], i16);
+                        let tile_type = parse_input!(chunk[2], u8);
+                        Tile::new(x, y, tile_type)
+                    })
+                    .collect();
+                grid.push(row);
+            }
+    
+            Game {
+                my_id,
+                width,
+                height,
+                grid,
+                init_agent_count,
+                agents,
+                my_points: 0,
+                opp_points: 0,
+                my_hp: 0,
+                opp_hp: 0,
+                my_bombs: 0,
+                opp_bombs: 0,
+                turn: -1, // turn one is 0 and corresponds to animation on website
+            }
+        }
+    
+        pub fn update_turn(&mut self) {
+            // Reset previous turn
+            self.agents.values_mut().for_each(|v| v.alive = false);
+            self.grid.iter_mut().flatten().for_each(|t| {
+                t.agent = None;
+            });
+    
+            // Parse new turn
+            self.turn += 1;
+    
+            let mut input_line = String::new();
+            io::stdin().read_line(&mut input_line).unwrap();
+    
+            for _ in 0..parse_input!(input_line, usize) {
+                let mut input_line = String::new();
+                io::stdin().read_line(&mut input_line).unwrap();
+                let inputs: Vec<&str> = input_line.split_whitespace().collect();
+    
+                let agent_id = parse_input!(inputs[0], u8);
+    
+                if let Some(agent) = self.agents.get_mut(&agent_id) {
+                    agent
+                        .position
+                        .change(parse_input!(inputs[1], i16), parse_input!(inputs[2], i16));
+                    agent.shoot_cooldown = parse_input!(inputs[3], i16); // Number of turns before this agent can shoot
+                    agent.splash_bombs = parse_input!(inputs[4], i16);
+                    agent.wetness = parse_input!(inputs[5], i16); // Damage (0-100) this agent has taken
+                    agent.alive = true;
+    
+                    self.grid[agent.position.y as usize][agent.position.x as usize].agent =
+                        Some(*agent);
+                }
+            }
+    
+            let mut input_line = String::new();
+            io::stdin().read_line(&mut input_line).unwrap();
+            let my_agent_count = parse_input!(input_line, usize);
+    
+            self.agents.retain(|_, agent| agent.alive);
+            assert!(
+                my_agent_count
+                    == self
+                        .agents
+                        .iter()
+                        .filter(|(_, v)| v.player_id == self.my_id)
+                        .count(),
+            );
+    
+            self.my_hp = self
+                .agents
+                .iter()
+                .filter(|(_, v)| v.player_id == self.my_id)
+                .map(|(_, a)| a.wetness)
+                .sum::<i16>();
+            self.opp_hp = self
+                .agents
+                .iter()
+                .filter(|(_, v)| v.player_id != self.my_id)
+                .map(|(_, a)| a.wetness)
+                .sum::<i16>();
+            self.my_bombs = self
+                .agents
+                .iter()
+                .filter(|(_, v)| v.player_id == self.my_id)
+                .map(|(_, a)| a.splash_bombs)
+                .sum::<i16>();
+            self.opp_bombs = self
+                .agents
+                .iter()
+                .filter(|(_, v)| v.player_id != self.my_id)
+                .map(|(_, a)| a.splash_bombs)
+                .sum::<i16>();
+    
+            self.update_points();
+    
+            eprintln!(
+                "Turn: {} Points: {}/{} DMG: {}/{} Bombs: {}/{}",
+                self.turn,
+                self.my_points,
+                self.opp_points,
+                self.my_hp,
+                self.opp_hp,
+                self.my_bombs,
+                self.opp_bombs
+            );
+        }
+    
+        pub fn update_points(&mut self) {
+            let (my_area, opp_area) = self.controlled_area();
+            self.my_points += (my_area - opp_area).max(0);
+            self.opp_points += (opp_area - my_area).max(0);
+        }
+    
+        pub fn output_commands(&self, agent_commands: &HashMap<Agent, (Command, Command)>) {
+            for (_, agent) in self
+                .agents
+                .iter()
+                .filter(|(_, a)| a.player_id == self.my_id)
+            {
+                if let Some((c1, c2)) = agent_commands.get(&agent) {
+                    println!("{}{}{}", agent.agent_id, c1, c2);
+                } else {
+                    println!("{}; HUNKER_DOWN; MESSAGE {}", agent.agent_id, "??");
+                }
+            }
+        }
+    
+        pub fn controlled_area(&self) -> (i16, i16) {
+            let mut my_points = 0;
+            let mut opp_points = 0;
+    
+            for r in 0..self.height {
+                for c in 0..self.width {
+                    let tile = self.grid[r as usize][c as usize];
+    
+                    let mut my_dist: i16 = std::i16::MAX;
+                    let mut opp_dist: i16 = std::i16::MAX;
+    
+                    for agent in self.agents.values() {
+                        let mut dist = tile.position.distance_to(&agent.position);
+                        if agent.wetness >= WETNESS_THRESHOLD_AREA_CONTROL {
+                            dist *= WETNESS_AREA_CONTROL_DIST_MULT;
+                        }
+    
+                        if agent.player_id == self.my_id {
+                            my_dist = my_dist.min(dist);
+                        } else {
+                            opp_dist = opp_dist.min(dist);
+                        }
+                    }
+    
+                    if my_dist <= opp_dist {
+                        my_points += 1
+                    }
+    
+                    if opp_dist <= my_dist {
+                        opp_points += 1
+                    }
+                }
+            }
+    
+            (my_points, opp_points)
+        }
+    
+        pub fn is_valid(&self, position: &Position) -> bool {
+            position.x >= 0
+                && position.x < self.width as i16
+                && position.y >= 0
+                && position.y < self.height as i16
+        }
+    
+        pub fn get_tile(&self, position: &Position) -> Tile {
+            self.grid[position.y as usize][position.x as usize]
+        }
+    
+        pub fn get_enemy_center(&self) -> Position {
+            let (sx, sy, n) = self
+                .agents
+                .values()
+                .filter(|a| a.player_id != self.my_id)
+                .fold((0i32, 0i32, 0i32), |(sx, sy, n), a| {
+                    (sx + a.position.x as i32, sy + a.position.y as i32, n + 1)
+                });
+    
+            if n == 0 {
+                return Position::new((self.width / 2) as i16, (self.height / 2) as i16);
+            }
+    
+            Position::new((sx / n) as i16, (sy / n) as i16)
+        }
+    
+        pub fn surrounding_agents(&self, position: &Position, incl_center: bool) -> (i16, i16) {
+            let mut num_my_agents = 0;
+            let mut num_opp_agents = 0;
+    
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    if !incl_center && dr == 0 && dc == 0 {
+                        continue;
+                    }
+    
+                    let new_position = Position {
+                        x: position.x + dc,
+                        y: position.y + dr,
+                    };
+    
+                    if !self.is_valid(&new_position) {
+                        continue;
+                    }
+    
+                    if let Some(agent) = self.get_tile(&new_position).agent {
+                        if agent.player_id == self.my_id {
+                            num_my_agents += 1;
+                        }
+                        if agent.player_id != self.my_id {
+                            num_opp_agents += 1;
+                        }
+                    }
+                }
+            }
+    
+            (num_my_agents, num_opp_agents)
+        }
+    }
+}
+mod types {
+    use std::fmt;
+    
+    macro_rules! parse_input {
+        ($x:expr, $t:ident) => {
+            $x.trim().parse::<$t>().unwrap()
+        };
+    }
+    
+    pub enum PlayingSide {
+        Player,
+        Opponent,
+    }
+    
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum TileType {
+        Empty,
+        LowCover,
+        HighCover,
+    }
+    
+    impl TileType {
+        pub const fn damage_multiplier(self) -> f32 {
+            match self {
+                TileType::Empty => 1.0,
+                TileType::LowCover => 0.50,
+                TileType::HighCover => 0.25,
+            }
+        }
+    }
+    
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Position {
+        pub x: i16,
+        pub y: i16,
+    }
+    
+    impl Position {
+        pub fn new(x: i16, y: i16) -> Self {
+            Position { x, y }
+        }
+    
+        pub fn change(&mut self, x: i16, y: i16) {
+            self.x = x;
+            self.y = y;
+        }
+    
+        // fn is_valid(&self, game: &Game) -> bool {
+        //     return self.x >= 0 && self.x < game.width && self.y >= 0 && self.y < game.height;
+        // }
+    
+        pub fn distance_to(&self, other: &Position) -> i16 {
+            (self.x.abs_diff(other.x) + self.y.abs_diff(other.y)) as i16
+        }
+    
+        pub fn cardinal_dirs(&self) -> Vec<Position> {
+            const CARDINAL_DIRS: [(i16, i16); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+            CARDINAL_DIRS
+                .iter()
+                .map(|(dx, dy)| Position::new(self.x + dx, self.y + dy))
+                .collect()
+        }
+    
+        pub fn moore_dirs(&self) -> Vec<Position> {
+            const MOORE_DIRS: [(i16, i16); 8] = [
+                (0, -1),
+                (1, -1),
+                (1, 0),
+                (1, 1),
+                (0, 1),
+                (-1, 1),
+                (-1, 0),
+                (-1, -1),
+            ];
+            MOORE_DIRS
+                .iter()
+                .map(|(dx, dy)| Position::new(self.x + dx, self.y + dy))
+                .collect()
+        }
+    
+        // fn surrounding_agents(&self, game: &Game, incl_center: bool) -> (u32, u32) {
+        //     let mut num_my_agents = 0;
+        //     let mut num_opp_agents = 0;
+        //     for dr in -1..=1 {
+        //         for dc in -1..=1 {
+        //             if !incl_center && dr == 0 && dc == 0 {
+        //                 continue;
+        //             }
+    
+        //             if self.y + dr < 0
+        //                 || self.y + dr >= game.height
+        //                 || self.x + dc < 0
+        //                 || self.x + dc >= game.width
+        //             {
+        //                 continue;
+        //             }
+    
+        //             if let Some(agent) = game.grid[(self.y + dr) as usize][(self.x + dc) as usize].agent
+        //             {
+        //                 if agent.player == game.my_id {
+        //                     num_my_agents += 1;
+        //                 }
+        //                 if agent.player != game.my_id {
+        //                     num_opp_agents += 1;
+        //                 }
+        //             }
+        //         }
+        //     }
+    
+        //     (num_my_agents, num_opp_agents)
+        // }
+    }
+    
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Tile {
+        pub position: Position,
+        pub tile_type: TileType,
+        pub agent: Option<Agent>,
+    }
+    
+    impl Tile {
+        pub fn new(x: i16, y: i16, tile_type: u8) -> Self {
+            Tile {
+                position: Position::new(x, y),
+                tile_type: match tile_type {
+                    0 => TileType::Empty,
+                    1 => TileType::LowCover,
+                    2 => TileType::HighCover,
+                    _ => unreachable!(),
+                },
+                agent: None,
+            }
+        }
+    }
+    
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Agent {
+        pub agent_id: u8,
+        pub player_id: u8,
+        pub shoot_cooldown: i16,
+        pub optimal_range: i16,
+        pub soaking_power: i16,
+        pub splash_bombs: i16,
+        pub position: Position,
+        pub wetness: i16,
+        pub alive: bool,
+    }
+    
+    impl Agent {
+        pub fn new(input_line: &str) -> Self {
+            let inputs: Vec<&str> = input_line.split_whitespace().collect();
+    
+            let agent_id = parse_input!(inputs[0], u8);
+            let player_id = parse_input!(inputs[1], u8);
+            let shoot_cooldown = parse_input!(inputs[2], i16);
+            let optimal_range = parse_input!(inputs[3], i16);
+            let soaking_power = parse_input!(inputs[4], i16);
+            let splash_bombs = parse_input!(inputs[5], i16);
+    
+            Agent {
+                agent_id,
+                player_id,
+                shoot_cooldown,
+                optimal_range,
+                soaking_power,
+                splash_bombs,
+                position: Position::new(0, 0),
+                wetness: 0,
+                alive: true,
+            }
+        }
+    
+        pub fn attack_damage(&self, target_position: &Position) -> i16 {
+            if self.shoot_cooldown > 0 {
+                return 0;
+            }
+    
+            let distance = self.position.distance_to(&target_position);
+    
+            if distance <= self.optimal_range {
+                return self.soaking_power;
+            }
+            if distance <= self.optimal_range * 2 {
+                return self.soaking_power / 2;
+            }
+    
+            0
+        }
+    }
+    
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum Command {
+        Move { position: Position },
+        Throw { position: Position },
+        Shoot { agent: Agent },
+        HunkerDown,
+        None,
+    }
+    
+    impl Command {
+        //     fn damage_multiplier(self) -> Option<f32> {
+        //         match self {
+        //             Command::HunkerDown => Some(0.25),
+        //             _ => None,
+        //         }
+        //     }
+    
+        pub fn position(self) -> Option<Position> {
+            match self {
+                Command::Move { position } | Command::Throw { position } => Some(position),
+                _ => None,
+            }
+        }
+    
+        //     fn actor(self) -> Option<Agent> {
+        //         if let Command::Shoot { agent } = self {
+        //             Some(agent)
+        //         } else {
+        //             None
+        //         }
+        //     }
+    }
+    
+    impl fmt::Display for Command {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Command::Move { position } => write!(f, "; MOVE {} {}", position.x, position.y),
+                Command::Throw { position } => write!(f, "; THROW {} {}", position.x, position.y),
+                Command::Shoot { agent } => write!(f, "; SHOOT {}", agent.agent_id),
+                Command::HunkerDown => write!(f, "; HUNKER_DOWN"),
+                Command::None => write!(f, ""),
+            }
+        }
+    }
+}
+
+use std::collections::HashMap;
+use std::time::Instant;
+
+use bot::Bot;
+use game::Game;
+use types::{Agent, Command};
+
+use crate::types::PlayingSide;
+
+fn main() {
+    let mut game = Game::new();
+
+    loop {
+        game.update_turn();
+
+        let start = Instant::now();
+        let mut iteration = 0;
+        let mut best_commands: HashMap<Agent, (Command, Command)> = HashMap::new();
+
+        let mut player = Bot::new(&PlayingSide::Player, &game);
+        let opponent = Bot::new(&PlayingSide::Opponent, &game);
+
+        loop {
+            iteration += 1;
+            let temp_game = game.clone();
+
+            let player_commands = player.play(&temp_game);
+
+            // let mut temp_counter_game = game.clone();
+            // temp_counter_game.apply_moves(&player_commands);
+            // let opponent_commands = opponent.counter_play(&temp_counter_game, &player_commands);
+            // temp_game.apply_both_player(&player_commands, &oppenent_commands);
+
+            // let player_score, opponent_score = temp_game.referee();
+            best_commands = player_commands;
+
+            let now = Instant::now();
+            if now.duration_since(start).as_millis() > 49 {
+                eprintln!("{}", iteration);
+                break;
+            }
+
+            break;
+        }
+
+        game.output_commands(&best_commands);
+    }
+}
