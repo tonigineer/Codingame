@@ -1,16 +1,16 @@
 name: Checks
 on:
-    push:
-        branches:
-            - main
-            - "feature/**"
+  push:
+    branches:
+      - main
+      - "feature/**"
 
 jobs:
-    lint:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - run: rustup install nightly --profile default
-            - run: rustup default nightly
-            - run: cargo fmt --check -- `find . -name "*.rs"`
-            - run: cargo clippy --all-targets --all-features -- --deny warnings
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup install nightly --profile default
+      - run: rustup default nightly
+      - run: cargo fmt --check -- `find . -name "*.rs"`
+      - run: cargo clippy --all-targets --all-features -- --deny warnings
