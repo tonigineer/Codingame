@@ -152,7 +152,7 @@ impl Board {
     }
 
     fn top_mask_all() -> u64 {
-        (0..WIDTH).map(|c| Board::top_mask(c)).sum()
+        (0..WIDTH).map(Board::top_mask).sum()
     }
 }
 
@@ -160,6 +160,12 @@ impl Board {
 pub struct ConnectFour {
     board: Board,
     current_player: PlayerMask,
+}
+
+impl Default for ConnectFour {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConnectFour {
@@ -184,7 +190,7 @@ impl Game for ConnectFour {
                 arr[i] = if i % 2 == 0 {
                     center - (i / 2)
                 } else {
-                    center + (i + 1) / 2
+                    center + i.div_ceil(2)
                 };
                 i += 1;
             }
@@ -301,7 +307,7 @@ impl Game for ConnectFour {
                 line.push(' ');
             }
 
-            print!("{}|\n", line);
+            println!("{}|", line);
         }
 
         let bottom_line = (0..WIDTH)
@@ -309,16 +315,16 @@ impl Game for ConnectFour {
             .collect::<Vec<_>>()
             .join("");
 
-        print!("+{}\n", bottom_line);
+        println!("+{}", bottom_line);
 
         if let Some(w) = self.get_winner() {
-            print!(" Winner: {}\n", w.symbol());
+            println!(" Winner: {}", w.symbol());
         }
 
         let _ = io::stdout().flush();
     }
 
-    fn get_game_state_score(&self, player: &Self::PlayerMask) -> f32 {
+    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
         fn count_sequences(p: u64) -> (u32, u32) {
             let mut n_two = 0u32;
             let mut n_three = 0u32;

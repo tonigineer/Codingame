@@ -4,9 +4,9 @@ pub mod minimax;
 use crate::Game;
 
 pub trait Strategy {
-    fn compute_move<G: Game>(&self, game: &G) -> G::Move
+    fn compute_move<G>(&self, game: &G) -> G::Move
     where
-        G: Clone,
+        G: Game + Clone,
         G::Move: Clone,
         <G as Game>::PlayerMask: Eq;
 }

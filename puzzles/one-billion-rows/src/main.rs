@@ -83,7 +83,7 @@ fn split_once<T, F>(s: &[T], mut pred: F) -> Option<(&[T], &[T])>
 where
     F: FnMut(&T) -> bool,
 {
-    let i = s.iter().position(|x| pred(x))?;
+    let i = s.iter().position(pred)?;
     let (left, right_with_sep) = s.split_at(i);
     Some((left, &right_with_sep[1..]))
 }

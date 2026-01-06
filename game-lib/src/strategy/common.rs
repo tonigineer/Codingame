@@ -26,7 +26,7 @@ impl Strategy for RandomMove {
         game.get_possible_moves()
             .collect::<Vec<G::Move>>()
             .choose(&mut rng)
-            .map(|x| x.clone())
+            .copied()
             .expect("No moves available, game's done. Should not be called.")
     }
 }

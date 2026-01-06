@@ -71,6 +71,12 @@ pub struct Board {
     pub o_board: u16,
 }
 
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Board {
     pub fn new() -> Self {
         Self {
@@ -91,6 +97,12 @@ impl Board {
 pub struct TicTacToe {
     pub board: Board,
     pub current_player: PlayerMask,
+}
+
+impl Default for TicTacToe {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TicTacToe {
@@ -197,16 +209,16 @@ impl Game for TicTacToe {
                 }
             }
 
-            print!("{}\n", line);
+            println!("{}", line);
 
             if r < 2 {
-                print!("---+---+---\n");
+                println!("---+---+---");
             }
         }
-        print!("\n");
+        println!();
 
         if let Some(w) = self.get_winner() {
-            print!(" Winner: {}\n", w.colored_symbol());
+            println!(" Winner: {}", w.colored_symbol());
         }
 
         let _ = io::stdout().flush();

@@ -22,7 +22,7 @@ pub struct Minimax {
 impl Minimax {
     pub fn new(max_depth: u64) -> Self {
         Minimax {
-            max_depth: max_depth,
+            max_depth,
             transpositions: AHashMap::new(),
             move_score: 0.0,
             n_cached_transposition: 0,
@@ -32,9 +32,9 @@ impl Minimax {
         }
     }
 
-    pub fn get_move<G: Game>(&mut self, game: &mut G, side: G::PlayerMask) -> G::Move
+    pub fn get_move<G>(&mut self, game: &mut G, side: G::PlayerMask) -> G::Move
     where
-        G: Clone,
+        G: Game + Clone,
         G::Move: Clone,
         <G as Game>::PlayerMask: Eq,
     {
@@ -80,7 +80,7 @@ impl Minimax {
     where
         G: Game + Clone,
     {
-        game.get_game_state_score(&side)
+        game.get_game_state_score(side)
     }
 
     fn terminal_score<G>(&mut self, game: &G, my_side: &G::PlayerMask, depth: u64) -> Option<f32>
@@ -192,9 +192,9 @@ impl Minimax {
 }
 
 impl Strategy for Minimax {
-    fn compute_move<G: Game>(&self, game: &G) -> G::Move
+    fn compute_move<G>(&self, game: &G) -> G::Move
     where
-        G: Clone,
+        G: Game + Clone,
         G::Move: Clone,
         <G as Game>::PlayerMask: Eq,
     {
@@ -202,8 +202,7 @@ impl Strategy for Minimax {
         let side = game.get_current_player();
 
         let mut minimax = Minimax::new(self.max_depth);
-        let mv = minimax.get_move(&mut new_game, side);
 
-        mv
+        minimax.get_move(&mut new_game, side)
     }
 }
