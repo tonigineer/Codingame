@@ -23,6 +23,12 @@ impl std::fmt::Display for GameError {
 
 impl std::error::Error for GameError {}
 
+pub trait Player {
+    fn other(&self) -> Self;
+    fn index(&self) -> usize;
+    fn symbol(&self) -> char;
+}
+
 pub trait Game {
     type PlayerMask;
     type Move: Copy + Clone;
@@ -53,24 +59,26 @@ pub trait Game {
     fn get_game_state_hash(&self) -> u64;
 }
 
-pub enum PlayerType<S: Strategy> {
+pub enum PlayerType {
     Human,
-    AI(S),
+    Minimax(strategy::minimax::Minimax),
+    FirstPossibleMove(strategy::common::FirstPossibleMove),
+    RandomMove(strategy::common::RandomMove),
 }
 
-pub struct Competition<G: Game, S: Strategy> {
+pub struct Competition<G: Game> {
     pub game: G,
-    first_player: PlayerType<S>,
-    second_player: PlayerType<S>,
+    first_player: PlayerType,
+    second_player: PlayerType,
     pub turn: u32,
 }
 
-impl<G: Game<Move = usize>, S: Strategy> Competition<G, S>
+impl<G: Game<Move = usize>> Competition<G>
 where
     G: Clone,
     <G as Game>::PlayerMask: Eq,
 {
-    pub fn new(game: G, first_player: PlayerType<S>, second_player: PlayerType<S>) -> Self {
+    pub fn new(game: G, first_player: PlayerType, second_player: PlayerType) -> Self {
         Competition {
             game,
             first_player,
@@ -98,13 +106,15 @@ where
         Ok(())
     }
 
-    pub fn determine_player(&self) -> &PlayerType<S> {
+    pub fn determine_player(&self) -> &PlayerType {
         [&self.first_player, &self.second_player][self.game.get_current_player_index()]
     }
 
-    pub fn get_move_for_player(&self, player: &PlayerType<S>) -> Result<usize, GameError> {
+    pub fn get_move_for_player(&self, player: &PlayerType) -> Result<usize, GameError> {
         match player {
-            PlayerType::AI(strategy) => strategy.compute_move(&self.game),
+            PlayerType::Minimax(strategy) => strategy.compute_move(&self.game),
+            PlayerType::FirstPossibleMove(strategy) => strategy.compute_move(&self.game),
+            PlayerType::RandomMove(strategy) => strategy.compute_move(&self.game),
             PlayerType::Human => Ok(prompt_user_move(&self.game)),
         }
     }

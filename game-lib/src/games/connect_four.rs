@@ -1,5 +1,6 @@
 use crate::Game;
 use std::io::{self, Write};
+use crate::Player;
 
 const WIDTH: usize = 7;
 const HEIGHT: usize = 6;
@@ -103,7 +104,7 @@ pub enum PlayerMask {
     Yellow,
 }
 
-impl PlayerMask {
+impl crate::Player for PlayerMask {
     fn other(&self) -> Self {
         match &self {
             PlayerMask::Red => PlayerMask::Yellow,

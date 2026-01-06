@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use games::games::connect_four::ConnectFour;
+    use games::games::connect_four::{ConnectFour, PlayerMask};
     use games::games::tic_tac_toe::TicTacToe;
-    // use games::strategy::common::{FirstPossibleMove, RandomMove};
+    use games::strategy::common::{RandomMove, FirstPossibleMove};
     use games::strategy::minimax::Minimax;
     use games::{Competition, Game, PlayerType};
 
@@ -11,8 +11,8 @@ mod tests {
         let game = TicTacToe::new();
         let depths = 9;
 
-        let first_player = PlayerType::AI(Minimax::new(depths));
-        let second_player = PlayerType::AI(Minimax::new(depths));
+        let first_player = PlayerType::Minimax(Minimax::new(depths));
+        let second_player = PlayerType::Minimax(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
 
@@ -21,6 +21,7 @@ mod tests {
             .get_move_for_player(player)
             .expect("Should be able to get a move");
         competition.game.apply_move(chosen_move);
+
         assert!(
             competition.game.board.x_board & (1 + 4 + 16 + 64 + 256) > 0,
             "First move of first player must be either a corner or the center."
@@ -29,10 +30,12 @@ mod tests {
         player = competition.determine_player();
         chosen_move = competition.get_move_for_player(player).unwrap();
         competition.game.apply_move(chosen_move);
+
         assert!(
             competition.game.board.o_board & (1 + 4 + 16 + 64 + 256) > 0,
             "First move of second player must be either a corner or the center."
         );
+
         assert!(
             competition.game.board.x_board & 16 > 0 || competition.game.board.o_board & 16 > 0,
             "One of first two moves must be in the center."
@@ -44,8 +47,8 @@ mod tests {
         let game = TicTacToe::new();
         let depths = 9;
 
-        let first_player = PlayerType::AI(Minimax::new(depths));
-        let second_player = PlayerType::AI(Minimax::new(depths));
+        let first_player = PlayerType::Minimax(Minimax::new(depths));
+        let second_player = PlayerType::Minimax(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
         competition
@@ -63,8 +66,8 @@ mod tests {
         let game = ConnectFour::new();
         let depths = 15;
 
-        let first_player = PlayerType::AI(Minimax::new(depths));
-        let second_player = PlayerType::AI(Minimax::new(depths));
+        let first_player = PlayerType::Minimax(Minimax::new(depths));
+        let second_player = PlayerType::Minimax(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
         let player = competition.determine_player();
@@ -84,8 +87,8 @@ mod tests {
         let game = ConnectFour::new();
         let depths = 9;
 
-        let first_player = PlayerType::AI(Minimax::new(depths));
-        let second_player = PlayerType::AI(Minimax::new(depths));
+        let first_player = PlayerType::Minimax(Minimax::new(depths));
+        let second_player = PlayerType::Minimax(Minimax::new(depths));
 
         let mut competition = Competition::new(game, first_player, second_player);
         competition
@@ -98,19 +101,41 @@ mod tests {
         );
     }
 
-    // TODO: Implement the possiblity of different strategies.
-    //
-    // #[test]
-    // fn minimax_connect_four_beat_random() {
-    //     let game = ConnectFour::new();
-    //     let depths = 10;
+    #[test]
+    fn minimax_connect_four_beat_first_possible_move() {
+        let game = ConnectFour::new();
+        let depths = 9;
 
-    //     let first_player = PlayerType::AI(Minimax::new(depths));
-    //     let second_player = PlayerType::AI(FirstPossibleMove);
+        let first_player = PlayerType::Minimax(Minimax::new(depths));
+        let second_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
 
-    //     let mut competition = Competition::new(game, first_player, second_player);
-    //     competition.start(false);
+        let mut competition = Competition::new(game, first_player, second_player);
+        competition
+            .start(false)
+            .expect("Game should complete without errors");
 
-    //     assert!(competition.game.get_winner().is_none());
-    // }
+        assert!(
+            competition.game.get_winner().unwrap() == PlayerMask::Red,
+            "Minimax must beat bot that always plays first possible move."
+        );
+    }
+
+    #[test]
+    fn minimax_connect_four_beat_random() {
+        let game = ConnectFour::new();
+        let depths = 9;
+
+        let first_player = PlayerType::Minimax(Minimax::new(depths));
+        let second_player = PlayerType::RandomMove(RandomMove);
+
+        let mut competition = Competition::new(game, first_player, second_player);
+        competition
+            .start(false)
+            .expect("Game should complete without errors");
+
+        assert!(
+            competition.game.get_winner().unwrap() == PlayerMask::Red,
+            "Minimax must beat bot that always plays random moves."
+        );
+    }
 }
