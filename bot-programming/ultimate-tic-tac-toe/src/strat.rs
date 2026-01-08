@@ -132,28 +132,21 @@ impl Minimax {
         }
 
         let game_state_hash = game.get_game_state_hash();
-        if let Some((score_seen, depth_seen, transposition_type)) =
-            self.transpositions.get(&game_state_hash)
-        {
-            if *depth_seen >= depth {
+        match self.transpositions.get(&game_state_hash) {
+            Some((score_seen, depth_seen, transposition_type)) if *depth_seen >= depth => {
                 self.n_cached_transposition += 1;
 
                 match transposition_type {
-                    TranspositionType::Exact => {
-                        return *score_seen;
-                    }
-                    TranspositionType::LowerBound => {
-                        alpha = alpha.max(*score_seen);
-                    }
-                    TranspositionType::UpperBound => {
-                        beta = beta.min(*score_seen);
-                    }
+                    TranspositionType::Exact => return *score_seen,
+                    TranspositionType::LowerBound => alpha = alpha.max(*score_seen),
+                    TranspositionType::UpperBound => beta = beta.min(*score_seen),
                 }
 
                 if alpha >= beta {
                     return *score_seen;
                 }
             }
+            _ => {}
         }
 
         let maximizing = *my_side == game.get_current_player();
