@@ -21,7 +21,7 @@ def inline(file_path: Path) -> str:
         body = inline(child)
 
         indented = "\n".join("    " + line for line in body.splitlines())
-        return f"mod {name} {{\n{indented}\n}}"
+        return f"mod {name} {{\n{indented}\n}}\n"
 
     return mod_decl.sub(repl, src)
 

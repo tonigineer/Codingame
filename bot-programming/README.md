@@ -8,6 +8,7 @@ To prepare the code as a single file for submission to the CodinGame web browser
 IDE, use the `flatten.py` script from the root directory:
 
 ```sh
+cd ./bot-programming/ultimate-tic-tac-tac
 python ./bot-programming/flatten.py ultimate-tic-tac-toe
 ```
 
@@ -17,4 +18,4 @@ This will generate a flattened version of the code suitable for the IDE.
 
 | Game | Leaderboard | Current League |
 |------|-------------|----------------|
-| [Ultimate Tic-Tac-Toe](https://www.codingame.com/multiplayer/bot-programming/tic-tac-toe) | [Leaderboard](https://www.codingame.com/multiplayer/bot-programming/tic-tac-toe/leaderboard) | [Add manually] |
+| [Ultimate Tic-Tac-Toe](https://www.codingame.com/multiplayer/bot-programming/tic-tac-toe) | [Leaderboard](https://www.codingame.com/multiplayer/bot-programming/tic-tac-toe/leaderboard) | Bronze |

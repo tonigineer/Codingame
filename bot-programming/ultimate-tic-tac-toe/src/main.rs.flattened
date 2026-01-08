@@ -1,3 +1,296 @@
+mod game {
+    use std::io::{self, Write};
+    
+    pub trait Player {
+        fn other(&self) -> Self;
+        fn index(&self) -> usize;
+        fn symbol(&self) -> char;
+    }
+    
+    pub trait Game {
+        type PlayerMask;
+        type Move: Copy + Clone;
+    
+        // TODO: Could be done better, by using the type PlayerMask of trait
+        fn get_current_player_index(&self) -> usize;
+    
+        fn get_current_player_symbol(&self) -> char;
+    
+        fn get_current_player(&self) -> Self::PlayerMask;
+    
+        // Actual game
+        fn apply_move(&mut self, chosen_move: Self::Move);
+    
+        fn undo_move(&mut self, chosen_move: Self::Move);
+    
+        fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move>;
+    
+        fn is_finished(&self) -> bool;
+    
+        fn get_winner(&self) -> Option<Self::PlayerMask>;
+    
+        fn render(&self);
+    
+        // Additional information for strategies, could be a dedicated trait?
+        fn get_game_state_score(&self, player: &Self::PlayerMask) -> f32;
+    
+        fn get_game_state_hash(&self) -> u64;
+    }
+    
+    const ZOBRIST_SIDE_TO_MOVE: u64 = 0x8A24_B6DF_19E4_7C90;
+    
+    const ZOBRIST_TABLE: [[u64; 9]; 2] = [
+        [
+            0xD5D2_2C1E_4B6B_2A2D,
+            0x6AC5_3F90_2B3C_1159,
+            0x8F52_5A17_6B92_0E7B,
+            0x3BD0_5E43_A9E3_B1F4,
+            0xC1B7_2F81_2D9C_4F23,
+            0x75A4_1D62_E38A_6C91,
+            0x9E61_9C04_57AD_334A,
+            0x12F7_6AB9_8C01_DD2E,
+            0x4C8B_EE17_017F_9B85,
+        ],
+        [
+            0xA94B_2E39_F0C4_7A1D,
+            0x51E9_0D84_0D7C_0A3B,
+            0xF2B1_5C6F_6CE1_8452,
+            0x0B7C_9F23_2B18_5F67,
+            0xE7D3_1A90_9F42_CE08,
+            0x28C6_7ED2_34A1_90D5,
+            0xB3A8_0B53_1E2C_77F9,
+            0x59FE_2A44_E8D6_1C0E,
+            0x84D9_34B0_2C57_AA11,
+        ],
+    ];
+    
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum PlayerMask {
+        X,
+        O,
+    }
+    
+    impl Player for PlayerMask {
+        fn other(&self) -> Self {
+            match &self {
+                PlayerMask::X => PlayerMask::O,
+                PlayerMask::O => PlayerMask::X,
+            }
+        }
+    
+        fn index(&self) -> usize {
+            match &self {
+                PlayerMask::X => 0,
+                PlayerMask::O => 1,
+            }
+        }
+    
+        fn symbol(&self) -> char {
+            match &self {
+                PlayerMask::X => 'X',
+                PlayerMask::O => 'O',
+            }
+        }
+    }
+    
+    impl PlayerMask {
+        pub fn colored_symbol(&self) -> String {
+            match self {
+                PlayerMask::X => format!("\x1b[34m{}\x1b[0m", self.symbol()),
+                PlayerMask::O => format!("\x1b[32m{}\x1b[0m", self.symbol()),
+            }
+        }
+    }
+    
+    #[derive(Debug, Clone, Copy)]
+    pub struct Board {
+        pub x_board: u16,
+        pub o_board: u16,
+    }
+    
+    impl Default for Board {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+    
+    impl Board {
+        pub fn new() -> Self {
+            Self {
+                x_board: 0u16,
+                o_board: 0u16,
+            }
+        }
+    
+        pub fn get(&self, mark: PlayerMask) -> u16 {
+            match mark {
+                PlayerMask::X => self.x_board,
+                PlayerMask::O => self.o_board,
+            }
+        }
+    }
+    
+    #[derive(Debug, Clone)]
+    pub struct TicTacToe {
+        pub board: Board,
+        pub current_player: PlayerMask,
+    }
+    
+    impl Default for TicTacToe {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+    
+    impl TicTacToe {
+        pub fn new() -> Self {
+            Self {
+                board: Board::new(),
+                current_player: PlayerMask::X,
+            }
+        }
+    }
+    
+    impl Game for TicTacToe {
+        type PlayerMask = PlayerMask;
+        type Move = usize;
+    
+        fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
+            const BITS: [u16; 9] = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+            let board = self.board.x_board | self.board.o_board;
+            (0..=8).filter(move |&i| (board & BITS[i]) == 0)
+        }
+    
+        fn apply_move(&mut self, chosen_move: Self::Move) {
+            match self.current_player {
+                PlayerMask::X => self.board.x_board |= 1 << chosen_move,
+                PlayerMask::O => self.board.o_board |= 1 << chosen_move,
+            }
+    
+            self.current_player = self.current_player.other();
+        }
+    
+        fn undo_move(&mut self, chosen_move: Self::Move) {
+            self.current_player = self.current_player.other();
+    
+            match self.current_player {
+                PlayerMask::X => self.board.x_board &= !(1 << chosen_move),
+                PlayerMask::O => self.board.o_board &= !(1 << chosen_move),
+            }
+        }
+    
+        fn get_current_player_index(&self) -> usize {
+            self.current_player.index()
+        }
+    
+        fn get_current_player_symbol(&self) -> char {
+            self.current_player.symbol()
+        }
+    
+        fn get_current_player(&self) -> Self::PlayerMask {
+            self.current_player
+        }
+    
+        fn is_finished(&self) -> bool {
+            const FULL: u16 = (1 << 9) - 1; // 0b1_1111_1111 == 0x1FF
+            ((self.board.x_board | self.board.o_board) == FULL) || self.get_winner().is_some()
+        }
+    
+        fn get_winner(&self) -> Option<PlayerMask> {
+            const WINS: [u16; 8] = [
+                0b000_000_111,
+                0b000_111_000,
+                0b111_000_000,
+                0b001_001_001,
+                0b010_010_010,
+                0b100_100_100,
+                0b100_010_001,
+                0b001_010_100,
+            ];
+    
+            for &m in &WINS {
+                if self.board.x_board & m == m {
+                    return Some(PlayerMask::X);
+                }
+                if self.board.o_board & m == m {
+                    return Some(PlayerMask::O);
+                }
+            }
+    
+            None
+        }
+    
+        fn render(&self) {
+            print!("\x1B[2J\x1B[H"); // clear screen
+    
+            for r in 0..3 {
+                let mut line = String::with_capacity(8);
+                for c in 0..3 {
+                    let idx = r * 3 + c;
+                    let bit = 1 << idx;
+    
+                    line.push(' ');
+    
+                    if self.board.x_board & bit != 0 {
+                        line.push_str(&PlayerMask::X.colored_symbol());
+                    } else if self.board.o_board & bit != 0 {
+                        line.push_str(&PlayerMask::O.colored_symbol());
+                    } else {
+                        line.push_str(&idx.to_string());
+                    }
+    
+                    line.push(' ');
+    
+                    if c < 2 {
+                        line.push('|');
+                    }
+                }
+    
+                println!("{}", line);
+    
+                if r < 2 {
+                    println!("---+---+---");
+                }
+            }
+            println!();
+    
+            if let Some(w) = self.get_winner() {
+                println!(" Winner: {}", w.colored_symbol());
+            }
+    
+            let _ = io::stdout().flush();
+        }
+    
+        fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+            // INFO: Tic-Tac-Toe is a solved game where perfect play can be achieved through
+            // exhaustive search. Therefore, heuristic evaluation of intermediate states
+            // is unnecessary, and we return a neutral score.
+    
+            0f32
+        }
+    
+        fn get_game_state_hash(&self) -> u64 {
+            let mut h = 0u64;
+    
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..9 {
+                let bit = 1u16 << i;
+                if (self.board.x_board & bit) != 0 {
+                    h ^= ZOBRIST_TABLE[PlayerMask::X.index()][i];
+                } else if (self.board.o_board & bit) != 0 {
+                    h ^= ZOBRIST_TABLE[PlayerMask::O.index()][i];
+                }
+            }
+    
+            if matches!(self.current_player, PlayerMask::X) {
+                h ^= ZOBRIST_SIDE_TO_MOVE;
+            }
+    
+            h
+        }
+    }
+}
+
 mod parse {
     use std::io;
     
@@ -7,32 +300,289 @@ mod parse {
         };
     }
     
-    pub fn parse_input() {
+    pub fn read_input() -> ((i32, i32), Vec<(i32, i32)>) {
         let mut input_line = String::new();
         io::stdin().read_line(&mut input_line).unwrap();
-        let inputs = input_line.split(" ").collect::<Vec<_>>();
-        let opponent_row = parse_input!(inputs[0], i32);
-        let opponent_col = parse_input!(inputs[1], i32);
-        let mut input_line = String::new();
+        let mut inputs = input_line.split_once(" ").unwrap();
+        let opponent = (parse_input!(inputs.0, i32), parse_input!(inputs.1, i32));
+    
+        input_line.clear();
         io::stdin().read_line(&mut input_line).unwrap();
         let valid_action_count = parse_input!(input_line, i32);
-        for i in 0..valid_action_count as usize {
-            let mut input_line = String::new();
+    
+        let mut moves = Vec::with_capacity(valid_action_count as usize);
+        for _ in 0..valid_action_count as usize {
+            input_line.clear();
             io::stdin().read_line(&mut input_line).unwrap();
-            let inputs = input_line.split(" ").collect::<Vec<_>>();
-            let row = parse_input!(inputs[0], i32);
-            let col = parse_input!(inputs[1], i32);
+            inputs = input_line.split_once(" ").unwrap();
+            moves.push((parse_input!(inputs.0, i32), parse_input!(inputs.1, i32)));
+        }
+    
+        (opponent, moves)
+    }
+}
+
+mod strat {
+    use std::collections::HashMap;
+    
+    use crate::game::Game;
+    use crate::types::GameError;
+    
+    #[derive(PartialEq)]
+    pub enum TranspositionType {
+        Exact,
+        UpperBound,
+        LowerBound,
+    }
+    
+    pub struct Minimax {
+        pub max_depth: u64,
+        pub transpositions: HashMap<u64, (f32, u64, TranspositionType)>,
+        pub move_score: f32,
+        n_cached_transposition: u64,
+        n_eval_terminal_state: u64,
+        n_eval_game_state: u64,
+        compute_time_ns: u128,
+    }
+    
+    impl Minimax {
+        pub fn new(max_depth: u64) -> Self {
+            Minimax {
+                max_depth,
+                transpositions: HashMap::new(),
+                move_score: 0.0,
+                n_cached_transposition: 0,
+                n_eval_terminal_state: 0,
+                n_eval_game_state: 0,
+                compute_time_ns: 0,
+            }
+        }
+    
+        pub fn get_move<G>(&mut self, game: &mut G, side: G::PlayerMask) -> Result<G::Move, GameError>
+        where
+            G: Game + Clone,
+            G::Move: Clone,
+            <G as Game>::PlayerMask: Eq,
+        {
+            let mut best_score: Option<(f32, G::Move)> = None;
+            let alpha = f32::MIN;
+            let beta = f32::MAX;
+    
+            self.transpositions.clear();
+            self.n_cached_transposition = 0;
+            self.n_eval_terminal_state = 0;
+            self.n_eval_game_state = 0;
+    
+            let start = std::time::Instant::now();
+            for mv in game.get_possible_moves() {
+                let mut next_game = game.clone();
+                next_game.apply_move(mv);
+    
+                let score = self.minimax(&mut next_game, &side, 1, alpha, beta);
+    
+                best_score = Some(match best_score {
+                    None => (score, mv),
+                    Some((best_score, best_mv)) => {
+                        if score > best_score {
+                            (score, mv)
+                        } else {
+                            (best_score, best_mv)
+                        }
+                    }
+                });
+            }
+    
+            self.compute_time_ns = start.elapsed().as_nanos();
+    
+            if let Some((score, mv)) = best_score {
+                self.move_score = score;
+                Ok(mv)
+            } else {
+                Err(GameError::NoMovesAvailable)
+            }
+        }
+    
+        fn game_state_score<G>(&mut self, game: &G, side: &G::PlayerMask) -> f32
+        where
+            G: Game + Clone,
+        {
+            game.get_game_state_score(side)
+        }
+    
+        fn terminal_score<G>(&mut self, game: &G, my_side: &G::PlayerMask, depth: u64) -> Option<f32>
+        where
+            G: Game + Clone,
+            <G as Game>::PlayerMask: Eq,
+        {
+            if let Some(winner) = game.get_winner() {
+                if winner == *my_side {
+                    return Some(1.0 / (depth as f32));
+                } else {
+                    return Some(-1.0 / (depth as f32));
+                }
+            }
+    
+            if game.is_finished() {
+                return Some(0.0);
+            }
+    
+            None
+        }
+    
+        fn minimax<G>(
+            &mut self,
+            game: &mut G,
+            my_side: &G::PlayerMask,
+            depth: u64,
+            mut alpha: f32,
+            mut beta: f32,
+        ) -> f32
+        where
+            G: Game + Clone,
+            <G as Game>::PlayerMask: Eq,
+        {
+            if depth > self.max_depth {
+                self.n_eval_game_state += 1;
+                let score = self.game_state_score(game, my_side);
+                return score;
+            }
+    
+            if let Some(score) = self.terminal_score(game, my_side, depth) {
+                self.n_eval_terminal_state += 1;
+                return score;
+            }
+    
+            let game_state_hash = game.get_game_state_hash();
+            if let Some((score_seen, depth_seen, transposition_type)) =
+                self.transpositions.get(&game_state_hash)
+            {
+                if *depth_seen >= depth {
+                    self.n_cached_transposition += 1;
+    
+                    match transposition_type {
+                        TranspositionType::Exact => {
+                            return *score_seen;
+                        }
+                        TranspositionType::LowerBound => {
+                            alpha = alpha.max(*score_seen);
+                        }
+                        TranspositionType::UpperBound => {
+                            beta = beta.min(*score_seen);
+                        }
+                    }
+    
+                    if alpha >= beta {
+                        return *score_seen;
+                    }
+                }
+            }
+    
+            let maximizing = *my_side == game.get_current_player();
+    
+            let mut best_score = match maximizing {
+                true => f32::MIN,
+                false => f32::MAX,
+            };
+    
+            for mv in game.clone().get_possible_moves() {
+                game.apply_move(mv);
+                let score = self.minimax(game, my_side, depth + 1, alpha, beta);
+                game.undo_move(mv);
+    
+                if maximizing {
+                    best_score = best_score.max(score);
+                    if best_score >= beta {
+                        break;
+                    }
+                    alpha = alpha.max(best_score);
+                } else {
+                    best_score = best_score.min(score);
+                    if best_score <= alpha {
+                        break;
+                    }
+                    beta = beta.min(best_score);
+                };
+            }
+    
+            let transposition_type = match (best_score <= alpha, best_score >= beta) {
+                (true, _) => TranspositionType::UpperBound,
+                (_, true) => TranspositionType::LowerBound,
+                _ => TranspositionType::Exact,
+            };
+    
+            self.transpositions
+                .insert(game_state_hash, (best_score, depth, transposition_type));
+    
+            best_score
         }
     }
 }
 
-fn main() {
-    loop {
-        crate::parse::parse_input();
+mod types {
+    #[derive(Debug)]
+    pub enum GameError {
+        InvalidMove(String),
+        NoMovesAvailable,
+        ParseError(String),
+    }
+    
+    impl std::fmt::Display for GameError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                GameError::InvalidMove(msg) => write!(f, "Invalid move: {}", msg),
+                GameError::NoMovesAvailable => write!(f, "No moves available"),
+                GameError::ParseError(msg) => write!(f, "Parse error: {}", msg),
+            }
+        }
+    }
+    
+    impl std::error::Error for GameError {}
+}
 
-        // Write an action using println!("message...");
-        // To debug: eprintln!("Debug message...");
-        println!("0 0");
+
+fn rc2idx(row: i32, col: i32) -> usize {
+    (row * 3 + col) as usize
+}
+
+fn idx2rc(idx: usize) -> (i32, i32) {
+    ((idx as i32 / 3), idx as i32 % 3)
+}
+
+fn main() {
+    use crate::game::Game;
+
+    let mut game = game::TicTacToe::new();
+
+    let max_depths = 9;
+    let mut minimax = strat::Minimax::new(max_depths);
+
+    loop {
+        let (opp_move, moves) = parse::read_input();
+
+        // Apply opponents move to keep track in own game
+        if opp_move != (-1, -1) {
+            game.apply_move(rc2idx(opp_move.0, opp_move.1));
+        }
+
+        // Sanity check
+        eprintln!("{:?}", moves);
+        eprintln!(
+            "{:?}",
+            game.get_possible_moves()
+                .map(idx2rc)
+                .collect::<Vec<(i32, i32)>>()
+        );
+
+        // Bot
+        let mut game_temp = game.clone();
+        let player = game.get_current_player();
+        let mv = minimax.get_move(&mut game_temp, player).unwrap();
+
+        // Apply own move in own game
+        game.apply_move(mv);
+
+        let (row, col) = idx2rc(mv);
+        println!("{} {}", row, col);
     }
 }
 
