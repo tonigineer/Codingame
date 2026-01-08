@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use games::games::connect_four::{ConnectFour, PlayerMask};
-    use games::games::tic_tac_toe::TicTacToe;
-    use games::strategy::common::{RandomMove, FirstPossibleMove};
-    use games::strategy::minimax::Minimax;
-    use games::{Competition, Game, PlayerType};
+    use game_lib::games::connect_four::{ConnectFour, PlayerMask};
+    use game_lib::games::tic_tac_toe::TicTacToe;
+    use game_lib::strategy::common::{RandomMove, FirstPossibleMove};
+    use game_lib::strategy::minimax::Minimax;
+    use game_lib::{Competition, Game, PlayerType};
 
     #[test]
     fn minimax_tictactoe_first_two_moves() {

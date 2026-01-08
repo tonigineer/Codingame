@@ -1,6 +1,6 @@
-use games::games::{connect_four::ConnectFour, tic_tac_toe::TicTacToe};
-use games::strategy::minimax::Minimax;
-use games::{Competition, PlayerType};
+use game_lib::games::{connect_four::ConnectFour, tic_tac_toe::TicTacToe};
+use game_lib::strategy::minimax::Minimax;
+use game_lib::{Competition, PlayerType};
 
 fn play_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
     let game = TicTacToe::new();

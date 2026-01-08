@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use games::games::tic_tac_toe::{self, TicTacToe};
-    use games::strategy::common::{FirstPossibleMove, RandomMove};
-    use games::{Competition, Game, PlayerType};
+    use game_lib::games::tic_tac_toe::{self, TicTacToe};
+    use game_lib::strategy::common::{FirstPossibleMove, RandomMove};
+    use game_lib::{Competition, Game, PlayerType};
 
     #[test]
     fn test_tictactoe_always_first_move() {

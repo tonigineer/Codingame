@@ -21,6 +21,7 @@ pub struct Minimax {
 }
 
 impl Minimax {
+    #[must_use]
     pub fn new(max_depth: u64) -> Self {
         Minimax {
             max_depth,
@@ -33,7 +34,10 @@ impl Minimax {
         }
     }
 
-    pub fn get_move<G>(&mut self, game: &mut G, side: G::PlayerMask) -> Result<G::Move, GameError>
+    /// # Errors
+    ///
+    /// Returns `GameError::NoMovesAvailable` if there are no possible moves in the game.
+    pub fn get_move<G>(&mut self, game: &mut G, side: &G::PlayerMask) -> Result<G::Move, GameError>
     where
         G: Game + Clone,
         G::Move: Clone,
@@ -53,7 +57,7 @@ impl Minimax {
             let mut next_game = game.clone();
             next_game.apply_move(mv);
 
-            let score = self.minimax(&mut next_game, &side, 1, alpha, beta);
+            let score = self.minimax(&mut next_game, side, 1, alpha, beta);
 
             best_score = Some(match best_score {
                 None => (score, mv),
@@ -77,24 +81,24 @@ impl Minimax {
         }
     }
 
-    fn game_state_score<G>(&mut self, game: &G, side: &G::PlayerMask) -> f32
+    fn game_state_score<G>(game: &G, side: &G::PlayerMask) -> f32
     where
         G: Game + Clone,
     {
         game.get_game_state_score(side)
     }
 
-    fn terminal_score<G>(&mut self, game: &G, my_side: &G::PlayerMask, depth: u64) -> Option<f32>
+    fn terminal_score<G>(game: &G, my_side: &G::PlayerMask, depth: u64) -> Option<f32>
     where
         G: Game + Clone,
         <G as Game>::PlayerMask: Eq,
     {
+        #[allow(clippy::cast_precision_loss)]
         if let Some(winner) = game.get_winner() {
             if winner == *my_side {
                 return Some(1.0 / (depth as f32));
-            } else {
-                return Some(-1.0 / (depth as f32));
             }
+            return Some(-1.0 / (depth as f32));
         }
 
         if game.is_finished() {
@@ -118,11 +122,11 @@ impl Minimax {
     {
         if depth > self.max_depth {
             self.n_eval_game_state += 1;
-            let score = self.game_state_score(game, my_side);
+            let score = Minimax::game_state_score(game, my_side);
             return score;
         }
 
-        if let Some(score) = self.terminal_score(game, my_side, depth) {
+        if let Some(score) = Minimax::terminal_score(game, my_side, depth) {
             self.n_eval_terminal_state += 1;
             return score;
         }
@@ -154,10 +158,7 @@ impl Minimax {
 
         let maximizing = *my_side == game.get_current_player();
 
-        let mut best_score = match maximizing {
-            true => f32::MIN,
-            false => f32::MAX,
-        };
+        let mut best_score = if maximizing { f32::MIN } else { f32::MAX };
 
         for mv in game.clone().get_possible_moves() {
             game.apply_move(mv);
@@ -176,7 +177,7 @@ impl Minimax {
                     break;
                 }
                 beta = beta.min(best_score);
-            };
+            }
         }
 
         let transposition_type = match (best_score <= alpha, best_score >= beta) {

@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 
 pub trait Player {
+    #[must_use]
     fn other(&self) -> Self;
     fn index(&self) -> usize;
     fn symbol(&self) -> char;
@@ -93,6 +94,7 @@ impl Player for PlayerMask {
 }
 
 impl PlayerMask {
+    #[must_use]
     pub fn colored_symbol(&self) -> String {
         match self {
             PlayerMask::X => format!("\x1b[34m{}\x1b[0m", self.symbol()),
@@ -114,6 +116,7 @@ impl Default for Board {
 }
 
 impl Board {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             x_board: 0u16,
@@ -121,6 +124,7 @@ impl Board {
         }
     }
 
+    #[must_use]
     pub fn get(&self, mark: PlayerMask) -> u16 {
         match mark {
             PlayerMask::X => self.x_board,
@@ -142,6 +146,7 @@ impl Default for TicTacToe {
 }
 
 impl TicTacToe {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             board: Board::new(),
@@ -245,7 +250,7 @@ impl Game for TicTacToe {
                 }
             }
 
-            println!("{}", line);
+            println!("{line}");
 
             if r < 2 {
                 println!("---+---+---");

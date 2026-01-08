@@ -8,10 +8,10 @@ clippy:
     cargo clippy --all-targets --all-features -- --deny warnings
 
 build:
-    cargo build --workspace
+    cargo build --workspace --release
 
 test:
-    cargo test --workspace
+    cargo test --workspace --release
 
 ci: format clippy build test
 

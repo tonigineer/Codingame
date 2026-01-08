@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use games::games::connect_four::{self, ConnectFour};
-    use games::strategy::common::{FirstPossibleMove, RandomMove};
-    use games::{Competition, Game, PlayerType};
+    use game_lib::games::connect_four::{self, ConnectFour};
+    use game_lib::strategy::common::{FirstPossibleMove, RandomMove};
+    use game_lib::{Competition, Game, PlayerType};
 
     #[test]
     fn test_connect_four_always_first_move() {

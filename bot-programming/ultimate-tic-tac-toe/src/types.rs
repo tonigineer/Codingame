@@ -8,9 +8,9 @@ pub enum GameError {
 impl std::fmt::Display for GameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GameError::InvalidMove(msg) => write!(f, "Invalid move: {}", msg),
+            GameError::InvalidMove(msg) => write!(f, "Invalid move: {msg}"),
             GameError::NoMovesAvailable => write!(f, "No moves available"),
-            GameError::ParseError(msg) => write!(f, "Parse error: {}", msg),
+            GameError::ParseError(msg) => write!(f, "Parse error: {msg}"),
         }
     }
 }
