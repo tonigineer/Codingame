@@ -73,7 +73,7 @@ pub struct Competition<G: Game> {
     pub turn: u32,
 }
 
-impl<G: Game<Move = usize>> Competition<G>
+impl<G: Game<G::Move>> Competition<G>
 where
     G: Clone,
     <G as Game>::PlayerMask: Eq,

@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::collections::HashMap;
 
 use crate::Game;
 use crate::Player;
@@ -30,7 +31,7 @@ const ZOBRIST_TABLE: [[u64; 9]; 2] = [
     ],
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerMask {
     X,
     O,
@@ -88,8 +89,8 @@ impl Board {
         }
     }
 
-    pub fn get(&self, mark: PlayerMask) -> u16 {
-        match mark {
+    pub fn get(&self, player: PlayerMask) -> u16 {
+        match player {
             PlayerMask::X => self.x_board,
             PlayerMask::O => self.o_board,
         }
@@ -99,7 +100,9 @@ impl Board {
 #[derive(Debug, Clone)]
 pub struct UltTicTacToe {
     pub board: Board,
+    boards: [Board; 9],
     pub current_player: PlayerMask,
+    pub moves: [Vec<(usize, usize)>; 2],
 }
 
 impl Default for UltTicTacToe {
@@ -112,37 +115,41 @@ impl UltTicTacToe {
     pub fn new() -> Self {
         Self {
             board: Board::new(),
+            boards: [Board::new(); 9],
             current_player: PlayerMask::X,
+            moves: [Vec::with_capacity(41), Vec::with_capacity(41)],
         }
     }
 }
 
 impl Game for UltTicTacToe {
     type PlayerMask = PlayerMask;
-    type Move = usize;
+    type Move = (usize, usize);
 
     fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
         const BITS: [u16; 9] = [1, 2, 4, 8, 16, 32, 64, 128, 256];
         let board = self.board.x_board | self.board.o_board;
-        (0..=8).filter(move |&i| (board & BITS[i]) == 0)
+        (0..=8)
+            .filter(move |&i| (board & BITS[i]) == 0)
+            .map(|i| (i, i))
     }
 
     fn apply_move(&mut self, chosen_move: Self::Move) {
-        match self.current_player {
-            PlayerMask::X => self.board.x_board |= 1 << chosen_move,
-            PlayerMask::O => self.board.o_board |= 1 << chosen_move,
-        }
+        //     match self.current_player {
+        //         PlayerMask::X => self.board.x_board |= 1 << chosen_move,
+        //         PlayerMask::O => self.board.o_board |= 1 << chosen_move,
+        //     }
 
-        self.current_player = self.current_player.other();
+        //     self.current_player = self.current_player.other();
     }
 
     fn undo_move(&mut self, chosen_move: Self::Move) {
-        self.current_player = self.current_player.other();
+        //     self.current_player = self.current_player.other();
 
-        match self.current_player {
-            PlayerMask::X => self.board.x_board &= !(1 << chosen_move),
-            PlayerMask::O => self.board.o_board &= !(1 << chosen_move),
-        }
+        //     match self.current_player {
+        //         PlayerMask::X => self.board.x_board &= !(1 << chosen_move),
+        //         PlayerMask::O => self.board.o_board &= !(1 << chosen_move),
+        //     }
     }
 
     fn get_current_player_index(&self) -> usize {
@@ -187,19 +194,27 @@ impl Game for UltTicTacToe {
     }
 
     fn render(&self) {
+        fn rc2board_idx(row: usize, col: usize) -> usize {
+            ((row / 3) - 1) * 3 + (col / 3 - 1)
+        }
+
         print!("\x1B[2J\x1B[H"); // clear screen
 
-        for r in 0..3 {
-            let mut line = String::with_capacity(8);
-            for c in 0..3 {
-                let idx = r * 3 + c;
+        for r in 0..9 {
+            let mut line = String::new();
+            for c in 0..9 {
+                let board_idx = rc2board_idx(r, c);
+
+                let board = self.boards[board_idx];
+
+                let idx = (r % 3) * 3 + (c % 3);
                 let bit = 1 << idx;
 
                 line.push(' ');
 
-                if self.board.x_board & bit != 0 {
+                if board.x_board & bit != 0 {
                     line.push_str(&PlayerMask::X.colored_symbol());
-                } else if self.board.o_board & bit != 0 {
+                } else if board.o_board & bit != 0 {
                     line.push_str(&PlayerMask::O.colored_symbol());
                 } else {
                     line.push_str(&idx.to_string());
@@ -215,7 +230,7 @@ impl Game for UltTicTacToe {
             println!("{}", line);
 
             if r < 2 {
-                println!("---+---+---");
+                println!("---+---+--- | ---+---+--- | ---+---+---");
             }
         }
         println!();
@@ -228,9 +243,9 @@ impl Game for UltTicTacToe {
     }
 
     fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
-        // INFO: Tic-Tac-Toe is a solved game where perfect play can be achieved through
-        // exhaustive search. Therefore, heuristic evaluation of intermediate states
-        // is unnecessary, and we return a neutral score.
+        //     // INFO: Tic-Tac-Toe is a solved game where perfect play can be achieved through
+        //     // exhaustive search. Therefore, heuristic evaluation of intermediate states
+        //     // is unnecessary, and we return a neutral score.
 
         0f32
     }
@@ -238,19 +253,19 @@ impl Game for UltTicTacToe {
     fn get_game_state_hash(&self) -> u64 {
         let mut h = 0u64;
 
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..9 {
-            let bit = 1u16 << i;
-            if (self.board.x_board & bit) != 0 {
-                h ^= ZOBRIST_TABLE[PlayerMask::X.index()][i];
-            } else if (self.board.o_board & bit) != 0 {
-                h ^= ZOBRIST_TABLE[PlayerMask::O.index()][i];
-            }
-        }
+        //     #[allow(clippy::needless_range_loop)]
+        //     for i in 0..9 {
+        //         let bit = 1u16 << i;
+        //         if (self.board.x_board & bit) != 0 {
+        //             h ^= ZOBRIST_TABLE[PlayerMask::X.index()][i];
+        //         } else if (self.board.o_board & bit) != 0 {
+        //             h ^= ZOBRIST_TABLE[PlayerMask::O.index()][i];
+        //         }
+        //     }
 
-        if matches!(self.current_player, PlayerMask::X) {
-            h ^= ZOBRIST_SIDE_TO_MOVE;
-        }
+        //     if matches!(self.current_player, PlayerMask::X) {
+        //         h ^= ZOBRIST_SIDE_TO_MOVE;
+        //     }
 
         h
     }
