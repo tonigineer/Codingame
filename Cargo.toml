@@ -3,6 +3,7 @@ members = [
     "puzzles/one-billion-rows",
     "game-lib",
     "bot-programming/ultimate-tic-tac-toe",
+    "bot-programming/snakebyte",
 ]
 resolver = "3"
 

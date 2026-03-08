@@ -1,5 +1,4 @@
 use std::io::{self, Write};
-use std::collections::HashMap;
 
 use crate::Game;
 use crate::Player;
@@ -102,7 +101,7 @@ pub struct UltTicTacToe {
     pub board: Board,
     boards: [Board; 9],
     pub current_player: PlayerMask,
-    pub moves: [Vec<(usize, usize)>; 2],
+    pub moves: [Vec<usize>; 2],
 }
 
 impl Default for UltTicTacToe {
@@ -117,8 +116,19 @@ impl UltTicTacToe {
             board: Board::new(),
             boards: [Board::new(); 9],
             current_player: PlayerMask::X,
-            moves: [Vec::with_capacity(41), Vec::with_capacity(41)],
+            moves: [
+                Vec::<usize>::with_capacity(41),
+                Vec::<usize>::with_capacity(41),
+            ],
         }
+    }
+
+    fn rc2board_idx(row: usize, col: usize) -> usize {
+        (row / 3) * 3 + (col / 3)
+    }
+
+    fn rc2idx(row: usize, col: usize) -> usize {
+        (row % 3) * 3 + (col % 3)
     }
 }
 
@@ -129,21 +139,24 @@ impl Game for UltTicTacToe {
     fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
         const BITS: [u16; 9] = [1, 2, 4, 8, 16, 32, 64, 128, 256];
         let board = self.board.x_board | self.board.o_board;
-        (0..=8)
-            .filter(move |&i| (board & BITS[i]) == 0)
-            .map(|i| (i, i))
+        (0..=8).filter(move |&i| (board & BITS[i]) == 0).map(|i| i)
     }
 
     fn apply_move(&mut self, chosen_move: Self::Move) {
-        //     match self.current_player {
-        //         PlayerMask::X => self.board.x_board |= 1 << chosen_move,
-        //         PlayerMask::O => self.board.o_board |= 1 << chosen_move,
-        //     }
+        let (row, col) = chosen_move;
 
-        //     self.current_player = self.current_player.other();
+        let board_idx = Self::rc2board_idx(row, col);
+        let converted_move = Self::rc2idx(row, col);
+
+        match self.current_player {
+            PlayerMask::X => self.boards[board_idx].x_board |= 1 << converted_move,
+            PlayerMask::O => self.boards[board_idx].o_board |= 1 << converted_move,
+        }
+
+        self.current_player = self.current_player.other();
     }
 
-    fn undo_move(&mut self, chosen_move: Self::Move) {
+    fn undo_move(&mut self, _chosen_move: Self::Move) {
         //     self.current_player = self.current_player.other();
 
         //     match self.current_player {
@@ -194,20 +207,20 @@ impl Game for UltTicTacToe {
     }
 
     fn render(&self) {
-        fn rc2board_idx(row: usize, col: usize) -> usize {
-            ((row / 3) - 1) * 3 + (col / 3 - 1)
-        }
+        // fn rc2board_idx(row: usize, col: usize) -> usize {
+        //     (row / 3) * 3 + (col / 3)
+        // }
 
         print!("\x1B[2J\x1B[H"); // clear screen
+        println!(" COL 0   1   2     3   4   5     6   7   8");
 
         for r in 0..9 {
-            let mut line = String::new();
+            let mut line = String::from(format!(" R{} ", r));
             for c in 0..9 {
-                let board_idx = rc2board_idx(r, c);
-
+                let board_idx = Self::rc2board_idx(r, c);
                 let board = self.boards[board_idx];
 
-                let idx = (r % 3) * 3 + (c % 3);
+                let idx = Self::rc2idx(r % 3) * 3 + (c % 3);
                 let bit = 1 << idx;
 
                 line.push(' ');
@@ -222,15 +235,19 @@ impl Game for UltTicTacToe {
 
                 line.push(' ');
 
-                if c < 2 {
+                if (c % 3) < 2 {
                     line.push('|');
+                } else if c < 8 {
+                    line.push_str(" | ");
                 }
             }
 
             println!("{}", line);
 
-            if r < 2 {
-                println!("---+---+--- | ---+---+--- | ---+---+---");
+            if (r % 3) < 2 {
+                println!("    ---+---+--- | ---+---+--- | ---+---+---");
+            } else if r < 8 {
+                println!("    ---------------------------------------");
             }
         }
         println!();
@@ -251,7 +268,7 @@ impl Game for UltTicTacToe {
     }
 
     fn get_game_state_hash(&self) -> u64 {
-        let mut h = 0u64;
+        let h = 0u64;
 
         //     #[allow(clippy::needless_range_loop)]
         //     for i in 0..9 {

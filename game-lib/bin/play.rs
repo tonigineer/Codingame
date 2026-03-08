@@ -1,18 +1,18 @@
-use game_lib::games::{TicTacToe, ConnectFour, UltTicTacToe};
+use game_lib::games::{TicTacToe, ConnectFour};
 use game_lib::strategy::minimax::Minimax;
 use game_lib::{Competition, PlayerType};
 
-fn play_ult_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
-    let game = UltTicTacToe::new();
+// fn play_ult_tic_tac_toe() -> Result<(), Box<dyn std::error::Error>> {
+//     let game = UltTicTacToe::new();
 
-    let first_player = PlayerType::Human;
-    let second_player = PlayerType::Human;
+//     let first_player = PlayerType::Human;
+//     let second_player = PlayerType::Human;
 
-    let mut competition = Competition::new(game, first_player, second_player);
-    competition.start(true)?;
+//     let mut competition = Competition::new(game, first_player, second_player);
+//     competition.start(true)?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn play_connect_four() -> Result<(), Box<dyn std::error::Error>> {
     let game = ConnectFour::<7, 6>::new();
@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match game {
-        "ult-tic-tac-toe" => play_tic_tac_toe()?,
+        // "ult-tic-tac-toe" => play_ult_tic_tac_toe()?,
         "connect-four" => play_connect_four()?,
         "tic-tac-toe" => play_tic_tac_toe()?,
         _ => {
