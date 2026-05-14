@@ -1,4 +1,4 @@
-use crate::position::*;
+use crate::position::Position;
 use std::ops::{Index, IndexMut};
 
 /// A rectangular grid of elements stored in row-major order.
@@ -57,12 +57,14 @@ impl From<&str> for Grid<u8> {
     /// assert_eq!(grid[Position::new(0, 0)], b'a');
     /// assert_eq!(grid[Position::new(1, 1)], b'e');
     /// ```
-    fn from(input: &str) -> Self {
-        let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
-        let width = raw[0].len() as i32;
-        let height = raw.len() as i32;
-        let mut bytes = Vec::with_capacity((width * height) as usize);
-        raw.iter().for_each(|slice| bytes.extend_from_slice(slice));
+      fn from(input: &str) -> Self {
+          let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+          let width = i32::try_from(raw[0].len()).expect("width too large");
+          let height = i32::try_from(raw.len()).expect("height too large");
+          let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
+          for slice in &raw {
+              bytes.extend_from_slice(slice);
+          }
 
         Grid {
             width,
@@ -88,12 +90,14 @@ impl From<String> for Grid<u8> {
     /// assert_eq!(grid[Position::new(0, 0)], b'a');
     /// assert_eq!(grid[Position::new(1, 1)], b'e');
     /// ```
-    fn from(input: String) -> Self {
-        let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
-        let width = raw[0].len() as i32;
-        let height = raw.len() as i32;
-        let mut bytes = Vec::with_capacity((width * height) as usize);
-        raw.iter().for_each(|slice| bytes.extend_from_slice(slice));
+     fn from(input: String) -> Self {
+         let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+         let width = i32::try_from(raw[0].len()).expect("width too large");
+         let height = i32::try_from(raw.len()).expect("height too large");
+         let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
+         for slice in raw.iter() {
+             bytes.extend_from_slice(slice);
+         }
 
         Grid {
             width,

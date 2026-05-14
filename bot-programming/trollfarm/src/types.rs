@@ -26,6 +26,7 @@ pub enum Resource {
 }
 
 impl Resource {
+    #[must_use]
     pub fn from_tree(typ: &TreeType, amount: i32) -> Self {
         match typ {
             TreeType::Apple => Resource::Apple(amount),
@@ -35,12 +36,14 @@ impl Resource {
         }
     }
 
+    #[must_use]
     pub fn amount(&self) -> i32 {
         match self {
             Resource::Apple(n) | Resource::Banana(n) | Resource::Lemon(n) | Resource::Plum(n) => *n,
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.amount() == 0
     }
@@ -51,10 +54,10 @@ use std::ops::AddAssign;
 impl AddAssign for Resource {
     fn add_assign(&mut self, other: Self) {
         match (self, other) {
-            (Resource::Plum(a), Resource::Plum(b)) => *a += b,
-            (Resource::Lemon(a), Resource::Lemon(b)) => *a += b,
-            (Resource::Apple(a), Resource::Apple(b)) => *a += b,
-            (Resource::Banana(a), Resource::Banana(b)) => *a += b,
+            (Resource::Plum(a), Resource::Plum(b))
+            | (Resource::Lemon(a), Resource::Lemon(b))
+            | (Resource::Apple(a), Resource::Apple(b))
+            | (Resource::Banana(a), Resource::Banana(b)) => *a += b,
             _ => panic!("Cannot add different resource types"),
         }
     }
@@ -71,7 +74,9 @@ pub struct Resources {
 }
 
 impl Resources {
+    #![allow(clippy::missing_panics_doc)]
     #[rustfmt::skip]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             plum:   Resource::Plum(0),
@@ -83,7 +88,9 @@ impl Resources {
         }
     }
 
+
     #[rustfmt::skip]
+    #[must_use]
     pub fn parse(line: &str) -> Self {
         let r: Vec<i32> = line
             .split_whitespace()
@@ -110,6 +117,12 @@ impl Resources {
     }
 }
 
+impl Default for Resources {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum TreeType {
     Plum,
@@ -119,6 +132,7 @@ pub enum TreeType {
 }
 
 impl TreeType {
+    #[must_use]
     pub fn to_byte(&self) -> u8 {
         match self {
             TreeType::Apple => b'A',
@@ -140,7 +154,9 @@ pub struct Tree {
 }
 
 impl Tree {
+    #![allow(clippy::missing_panics_doc)]
     #[rustfmt::skip]
+    #[must_use]
     pub fn parse(line: &str) -> Self {
         let d: Vec<&str> = line.split_whitespace().collect();
 
@@ -162,6 +178,7 @@ impl Tree {
         }
     }
 
+    #[must_use]
     pub fn growth_time(&self) -> i32 {
         // Adjust these to match actual game constants
         match self.size {
@@ -172,6 +189,7 @@ impl Tree {
         }
     }
 
+    #[must_use]
     pub fn fruit_time(&self) -> i32 {
         // Adjust to match actual game constants
         5
@@ -193,7 +211,9 @@ pub struct Troll {
 }
 
 impl Troll {
+    #![allow(clippy::missing_panics_doc)]
     #[rustfmt::skip]
+    #[must_use]
     pub fn parse(line: &str) -> Self {
         let d: Vec<i32> = line
             .split_whitespace()
@@ -227,6 +247,7 @@ impl Troll {
             .find(|t| t.position == self.position)
     }
 
+    #[must_use]
     pub fn would_harvest(&self, game_state: &GameState) -> Option<Resource> {
         let free_capacity = self.free_capacity();
         if free_capacity == 0 {
@@ -243,6 +264,7 @@ impl Troll {
     // ------ Dropping into shack
     // ------------------------------------------------------------------------
 
+    #[must_use]
     pub fn carried_resources(&self) -> Vec<Resource> {
         [
             Resource::Apple(self.carry_apple),
@@ -259,6 +281,7 @@ impl Troll {
         self.position.manhattan(&game_state.my_shack) == 1
     }
 
+    #[must_use]
     pub fn would_drop(&self, game_state: &GameState) -> Option<Vec<Resource>> {
         (self.is_adjacent_to_shack(game_state) && self.total_carried() > 0)
             .then(|| self.carried_resources())
@@ -270,14 +293,11 @@ impl Troll {
 
     /// Sort moves by nearest trees with fruits. Just temporary, we don't want to
     /// use heuristic :)
-    fn heuristic_sort_moves(&self, game_state: &GameState, moves: &mut Vec<Position>) {
+    fn heuristic_sort_moves(&self, game_state: &GameState, moves: &mut [Position]) {
         // Bring back to shack
         if self.free_capacity() == 0 {
-            moves.sort_by_key(|pos| {
-                game_state
-                    .my_shack.manhattan(pos)
-            });
-            return
+            moves.sort_by_key(|pos| game_state.my_shack.manhattan(pos));
+            return;
         }
 
         // Find nearest tree with fruit
@@ -289,9 +309,10 @@ impl Troll {
                 .map(|t| t.position.manhattan(pos))
                 .min()
                 .unwrap_or(usize::MAX)
-        })
+        });
     }
 
+    #[must_use]
     pub fn reachable_positions(&self, game_state: &GameState) -> Option<Vec<Position>> {
         let mut moves: Vec<_> = crate::position::CARDINALS
             .iter()
@@ -310,6 +331,8 @@ impl Troll {
     fn free_capacity(&self) -> i32 {
         self.carry_capacity - self.total_carried()
     }
+
+    #[must_use]
     pub fn total_carried(&self) -> i32 {
         self.carry_plum + self.carry_lemon + self.carry_apple + self.carry_banana
     }

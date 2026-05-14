@@ -1,8 +1,7 @@
-
 use std::collections::HashMap;
-use itertools::Itertools;
 
-use crate::types::{Troll, Player};
+
+use crate::types::Player;
 use crate::game::Action;
 use crate::game::GameState;
 
@@ -29,12 +28,21 @@ impl Bot {
     }
 
     pub fn play(&mut self) {
-        let output = self.final_actions.iter()
+        let output = self
+            .final_actions
+            .iter()
             .map(|a| a.to_string())
             .collect::<Vec<_>>()
             .join(";");
 
-        println!("{}", if output.is_empty() { "WAIT".into() } else { output });
+        println!(
+            "{}",
+            if output.is_empty() {
+                "WAIT".into()
+            } else {
+                output
+            }
+        );
     }
 
     pub fn eval(&mut self, game_state: &GameState) {
@@ -43,7 +51,7 @@ impl Bot {
 
         // For now: pick first action per troll (drop > harvest > move > wait)
         self.final_actions.clear();
-        for (id, actions) in &my_actions {
+        for (_, actions) in &my_actions {
             if let Some(action) = actions.first() {
                 self.final_actions.push(action.clone());
             }
@@ -56,8 +64,14 @@ impl Bot {
     // ------------------------------------------------------------------------
     // ------ Strategy
     // ------------------------------------------------------------------------
-    fn find_all_actions(&self, game_state: &GameState, player: Player) -> HashMap<i32, Vec<Action>> {
-        game_state.trolls.iter()
+    fn find_all_actions(
+        &self,
+        game_state: &GameState,
+        player: Player,
+    ) -> HashMap<i32, Vec<Action>> {
+        game_state
+            .trolls
+            .iter()
             .filter(|t| t.player == player)
             .map(|troll| {
                 let mut actions = Vec::new();
@@ -76,5 +90,4 @@ impl Bot {
             })
             .collect()
     }
-
 }

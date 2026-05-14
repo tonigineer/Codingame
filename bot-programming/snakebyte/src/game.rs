@@ -10,6 +10,7 @@ pub enum Player {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Snake {
     id: usize,
     body: Vec<Position>,
@@ -21,6 +22,7 @@ impl Snake {
     }
 }
 
+#[allow(dead_code)]
 pub struct GameState {
     me: Player,
     opp: Player,
@@ -31,6 +33,12 @@ pub struct GameState {
     my_snakes: Vec<i32>,
     opp_snakes: Vec<i32>,
     snakes: Vec<Snake>,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GameState {

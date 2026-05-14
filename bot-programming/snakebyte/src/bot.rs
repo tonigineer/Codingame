@@ -1,14 +1,16 @@
 use crate::game::Game;
 
+use std::fmt;
+
 #[derive(Debug, Clone)]
 enum Move {
     Wait,
 }
 
-impl Move {
-    fn to_string(&self) -> String {
+impl fmt::Display for Move {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Move::Wait => "Wait".to_string(),
+            Move::Wait => write!(f, "Wait"),
         }
     }
 }
@@ -45,6 +47,6 @@ impl Bot {
             .collect::<Vec<String>>()
             .join(";");
 
-        println!("{}", mv);
+        println!("{mv}");
     }
 }

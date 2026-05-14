@@ -1,10 +1,10 @@
 default:
     @just --list
 
-format:
+fmt:
     cargo fmt --check -- `find . -name "*.rs"`
 
-clippy:
+lint:
     cargo clippy --all-targets --all-features -- --deny warnings
 
 build:
@@ -13,7 +13,7 @@ build:
 test:
     cargo test --workspace --release
 
-ci: format clippy build test
+ci: fmt lint build test
 
 trollfarm:
     cargo build --release -p trollfarm
