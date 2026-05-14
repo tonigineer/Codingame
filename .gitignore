@@ -3,4 +3,4 @@ target/
 
 # Files
 Cargo.lock
-*.flattend
+*.flattened

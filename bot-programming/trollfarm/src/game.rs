@@ -1,9 +1,11 @@
-use std::io::{self, BufRead};
 use std::fmt;
+use std::io::{self, BufRead};
+
 use crate::grid::Grid;
 use crate::position::Position;
 use crate::types::{Player, Resources, Tree, Troll};
 
+#[derive(Clone)]
 pub struct GameState {
     pub me: Player,
     pub opp: Player,
@@ -19,6 +21,7 @@ pub struct GameState {
     pub trees: Vec<Tree>,
     pub trolls: Vec<Troll>,
 }
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Move(i32, Position),
@@ -118,10 +121,10 @@ impl GameState {
     // Simulation
     // ------------------------------------------------------------------------
     pub fn apply_actions(&mut self, actions: &[Action]) {
+        self.tick_trees();
         self.apply_moves(actions);
         self.apply_harvests(actions);
         self.apply_drops(actions);
-        self.tick_trees();
     }
 
     fn troll_mut(&mut self, id: i32) -> Option<&mut Troll> {
@@ -141,10 +144,8 @@ impl GameState {
                 let speed = troll.movement_speed;
                 let start = troll.position;
 
-                // Find the closest reachable cell towards target, up to movementSpeed steps
                 let dest = self.resolve_move(start, *target, speed);
 
-                // Check no friendly troll already occupies dest
                 let player = troll.player;
                 let occupied = self
                     .trolls
@@ -167,7 +168,6 @@ impl GameState {
             let dx = (target.x - current.x).signum();
             let dy = (target.y - current.y).signum();
 
-            // Try horizontal first, then vertical, then stop
             let candidates = if dx != 0 && dy != 0 {
                 vec![
                     Position::new(current.x + dx, current.y),
@@ -178,7 +178,7 @@ impl GameState {
             } else if dy != 0 {
                 vec![Position::new(current.x, current.y + dy)]
             } else {
-                break; // already at target
+                break;
             };
 
             let mut moved = false;
@@ -202,11 +202,10 @@ impl GameState {
             && pos.y >= 0
             && (pos.x as usize) < self.width
             && (pos.y as usize) < self.height
-            && self.grid[pos] == b'.'
+            && b".ABPL".contains(&self.grid[pos])
     }
 
     fn apply_harvests(&mut self, actions: &[Action]) {
-        // Collect all harvest requests: (troll_id, tree_index)
         let mut requests: Vec<(i32, usize)> = Vec::new();
 
         for action in actions {
@@ -216,14 +215,12 @@ impl GameState {
                 };
                 let troll_pos = troll.position;
 
-                // Find tree on same cell
                 if let Some(tree_idx) = self.trees.iter().position(|t| t.position == troll_pos) {
                     requests.push((*id, tree_idx));
                 }
             }
         }
 
-        // Group by tree to handle contention
         let mut by_tree: std::collections::HashMap<usize, Vec<i32>> =
             std::collections::HashMap::new();
         for (troll_id, tree_idx) in &requests {
@@ -234,7 +231,6 @@ impl GameState {
             let tree = &self.trees[*tree_idx];
             let mut remaining_fruits = tree.fruits;
 
-            // Round-robin: each troll takes one fruit at a time
             let mut taken: std::collections::HashMap<i32, i32> = std::collections::HashMap::new();
             let mut active: Vec<i32> = troll_ids.clone();
 
@@ -253,7 +249,6 @@ impl GameState {
                 }
 
                 if last_fruit {
-                    // Last fruit gets duplicated for all active harvesters
                     for id in &active {
                         *taken.entry(*id).or_default() += 1;
                     }
@@ -269,7 +264,6 @@ impl GameState {
                 }
             }
 
-            // Apply harvested amounts
             let tree_typ = self.trees[*tree_idx].typ;
             self.trees[*tree_idx].fruits = remaining_fruits;
 
@@ -323,16 +317,19 @@ impl GameState {
 
     fn tick_trees(&mut self) {
         for tree in &mut self.trees {
-            if tree.cooldown > 0 {
+            if tree.cooldown > 1 {
                 tree.cooldown -= 1;
                 continue;
             }
+            // cooldown is 0 or 1 — tree acts this turn
             if tree.size < 4 {
                 tree.size += 1;
-                tree.cooldown = tree.growth_time();
+                tree.cooldown = tree.cooldown_time();
             } else if tree.fruits < 3 {
                 tree.fruits += 1;
-                tree.cooldown = tree.fruit_time();
+                tree.cooldown = tree.cooldown_time();
+            } else {
+                tree.cooldown = 0;
             }
         }
     }

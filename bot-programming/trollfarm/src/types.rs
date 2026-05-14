@@ -1,5 +1,5 @@
-use crate::{position::Position};
-use crate::{game::GameState};
+use crate::game::GameState;
+use crate::position::Position;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Player {
@@ -63,7 +63,7 @@ impl AddAssign for Resource {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Resources {
     pub plum: Resource,
     pub lemon: Resource,
@@ -87,7 +87,6 @@ impl Resources {
             wood:   0,
         }
     }
-
 
     #[rustfmt::skip]
     #[must_use]
@@ -143,7 +142,7 @@ impl TreeType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tree {
     pub typ: TreeType,
     pub position: Position,
@@ -179,24 +178,17 @@ impl Tree {
     }
 
     #[must_use]
-    pub fn growth_time(&self) -> i32 {
-        // Adjust these to match actual game constants
-        match self.size {
-            1 => 5,
-            2 => 7,
-            3 => 10,
-            _ => 0,
+    pub fn cooldown_time(&self) -> i32 {
+        match self.typ {
+            TreeType::Plum => 8,
+            TreeType::Lemon => 8,
+            TreeType::Apple => 9,
+            TreeType::Banana => 6,
         }
-    }
-
-    #[must_use]
-    pub fn fruit_time(&self) -> i32 {
-        // Adjust to match actual game constants
-        5
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Troll {
     pub id: i32,
     pub player: Player,
