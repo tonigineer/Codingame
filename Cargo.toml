@@ -4,10 +4,12 @@ members = [
     "game-lib",
     "bot-programming/ultimate-tic-tac-toe",
     "bot-programming/snakebyte",
+    "bot-programming/trollfarm",
 ]
 resolver = "3"
 
 [workspace.dependencies]
+itertools = "0.12"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

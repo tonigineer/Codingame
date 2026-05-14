@@ -1,7 +1,22 @@
 mod bot {
     use crate::game::Game;
+    
+    #[derive(Debug, Clone)]
+    enum Move {
+        Wait,
+    }
+    
+    impl Move {
+        fn to_string(&self) -> String {
+            match self {
+                Move::Wait => "Wait".to_string(),
+            }
+        }
+    }
+    
     pub struct Bot {
-        name: &'static str,
+        _name: &'static str,
+        moves: Vec<Move>,
     }
     
     impl Default for Bot {
@@ -13,17 +28,139 @@ mod bot {
     impl Bot {
         #[must_use]
         pub fn new() -> Self {
-            Self { name: "Snakebyte" }
+            Self {
+                _name: "Snakebyte",
+                moves: Vec::new(),
+            }
         }
     
-        pub fn play(&self, game: &Game) {
-            println!("GAME: {:?} - TURN: {:?}", self.name, game.turn);
+        pub fn think(&mut self, _game: &Game) {
+            self.moves = Vec::from([Move::Wait]);
+        }
+    
+        pub fn play(&mut self, _game: &Game) {
+            let mv = self
+                .moves
+                .iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<String>>()
+                .join(";");
+    
+            println!("{}", mv);
         }
     }
 }
 
 mod game {
-    use crate::types::GameState;
+    use std::io::{self, BufRead};
+    use crate::grid::Grid;
+    use crate::position::Position;
+    
+    type DummyResult<T> = Result<T, Box<dyn std::error::Error>>;
+    
+    pub enum Player {
+        Me(i32),
+        Opp(i32),
+    }
+    
+    #[derive(Debug)]
+    pub struct Snake {
+        id: usize,
+        body: Vec<Position>,
+    }
+    
+    impl Snake {
+        fn new(id: usize, body: Vec<Position>) -> Self {
+            Self { id, body }
+        }
+    }
+    
+    pub struct GameState {
+        me: Player,
+        opp: Player,
+        width: i32,
+        height: i32,
+        grid: Grid<u8>,
+        snakes_per_player: i32,
+        my_snakes: Vec<i32>,
+        opp_snakes: Vec<i32>,
+        snakes: Vec<Snake>,
+    }
+    
+    impl GameState {
+        pub fn new() -> Self {
+            let mut lines = io::stdin().lock().lines().map(|l| l.unwrap());
+            let mut next = || lines.next().unwrap();
+            let int = |s: &str| s.trim().parse::<i32>().unwrap();
+    
+            let my_id = int(&next());
+            let opp_id = 1 - my_id;
+            let width = int(&next());
+            let height = int(&next());
+    
+            let rows: Vec<String> = (0..height).map(|_| next()).collect();
+            let grid = Grid::from(rows.join("\n"));
+    
+            let snakes_per_player = int(&next());
+            let my_snakes: Vec<i32> = (0..snakes_per_player).map(|_| int(&next())).collect();
+            let opp_snakes: Vec<i32> = (0..snakes_per_player).map(|_| int(&next())).collect();
+    
+            Self {
+                me: Player::Me(my_id),
+                opp: Player::Opp(opp_id),
+                width,
+                height,
+                grid,
+                snakes_per_player,
+                my_snakes,
+                opp_snakes,
+                snakes: Vec::new(),
+            }
+        }
+    
+        fn parse_power_source(s: &str) -> DummyResult<Position> {
+            let (a, b) = s
+                .trim()
+                .split_once(' ')
+                .ok_or("Split on space did not work.")?;
+            Ok(Position::new(a.parse()?, b.parse()?))
+        }
+    
+        fn parse_snake(s: &str) -> DummyResult<Snake> {
+            let (snake_id, pos_string) = s.trim().split_once(' ').ok_or("Split on whitespace")?;
+            let body: Vec<Position> = pos_string
+                .trim()
+                .split(',')
+                .map(|p| {
+                    let (a, b) = p.trim().split_once(':').ok_or("Split on : did not work")?;
+                    Ok(Position::new(a.parse()?, b.parse()?))
+                })
+                .collect::<DummyResult<_>>()?;
+            Ok(Snake::new(snake_id.parse()?, body))
+        }
+    
+        pub fn update(&mut self) {
+            let mut lines = io::stdin().lock().lines().map(|l| l.unwrap());
+            let mut next = || lines.next().unwrap();
+            let int = |s: &str| s.trim().parse::<i32>().unwrap();
+    
+            let power_source_count = int(&next());
+            for _ in 0..power_source_count as usize {
+                let pos = GameState::parse_power_source(&next()).unwrap();
+                self.grid[pos] = b'P';
+            }
+    
+            self.grid.print();
+    
+            let snakebot_count = int(&next());
+            for _i in 0..snakebot_count as usize {
+                let snake = GameState::parse_snake(&next()).unwrap();
+                self.snakes.push(snake);
+            }
+    
+            eprintln!("{:?}", self.snakes);
+        }
+    }
     
     pub struct Game {
         pub turn: u8,
@@ -39,48 +176,512 @@ mod game {
     impl Game {
         #[must_use]
         pub fn new() -> Self {
+            let game_state = GameState::new();
+    
             Self {
                 turn: 0,
-                game_state: GameState::new(),
+                game_state,
             }
         }
     
         pub fn update(&mut self) {
-            let other = self.game_state.clone();
-    
             self.turn += 1;
             self.game_state.update();
+            eprintln!("finished");
+        }
+    }
+}
+
+mod grid {
+    use crate::position::*;
+    use std::ops::{Index, IndexMut};
     
-            self.game_state.diff(&other);
+    /// A rectangular grid of elements stored in row-major order.
+    ///
+    /// The grid has a fixed [`width`](Grid::width) and [`height`](Grid::height),
+    /// and its elements are stored in a flat [`Vec<T>`] in row-major order:
+    /// all elements of row `0` first, followed by row `1`, etc.
+    #[derive(Clone)]
+    pub struct Grid<T> {
+        width: i32,
+        height: i32,
+        bytes: Vec<T>,
+    }
+    
+    impl Grid<u8> {
+        /// Prints the contents of the grid to standard output.
+        ///
+        /// Each cell is interpreted as a `u8` character and printed in row-major order.
+        /// A newline is inserted after each row, and an extra blank line is added after the grid.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("ab\ncd");
+        /// grid.print();
+        /// // ab
+        /// // cd
+        /// //
+        /// ```
+        pub fn print(&self) {
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let p = Position::new(x, y);
+                    eprint!("{}", self[p] as char);
+                }
+                println!();
+            }
+            println!();
+        }
+    }
+    impl From<&str> for Grid<u8> {
+        /// Creates a [`Grid<u8>`] from a multi-line string input.
+        ///
+        /// Each line must have the same length. Characters are stored as raw bytes.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("abc\ndef");
+        /// assert_eq!(grid.width(), 3);
+        /// assert_eq!(grid.height(), 2);
+        /// assert_eq!(grid[Position::new(0, 0)], b'a');
+        /// assert_eq!(grid[Position::new(1, 1)], b'e');
+        /// ```
+        fn from(input: &str) -> Self {
+            let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+            let width = raw[0].len() as i32;
+            let height = raw.len() as i32;
+            let mut bytes = Vec::with_capacity((width * height) as usize);
+            raw.iter().for_each(|slice| bytes.extend_from_slice(slice));
+    
+            Grid {
+                width,
+                height,
+                bytes,
+            }
+        }
+    }
+    
+    impl From<String> for Grid<u8> {
+        /// Creates a [`Grid<u8>`] from a multi-line string input.
+        ///
+        /// Each line must have the same length. Characters are stored as raw bytes.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("abc\ndef".to_string());
+        /// assert_eq!(grid.width(), 3);
+        /// assert_eq!(grid.height(), 2);
+        /// assert_eq!(grid[Position::new(0, 0)], b'a');
+        /// assert_eq!(grid[Position::new(1, 1)], b'e');
+        /// ```
+        fn from(input: String) -> Self {
+            let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+            let width = raw[0].len() as i32;
+            let height = raw.len() as i32;
+            let mut bytes = Vec::with_capacity((width * height) as usize);
+            raw.iter().for_each(|slice| bytes.extend_from_slice(slice));
+    
+            Grid {
+                width,
+                height,
+                bytes,
+            }
+        }
+    }
+    
+    impl<T> Grid<T> {
+        /// Returns the width of the grid (number of columns).
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("abc\ndef");
+        /// assert_eq!(grid.width(), 3);
+        /// ```
+        #[inline]
+        pub fn width(&self) -> i32 {
+            self.width
         }
     
-        pub fn apply_move(&self) {}
+        /// Returns the height of the grid (number of rows).
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("abc\ndef");
+        /// assert_eq!(grid.height(), 2);
+        /// ```
+        #[inline]
+        pub fn height(&self) -> i32 {
+            self.height
+        }
+    
+        /// Returns `true` if the given [`Position`] lies inside the grid’s bounds.
+        ///
+        /// A position is inside the grid if its `x` coordinate is between
+        /// `0` and `width - 1`, and its `y` coordinate is between
+        /// `0` and `height - 1`.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("abc\ndef");
+        /// assert!(grid.contains(Position::new(0, 0)));
+        /// assert!(!grid.contains(Position::new(5, 5)));
+        /// ```
+        #[inline]
+        pub fn contains(&self, position: Position) -> bool {
+            position.x >= 0 && position.x < self.width && position.y >= 0 && position.y < self.height
+        }
+    }
+    
+    impl<T: PartialEq + Copy> Grid<T> {
+        /// Searches the grid for the first occurrence of `token` and returns its [`Position`].
+        ///
+        /// The search is performed in row-major order, starting from the top-left cell `(0, 0)`.
+        /// If the value is found, the coordinates of its position are returned; otherwise, `None`.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("abc\ndef");
+        /// assert_eq!(grid.search(b'e'), Some(Position::new(1, 1)));
+        /// assert_eq!(grid.search(b'z'), None);
+        /// ```
+        #[inline]
+        pub fn search(&self, token: T) -> Option<Position> {
+            self.bytes
+                .iter()
+                .position(|h| *h == token)
+                .map(|i| Position::new((i as i32) % self.width, (i as i32) / self.width))
+        }
+    }
+    
+    impl<T> Index<Position> for Grid<T> {
+        type Output = T;
+    
+        /// Returns a shared reference to the element at the given [`Position`].
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let grid = Grid::from("ab\ncd");
+        /// assert_eq!(grid[Position::new(0, 0)], b'a');
+        /// assert_eq!(grid[Position::new(1, 1)], b'd');
+        /// ```
+        #[inline]
+        fn index(&self, index: Position) -> &Self::Output {
+            &self.bytes[(self.width * index.y + index.x) as usize]
+        }
+    }
+    
+    impl<T> IndexMut<Position> for Grid<T> {
+        /// Returns a mutable reference to the element at the given [`Position`].
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::{grid::*,position::*};
+        ///
+        /// let mut grid = Grid::from("ab\ncd");
+        /// grid[Position::new(0, 0)] = b'x';
+        /// assert_eq!(grid[Position::new(0, 0)], b'x');
+        /// ```
+        #[inline]
+        fn index_mut(&mut self, index: Position) -> &mut Self::Output {
+            &mut self.bytes[(self.width * index.y + index.x) as usize]
+        }
+    }
+}
+
+mod position {
+    use std::hash::{Hash, Hasher};
+    use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+    
+    pub const ORIGIN: Position = Position { x: 0, y: 0 };
+    pub const RIGHT: Position = Position { x: 1, y: 0 };
+    pub const DOWN: Position = Position { x: 0, y: 1 };
+    pub const LEFT: Position = Position { x: -1, y: 0 };
+    pub const UP: Position = Position { x: 0, y: -1 };
+    
+    pub const CARDINALS: [Position; 4] = [RIGHT, DOWN, LEFT, UP];
+    pub const DIAGONALS: [Position; 4] = [
+        Position { x: 1, y: 1 },
+        Position { x: -1, y: 1 },
+        Position { x: -1, y: -1 },
+        Position { x: 1, y: -1 },
+    ];
+    
+    /// A 2D position with integer coordinates.
+    #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    pub struct Position {
+        pub x: i32,
+        pub y: i32,
+    }
+    
+    impl Position {
+        /// Returns a new [`Position`] with the given `x` and `y` coordinates.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let p = Position::new(3, 4);
+        /// assert_eq!(p.x, 3);
+        /// assert_eq!(p.y, 4);
+        /// ```
+        #[inline]
+        pub const fn new(x: i32, y: i32) -> Self {
+            Self { x, y }
+        }
+    
+        /// Returns the [Manhattan distance](https://en.wikipedia.org/wiki/Taxicab_geometry)
+        /// between `self` and another [`Position`].
+        ///
+        /// The Manhattan distance is the sum of the absolute differences of the `x`
+        /// and `y` coordinates.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let a = Position::new(1, 2);
+        /// let b = Position::new(4, 6);
+        /// assert_eq!(a.manhattan(&b), 7);
+        /// ```
+        #[inline]
+        pub fn manhattan(&self, other: &Self) -> usize {
+            self.x.abs_diff(other.x) as usize + self.y.abs_diff(other.y) as usize
+        }
+    }
+    
+    impl Hash for Position {
+        /// Feeds the `x` and `y` coordinates into the given [`Hasher`].
+        ///
+        /// This allows [`Position`] to be used as a key in hashed collections such as
+        /// [`HashMap`](std::collections::HashMap) and [`HashSet`](std::collections::HashSet).
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use std::collections::HashSet;
+        /// use aoc::common::position::Position;
+        ///
+        /// let mut set = HashSet::new();
+        /// set.insert(Position::new(1, 2));
+        /// assert!(set.contains(&Position::new(1, 2)));
+        /// ```
+        #[inline]
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            state.write_u32(self.x as u32);
+            state.write_u32(self.y as u32);
+        }
+    }
+    
+    impl Add for Position {
+        type Output = Self;
+    
+        /// Adds two positions component-wise.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let a = Position::new(1, 2);
+        /// let b = Position::new(3, 4);
+        /// assert_eq!(a + b, Position::new(4, 6));
+        /// ```
+        #[inline]
+        fn add(self, rhs: Self) -> Self {
+            Position::new(self.x + rhs.x, self.y + rhs.y)
+        }
+    }
+    
+    impl AddAssign for Position {
+        /// Adds another position to this one component-wise, in place.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let mut p = Position::new(1, 2);
+        /// p += Position::new(3, 4);
+        /// assert_eq!(p, Position::new(4, 6));
+        /// ```
+        #[inline]
+        fn add_assign(&mut self, rhs: Self) {
+            self.x += rhs.x;
+            self.y += rhs.y;
+        }
+    }
+    
+    impl Sub for Position {
+        type Output = Self;
+    
+        /// Subtracts one position from another component-wise.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let a = Position::new(5, 7);
+        /// let b = Position::new(2, 3);
+        /// assert_eq!(a - b, Position::new(3, 4));
+        /// ```
+        #[inline]
+        fn sub(self, rhs: Self) -> Self {
+            Position::new(self.x - rhs.x, self.y - rhs.y)
+        }
+    }
+    
+    impl SubAssign for Position {
+        /// Subtracts another position from this one component-wise, in place.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let mut p = Position::new(5, 7);
+        /// p -= Position::new(2, 3);
+        /// assert_eq!(p, Position::new(3, 4));
+        /// ```
+        #[inline]
+        fn sub_assign(&mut self, rhs: Self) {
+            self.x -= rhs.x;
+            self.y -= rhs.y;
+        }
+    }
+    
+    impl Mul<i32> for Position {
+        type Output = Self;
+    
+        /// Multiplies both coordinates of the position by a scalar.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let p = Position::new(2, 3);
+        /// assert_eq!(p * 4, Position::new(8, 12));
+        /// ```
+        #[inline]
+        fn mul(self, rhs: i32) -> Self {
+            Position::new(self.x * rhs, self.y * rhs)
+        }
+    }
+    
+    impl Div<i32> for Position {
+        type Output = Self;
+    
+        /// Divides both coordinates of the position by a scalar (integer division).
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use aoc::common::position::*;
+        ///
+        /// let p = Position::new(8, 12);
+        /// assert_eq!(p / 4, Position::new(2, 3));
+        /// ```
+        #[inline]
+        fn div(self, rhs: i32) -> Self {
+            assert!(rhs != 0, "division by zero");
+            Position::new(self.x / rhs, self.y / rhs)
+        }
     }
 }
 
 mod types {
-    use std::io;
+    use crate::{grid::Grid, position::Position};
     
-    macro_rules! parse_input {
-        ($x:expr, $t:ident) => {
-            $x.trim().parse::<$t>().unwrap()
-        };
+    use std::collections::VecDeque;
+    use std::io;
+    use std::fmt;
+    
+    fn read_val<T: std::str::FromStr>() -> T
+    where
+        T::Err: std::fmt::Debug,
+    {
+        let mut s = String::new();
+        io::stdin().read_line(&mut s).unwrap();
+        s.trim().parse().unwrap()
     }
     
-    macro_rules! diff_fields {
-        ($self:expr, $other:expr, $($field:ident),+) => {
-            $(
-                if $self.$field != $other.$field {
-                    eprintln!("{}: {} -> {}", stringify!($field), $self.$field, $other.$field);
-                }
-            )+
-        };
+    #[derive(Debug, Clone, Copy)]
+    pub enum Player {
+        Me(i32),
+        Opp(i32),
+    }
+    
+    #[derive(Debug, Clone)]
+    pub struct Snake {
+        pub id: i32,
+        pub player: Player,
+        pub head: Position,
+        pub body: VecDeque<Position>,
+    }
+    
+    impl Snake {
+        fn new(id: i32, player: Player) -> Self {
+            Self {
+                id,
+                player,
+                head: Position { x: 0, y: 0 },
+                body: VecDeque::new(),
+            }
+        }
+    }
+    
+    impl fmt::Display for Snake {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let body_str = self
+                .body
+                .iter()
+                .map(|p| format!("({},{})", p.x, p.y))
+                .collect::<Vec<_>>()
+                .join(" ");
+            write!(
+                f,
+                "Snake {} [{:?}] head:({},{}) body:[{}]",
+                self.id, self.player, self.head.x, self.head.y, body_str
+            )
+        }
     }
     
     #[derive(Clone)]
     pub struct GameState {
-        units: i32,
-        opp_units: i32,
+        pub me: Player,
+        pub opp: Player,
+        pub grid: Grid<u8>,
+        pub snakes: Vec<Snake>,
+        // my_snake_ids: Vec<i32>,
+        // opp_snake_ids: Vec<i32>,
     }
     
     impl Default for GameState {
@@ -96,13 +697,44 @@ mod types {
         /// Panics if reading from stdin fails.
         #[must_use]
         pub fn new() -> Self {
-            let mut input_line = String::new();
-            io::stdin().read_line(&mut input_line).unwrap();
-            let inputs: Vec<&str> = input_line.split_whitespace().collect();
+            let my_id: i32 = read_val();
+    
+            let me = Player::Me(my_id);
+            let opp = Player::Opp(my_id ^ 1);
+    
+            let _width: usize = read_val();
+            let height: usize = read_val();
+    
+            let grid = Grid::from(
+                (0..height)
+                    .map(|_| {
+                        let mut input_line = String::new();
+                        io::stdin().read_line(&mut input_line).unwrap();
+                        input_line.trim().to_string()
+                    })
+                    .collect::<Vec<String>>()
+                    .join("\n")
+                    .as_str(),
+            );
+    
+            let mut snakes = Vec::new();
+    
+            let snakebots_per_player: i32 = read_val();
+            (0..snakebots_per_player).for_each(|_| {
+                let id: i32 = read_val();
+                snakes.push(Snake::new(id, me));
+            });
+    
+            (0..snakebots_per_player).for_each(|_| {
+                let id: i32 = read_val();
+                snakes.push(Snake::new(id, opp));
+            });
     
             Self {
-                units: parse_input!(inputs[0], i32),
-                opp_units: parse_input!(inputs[1], i32),
+                me,
+                opp,
+                grid,
+                snakes,
             }
         }
         /// Updates the `GameState` from stdin input.
@@ -110,28 +742,66 @@ mod types {
         /// # Panics
         /// Panics if reading from stdin fails.
         pub fn update(&mut self) {
-            let mut input_line = String::new();
-            io::stdin().read_line(&mut input_line).unwrap();
-            let inputs: Vec<&str> = input_line.split_whitespace().collect();
+            let power_source_count: usize = read_val();
     
-            self.units = parse_input!(inputs[0], i32);
-            self.opp_units = parse_input!(inputs[1], i32);
+            (0..power_source_count).for_each(|_| {
+                let mut input_line = String::new();
+                io::stdin().read_line(&mut input_line).unwrap();
+                let (x, y): (i32, i32) = {
+                    let (a, b) = input_line.trim().split_once(" ").unwrap();
+                    (a.parse().unwrap(), b.parse().unwrap())
+                };
+                self.grid[Position::new(x, y)] = b'P';
+            });
+    
+            let snakebot_count: usize = read_val();
+    
+            (0..snakebot_count).for_each(|_| {
+                let mut input_line = String::new();
+                io::stdin().read_line(&mut input_line).unwrap();
+                let inputs = input_line.split(" ").collect::<Vec<_>>();
+                let snakebot_id = inputs[0].parse::<i32>().unwrap();
+    
+                let body: Vec<Position> = inputs[1]
+                    .split(':')
+                    .into_iter()
+                    .map(|s| {
+                        let (x, y) = s.trim().split_once(",").unwrap();
+                        Position {
+                            x: x.parse().unwrap(),
+                            y: y.parse().unwrap(),
+                        }
+                    })
+                    .collect();
+    
+                if let Some(snake) = self.snakes.iter_mut().find(|s| s.id == snakebot_id) {
+                    snake.head = body[0];
+                    snake.body = body.into_iter().skip(1).collect();
+                }
+            });
+    
+            self.snakes.iter().for_each(|s| {
+                eprintln!("{:?}", s);
+            });
         }
     
-        pub fn diff(&self, other: &GameState) {
-            diff_fields!(self, other, units, opp_units);
-        }
+        // pub fn diff(&self, other: &GameState) {
+        //     diff_fields!(self, other, units, opp_units);
     }
 }
 
 
 fn main() {
-    let mut game = game::Game::default();
-    let bot = bot::Bot::new();
+    let mut game = game::Game::new();
+    // let mut bot = bot::Bot::new();
 
     loop {
+        // game.game_state.grid.print();
         game.update();
-        bot.play(&game);
+        // bot.play(&mut game);
+
+        eprintln!("Should be here now");
+        println!("WAIT");
     }
 }
 
