@@ -3,3 +3,4 @@ target/
 
 # Files
 Cargo.lock
+*.flattend
