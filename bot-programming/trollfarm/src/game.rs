@@ -121,10 +121,10 @@ impl GameState {
     // Simulation
     // ------------------------------------------------------------------------
     pub fn apply_actions(&mut self, actions: &[Action]) {
-        self.tick_trees();
         self.apply_moves(actions);
         self.apply_harvests(actions);
         self.apply_drops(actions);
+        self.tick_trees();
     }
 
     fn troll_mut(&mut self, id: i32) -> Option<&mut Troll> {
@@ -317,20 +317,21 @@ impl GameState {
 
     fn tick_trees(&mut self) {
         for tree in &mut self.trees {
-            if tree.cooldown > 1 {
+            if tree.cooldown > 0 {
                 tree.cooldown -= 1;
+            }
+            if tree.cooldown > 0 {
                 continue;
             }
-            // cooldown is 0 or 1 — tree acts this turn
+            // cooldown just hit 0 — tree acts this turn
             if tree.size < 4 {
                 tree.size += 1;
                 tree.cooldown = tree.cooldown_time();
             } else if tree.fruits < 3 {
                 tree.fruits += 1;
                 tree.cooldown = tree.cooldown_time();
-            } else {
-                tree.cooldown = 0;
             }
+            // max size + full fruits: cooldown stays 0, nothing to do
         }
     }
 }

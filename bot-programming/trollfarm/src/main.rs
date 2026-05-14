@@ -2,6 +2,7 @@ pub mod bot;
 pub mod game;
 pub mod grid;
 pub mod position;
+pub mod prediction;
 pub mod types;
 
 fn main() {
@@ -15,7 +16,7 @@ fn main() {
         bot.compare(&game.game_state);
 
         bot.update(&game.game_state);
-        bot.eval(&game.game_state);
+        bot.think(&game.game_state);
 
         // Simulate my own actions to predict next state
         bot.simulate(&game.game_state);
