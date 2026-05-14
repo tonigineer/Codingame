@@ -1,51 +1,92 @@
 mod bot {
+    
+    use std::collections::HashMap;
+    use itertools::Itertools;
+    
     use crate::types::{Troll, Player};
+    use crate::game::Action;
     use crate::game::GameState;
     
     pub struct Bot {
         troll_ids: Vec<i32>,
+        final_actions: Vec<Action>,
     }
     
     impl Bot {
         pub fn new() -> Self {
-            Self { troll_ids: Vec::new() }
+            Self {
+                troll_ids: Vec::new(),
+                final_actions: Vec::new(),
+            }
         }
     
         pub fn update(&mut self, game_state: &GameState) {
-            self.troll_ids = game_state.trolls.iter()
+            self.troll_ids = game_state
+                .trolls
+                .iter()
                 .filter(|t| t.player == Player::Me)
                 .map(|t| t.id)
                 .collect();
         }
     
-        pub fn play(&self, game_state: &GameState) {
-            eprintln!("Shack : {:?}", game_state.my_shack);
+        pub fn play(&mut self) {
+            let output = self.final_actions.iter()
+                .map(|a| a.to_string())
+                .collect::<Vec<_>>()
+                .join(";");
     
-            let my_trolls: Vec<&Troll> = game_state.trolls.iter()
-                .filter(|t| self.troll_ids.contains(&t.id))
-                .collect();
+            println!("{}", if output.is_empty() { "WAIT".into() } else { output });
+        }
     
-            for troll in my_trolls {
-                eprintln!("Troll : {:?}", troll);
-                if let Some(resources) = troll.would_drop(game_state) {
-                    eprintln!("Drop : {:?}", resources);
-                }
-                if let Some(harvest) = troll.would_harvest(game_state) {
-                    eprintln!("Harvest : k{:?}", harvest);
-                }
-                if let Some(moves) = troll.reachable_positions(game_state) {
-                    eprintln!("Moves : {:?}", moves);
+        pub fn eval(&mut self, game_state: &GameState) {
+            let my_actions = self.find_all_actions(game_state, Player::Me);
+            let opp_actions = self.find_all_actions(game_state, Player::Opp);
+    
+            // For now: pick first action per troll (drop > harvest > move > wait)
+            self.final_actions.clear();
+            for (id, actions) in &my_actions {
+                if let Some(action) = actions.first() {
+                    self.final_actions.push(action.clone());
                 }
             }
+    
+            eprintln!("My actions: {:?}", my_actions);
+            eprintln!("Opp actions: {:?}", opp_actions);
         }
+    
+        // ------------------------------------------------------------------------
+        // ------ Strategy
+        // ------------------------------------------------------------------------
+        fn find_all_actions(&self, game_state: &GameState, player: Player) -> HashMap<i32, Vec<Action>> {
+            game_state.trolls.iter()
+                .filter(|t| t.player == player)
+                .map(|troll| {
+                    let mut actions = Vec::new();
+                    if troll.would_drop(game_state).is_some() {
+                        actions.push(Action::Drop(troll.id));
+                    }
+                    if troll.would_harvest(game_state).is_some() {
+                        actions.push(Action::Harvest(troll.id));
+                    }
+                    if let Some(moves) = troll.reachable_positions(game_state) {
+                        for pos in moves {
+                            actions.push(Action::Move(troll.id, pos));
+                        }
+                    }
+                    (troll.id, actions)
+                })
+                .collect()
+        }
+    
     }
 }
 
 mod game {
     use std::io::{self, BufRead};
+    use std::fmt;
     use crate::grid::Grid;
     use crate::position::Position;
-    use crate::types::{Player, Resources, Tree, TreeType, Troll};
+    use crate::types::{Player, Resources, Tree, Troll};
     
     pub struct GameState {
         pub me: Player,
@@ -57,8 +98,36 @@ mod game {
         pub opp_shack: Position,
         pub my_resources: Resources,
         pub opp_resources: Resources,
+        pub my_score: i32,
+        pub opp_score: i32,
         pub trees: Vec<Tree>,
         pub trolls: Vec<Troll>,
+    }
+    #[derive(Debug, Clone)]
+    pub enum Action {
+        Move(i32, Position),
+        Harvest(i32),
+        Drop(i32),
+        Wait(i32),
+    }
+    
+    impl Action {
+        pub fn troll_id(&self) -> i32 {
+            match self {
+                Action::Move(id, _) | Action::Harvest(id) | Action::Drop(id) | Action::Wait(id) => *id,
+            }
+        }
+    }
+    
+    impl fmt::Display for Action {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                Action::Move(id, pos) => write!(f, "MOVE {} {} {}", id, pos.x, pos.y),
+                Action::Harvest(id) => write!(f, "HARVEST {}", id),
+                Action::Drop(id) => write!(f, "DROP {}", id),
+                Action::Wait(_) => write!(f, ""),
+            }
+        }
     }
     
     impl GameState {
@@ -88,6 +157,8 @@ mod game {
                 opp_shack,
                 my_resources: Resources::new(),
                 opp_resources: Resources::new(),
+                my_score: 0,
+                opp_score: 0,
                 trees: Vec::new(),
                 trolls: Vec::new(),
             }
@@ -113,17 +184,240 @@ mod game {
             let troll_count: usize = next().trim().parse().unwrap();
             self.trolls = (0..troll_count).map(|_| Troll::parse(&next())).collect();
         }
+    
+        fn winner(&self) -> Option<Player> {
+            match self.my_score.cmp(&self.opp_score) {
+                std::cmp::Ordering::Equal => None,
+                std::cmp::Ordering::Greater => Some(Player::Me),
+                std::cmp::Ordering::Less => Some(Player::Opp),
+            }
+        }
+    
+        // ------------------------------------------------------------------------
+        // Simulation
+        // ------------------------------------------------------------------------
+        pub fn apply_actions(&mut self, actions: &[Action]) {
+            self.apply_moves(actions);
+            self.apply_harvests(actions);
+            self.apply_drops(actions);
+            self.tick_trees();
+        }
+    
+        fn troll_mut(&mut self, id: i32) -> Option<&mut Troll> {
+            self.trolls.iter_mut().find(|t| t.id == id)
+        }
+    
+        fn troll(&self, id: i32) -> Option<&Troll> {
+            self.trolls.iter().find(|t| t.id == id)
+        }
+    
+        fn apply_moves(&mut self, actions: &[Action]) {
+            for action in actions {
+                if let Action::Move(id, target) = action {
+                    let Some(troll) = self.troll(*id) else {
+                        continue;
+                    };
+                    let speed = troll.movement_speed;
+                    let start = troll.position;
+    
+                    // Find the closest reachable cell towards target, up to movementSpeed steps
+                    let dest = self.resolve_move(start, *target, speed);
+    
+                    // Check no friendly troll already occupies dest
+                    let player = troll.player;
+                    let occupied = self
+                        .trolls
+                        .iter()
+                        .any(|t| t.id != *id && t.player == player && t.position == dest);
+    
+                    if !occupied {
+                        if let Some(troll) = self.troll_mut(*id) {
+                            troll.position = dest;
+                        }
+                    }
+                }
+            }
+        }
+    
+        fn resolve_move(&self, from: Position, target: Position, speed: i32) -> Position {
+            let mut current = from;
+            for _ in 0..speed {
+                let dx = (target.x - current.x).signum();
+                let dy = (target.y - current.y).signum();
+    
+                // Try horizontal first, then vertical, then stop
+                let candidates = if dx != 0 && dy != 0 {
+                    vec![
+                        Position::new(current.x + dx, current.y),
+                        Position::new(current.x, current.y + dy),
+                    ]
+                } else if dx != 0 {
+                    vec![Position::new(current.x + dx, current.y)]
+                } else if dy != 0 {
+                    vec![Position::new(current.x, current.y + dy)]
+                } else {
+                    break; // already at target
+                };
+    
+                let mut moved = false;
+                for candidate in candidates {
+                    if self.is_walkable(candidate) {
+                        current = candidate;
+                        moved = true;
+                        break;
+                    }
+                }
+                if !moved {
+                    break;
+                }
+            }
+            current
+        }
+    
+        fn is_walkable(&self, pos: Position) -> bool {
+            pos.x >= 0
+                && pos.y >= 0
+                && (pos.x as usize) < self.width
+                && (pos.y as usize) < self.height
+                && self.grid[pos] == b'.'
+        }
+    
+        fn apply_harvests(&mut self, actions: &[Action]) {
+            // Collect all harvest requests: (troll_id, tree_index)
+            let mut requests: Vec<(i32, usize)> = Vec::new();
+    
+            for action in actions {
+                if let Action::Harvest(id) = action {
+                    let Some(troll) = self.troll(*id) else {
+                        continue;
+                    };
+                    let troll_pos = troll.position;
+    
+                    // Find tree on same cell
+                    if let Some(tree_idx) = self.trees.iter().position(|t| t.position == troll_pos) {
+                        requests.push((*id, tree_idx));
+                    }
+                }
+            }
+    
+            // Group by tree to handle contention
+            let mut by_tree: std::collections::HashMap<usize, Vec<i32>> =
+                std::collections::HashMap::new();
+            for (troll_id, tree_idx) in &requests {
+                by_tree.entry(*tree_idx).or_default().push(*troll_id);
+            }
+    
+            for (tree_idx, troll_ids) in &by_tree {
+                let tree = &self.trees[*tree_idx];
+                let mut remaining_fruits = tree.fruits;
+    
+                // Round-robin: each troll takes one fruit at a time
+                let mut taken: std::collections::HashMap<i32, i32> = std::collections::HashMap::new();
+                let mut active: Vec<i32> = troll_ids.clone();
+    
+                while remaining_fruits > 0 && !active.is_empty() {
+                    let last_fruit = remaining_fruits == 1 && active.len() > 1;
+    
+                    active.retain(|id| {
+                        let troll = self.trolls.iter().find(|t| t.id == *id).unwrap();
+                        let already = taken.get(id).copied().unwrap_or(0);
+                        let free_capacity = troll.carry_capacity - troll.total_carried();
+                        already < troll.harvest_power && free_capacity > already
+                    });
+    
+                    if active.is_empty() {
+                        break;
+                    }
+    
+                    if last_fruit {
+                        // Last fruit gets duplicated for all active harvesters
+                        for id in &active {
+                            *taken.entry(*id).or_default() += 1;
+                        }
+                        remaining_fruits = 0;
+                    } else {
+                        for id in &active {
+                            if remaining_fruits == 0 {
+                                break;
+                            }
+                            *taken.entry(*id).or_default() += 1;
+                            remaining_fruits -= 1;
+                        }
+                    }
+                }
+    
+                // Apply harvested amounts
+                let tree_typ = self.trees[*tree_idx].typ.clone();
+                self.trees[*tree_idx].fruits = remaining_fruits;
+    
+                for (troll_id, amount) in &taken {
+                    if let Some(troll) = self.troll_mut(*troll_id) {
+                        troll.add_carried(&tree_typ, *amount);
+                    }
+                }
+            }
+        }
+    
+        fn apply_drops(&mut self, actions: &[Action]) {
+            for action in actions {
+                if let Action::Drop(id) = action {
+                    let Some(troll) = self.troll(*id) else {
+                        continue;
+                    };
+                    let player = troll.player;
+                    let pos = troll.position;
+    
+                    let shack = if player == Player::Me {
+                        self.my_shack
+                    } else {
+                        self.opp_shack
+                    };
+                    if pos.manhattan(&shack) != 1 {
+                        continue;
+                    }
+    
+                    let resources = troll.carried_resources();
+                    if resources.is_empty() {
+                        continue;
+                    };
+    
+                    let inventory = if player == Player::Me {
+                        &mut self.my_resources
+                    } else {
+                        &mut self.opp_resources
+                    };
+    
+                    for r in &resources {
+                        inventory.add(r);
+                    }
+    
+                    if let Some(troll) = self.troll_mut(*id) {
+                        troll.clear_carried();
+                    }
+                }
+            }
+        }
+    
+        fn tick_trees(&mut self) {
+            for tree in &mut self.trees {
+                if tree.cooldown > 0 {
+                    tree.cooldown -= 1;
+                    continue;
+                }
+                if tree.size < 4 {
+                    tree.size += 1;
+                    tree.cooldown = tree.growth_time();
+                } else if tree.fruits < 3 {
+                    tree.fruits += 1;
+                    tree.cooldown = tree.fruit_time();
+                }
+            }
+        }
     }
     
     pub struct Game {
         pub turn: u8,
         pub game_state: GameState,
-    }
-    
-    impl Default for Game {
-        fn default() -> Self {
-            Self::new()
-        }
     }
     
     impl Game {
@@ -569,11 +863,10 @@ mod position {
 }
 
 mod types {
-    use crate::position::CARDINALS;
     use crate::{position::Position};
     use crate::{game::GameState};
     
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Player {
         Me,
         Opp,
@@ -589,7 +882,7 @@ mod types {
         }
     }
     
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Copy)]
     pub enum Resource {
         Banana(i32),
         Plum(i32),
@@ -615,6 +908,20 @@ mod types {
     
         pub fn is_empty(&self) -> bool {
             self.amount() == 0
+        }
+    }
+    
+    use std::ops::AddAssign;
+    
+    impl AddAssign for Resource {
+        fn add_assign(&mut self, other: Self) {
+            match (self, other) {
+                (Resource::Plum(a), Resource::Plum(b)) => *a += b,
+                (Resource::Lemon(a), Resource::Lemon(b)) => *a += b,
+                (Resource::Apple(a), Resource::Apple(b)) => *a += b,
+                (Resource::Banana(a), Resource::Banana(b)) => *a += b,
+                _ => panic!("Cannot add different resource types"),
+            }
         }
     }
     
@@ -657,9 +964,18 @@ mod types {
                 wood:   r[5],
             }
         }
+    
+        pub fn add(&mut self, resource: &Resource) {
+            match resource {
+                Resource::Plum(_) => self.plum += *resource,
+                Resource::Lemon(_) => self.lemon += *resource,
+                Resource::Apple(_) => self.apple += *resource,
+                Resource::Banana(_) => self.banana += *resource,
+            }
+        }
     }
     
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Copy)]
     pub enum TreeType {
         Plum,
         Lemon,
@@ -710,6 +1026,21 @@ mod types {
                 cooldown:   d[6].parse().unwrap(),
             }
         }
+    
+        pub fn growth_time(&self) -> i32 {
+            // Adjust these to match actual game constants
+            match self.size {
+                1 => 5,
+                2 => 7,
+                3 => 10,
+                _ => 0,
+            }
+        }
+    
+        pub fn fruit_time(&self) -> i32 {
+            // Adjust to match actual game constants
+            5
+        }
     }
     
     #[derive(Debug)]
@@ -750,27 +1081,32 @@ mod types {
             }
         }
     
-        pub fn adjacent_trees<'a>(&self, game_state: &'a GameState) -> Vec<&'a Tree> {
+        // ------------------------------------------------------------------------
+        // ------ Harvesting
+        // ------------------------------------------------------------------------
+    
+        fn tree_here<'a>(&self, game_state: &'a GameState) -> Option<&'a Tree> {
             game_state
                 .trees
                 .iter()
-                .filter(|t| t.position.manhattan(&self.position) == 1)
-                .collect()
+                .find(|t| t.position == self.position)
         }
     
-        pub fn would_harvest(&self, game_state: &GameState) -> Option<Vec<Resource>> {
-            let harvest: Vec<_> = self
-                .adjacent_trees(game_state)
-                .iter()
-                .filter_map(|tree| {
-                    eprintln!("{:?}", tree);
-                    let amount = self.carry_capacity.min(self.harvest_power).min(tree.fruits);
-                    eprintln!("{:?}", amount);
-                    (amount > 0).then(|| Resource::from_tree(&tree.typ, amount))
-                })
-                .collect();
-            (!harvest.is_empty()).then_some(harvest)
+        pub fn would_harvest(&self, game_state: &GameState) -> Option<Resource> {
+            let free_capacity = self.free_capacity();
+            if free_capacity == 0 {
+                return None;
+            }
+    
+            self.tree_here(game_state).and_then(|tree| {
+                let amount = free_capacity.min(self.harvest_power).min(tree.fruits);
+                (amount > 0).then(|| Resource::from_tree(&tree.typ, amount))
+            })
         }
+    
+        // ------------------------------------------------------------------------
+        // ------ Dropping into shack
+        // ------------------------------------------------------------------------
     
         pub fn carried_resources(&self) -> Vec<Resource> {
             [
@@ -784,22 +1120,79 @@ mod types {
             .collect()
         }
     
-        pub fn is_adjacent_to_shack(&self, game_state: &GameState) -> bool {
+        fn is_adjacent_to_shack(&self, game_state: &GameState) -> bool {
             self.position.manhattan(&game_state.my_shack) == 1
         }
     
         pub fn would_drop(&self, game_state: &GameState) -> Option<Vec<Resource>> {
-            self.is_adjacent_to_shack(game_state)
+            (self.is_adjacent_to_shack(game_state) && self.total_carried() > 0)
                 .then(|| self.carried_resources())
         }
     
+        // ------------------------------------------------------------------------
+        // ------ Moving
+        // ------------------------------------------------------------------------
+    
+        /// Sort moves by nearest trees with fruits. Just temporary, we don't want to
+        /// use heuristic :)
+        fn heuristic_sort_moves(&self, game_state: &GameState, moves: &mut Vec<Position>) {
+            // Bring back to shack
+            if self.free_capacity() == 0 {
+                moves.sort_by_key(|pos| {
+                    game_state
+                        .my_shack.manhattan(pos)
+                });
+                return
+            }
+    
+            // Find nearest tree with fruit
+            moves.sort_by_key(|pos| {
+                game_state
+                    .trees
+                    .iter()
+                    .filter(|t| t.fruits > 0)
+                    .map(|t| t.position.manhattan(pos))
+                    .min()
+                    .unwrap_or(usize::MAX)
+            })
+        }
+    
         pub fn reachable_positions(&self, game_state: &GameState) -> Option<Vec<Position>> {
-            let moves: Vec<_> = crate::position::CARDINALS
+            let mut moves: Vec<_> = crate::position::CARDINALS
                 .iter()
                 .map(|&c| self.position + c)
-                .filter(|p| game_state.grid[*p] == b'.')
+                .filter(|p| game_state.grid.contains(*p) && b".ABPL".contains(&game_state.grid[*p]))
                 .collect();
-            (!moves.is_empty()).then_some(moves)
+            (!moves.is_empty()).then_some({
+                self.heuristic_sort_moves(game_state, &mut moves);
+                moves
+            })
+        }
+    
+        // ------------------------------------------------------------------------
+        // ------ Helper
+        // ------------------------------------------------------------------------
+        fn free_capacity(&self) -> i32 {
+            self.carry_capacity - self.total_carried()
+        }
+        pub fn total_carried(&self) -> i32 {
+            self.carry_plum + self.carry_lemon + self.carry_apple + self.carry_banana
+        }
+    
+        pub fn add_carried(&mut self, typ: &TreeType, amount: i32) {
+            match typ {
+                TreeType::Plum => self.carry_plum += amount,
+                TreeType::Lemon => self.carry_lemon += amount,
+                TreeType::Apple => self.carry_apple += amount,
+                TreeType::Banana => self.carry_banana += amount,
+            }
+        }
+    
+        pub fn clear_carried(&mut self) {
+            self.carry_plum = 0;
+            self.carry_lemon = 0;
+            self.carry_apple = 0;
+            self.carry_banana = 0;
         }
     }
 }
@@ -812,10 +1205,8 @@ fn main() {
     loop {
         game.update();
         bot.update(&game.game_state);
-
-        bot.play(&game.game_state);
-
-        println!("WAIT");
+        bot.eval(&game.game_state);
+        bot.play();
     }
 }
 

@@ -11,9 +11,7 @@ fn main() {
     loop {
         game.update();
         bot.update(&game.game_state);
-
-        bot.play(&game.game_state);
-
-        println!("WAIT");
+        bot.eval(&game.game_state);
+        bot.play();
     }
 }
