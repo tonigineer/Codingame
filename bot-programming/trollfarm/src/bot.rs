@@ -57,8 +57,6 @@ impl Bot {
             }
         }
 
-
-
         eprintln!("My actions: {my_actions:?}");
         eprintln!("Opp actions: {opp_actions:?}");
     }
