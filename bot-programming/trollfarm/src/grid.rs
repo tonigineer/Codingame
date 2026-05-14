@@ -41,6 +41,7 @@ impl Grid<u8> {
         eprintln!();
     }
 }
+
 impl From<&str> for Grid<u8> {
     /// Creates a [`Grid<u8>`] from a multi-line string input.
     ///
@@ -57,14 +58,15 @@ impl From<&str> for Grid<u8> {
     /// assert_eq!(grid[Position::new(0, 0)], b'a');
     /// assert_eq!(grid[Position::new(1, 1)], b'e');
     /// ```
-      fn from(input: &str) -> Self {
-          let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
-          let width = i32::try_from(raw[0].len()).expect("width too large");
-          let height = i32::try_from(raw.len()).expect("height too large");
-          let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
-          for slice in &raw {
-              bytes.extend_from_slice(slice);
-          }
+    #[allow(clippy::cast_sign_loss)]
+    fn from(input: &str) -> Self {
+        let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+        let width = i32::try_from(raw[0].len()).expect("width too large");
+        let height = i32::try_from(raw.len()).expect("height too large");
+        let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
+        for slice in &raw {
+            bytes.extend_from_slice(slice);
+        }
 
         Grid {
             width,
@@ -90,14 +92,15 @@ impl From<String> for Grid<u8> {
     /// assert_eq!(grid[Position::new(0, 0)], b'a');
     /// assert_eq!(grid[Position::new(1, 1)], b'e');
     /// ```
-     fn from(input: String) -> Self {
-         let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
-         let width = i32::try_from(raw[0].len()).expect("width too large");
-         let height = i32::try_from(raw.len()).expect("height too large");
-         let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
-         for slice in raw.iter() {
-             bytes.extend_from_slice(slice);
-         }
+    #[allow(clippy::cast_sign_loss)]
+    fn from(input: String) -> Self {
+        let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+        let width = i32::try_from(raw[0].len()).expect("width too large");
+        let height = i32::try_from(raw.len()).expect("height too large");
+        let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
+        for slice in &raw {
+            bytes.extend_from_slice(slice);
+        }
 
         Grid {
             width,
@@ -119,6 +122,7 @@ impl<T> Grid<T> {
     /// assert_eq!(grid.width(), 3);
     /// ```
     #[inline]
+    #[must_use]
     pub fn width(&self) -> i32 {
         self.width
     }
@@ -134,6 +138,7 @@ impl<T> Grid<T> {
     /// assert_eq!(grid.height(), 2);
     /// ```
     #[inline]
+    #[must_use]
     pub fn height(&self) -> i32 {
         self.height
     }
@@ -154,6 +159,7 @@ impl<T> Grid<T> {
     /// assert!(!grid.contains(Position::new(5, 5)));
     /// ```
     #[inline]
+    #[must_use]
     pub fn contains(&self, position: Position) -> bool {
         position.x >= 0 && position.x < self.width && position.y >= 0 && position.y < self.height
     }
@@ -175,11 +181,14 @@ impl<T: PartialEq + Copy> Grid<T> {
     /// assert_eq!(grid.search(b'z'), None);
     /// ```
     #[inline]
+    #[allow(clippy::missing_panics_doc)]
     pub fn search(&self, token: T) -> Option<Position> {
-        self.bytes
-            .iter()
-            .position(|h| *h == token)
-            .map(|i| Position::new((i as i32) % self.width, (i as i32) / self.width))
+        self.bytes.iter().position(|h| *h == token).map(|i| {
+            Position::new(
+                i32::try_from(i).unwrap() % self.width,
+                i32::try_from(i).unwrap() / self.width,
+            )
+        })
     }
 }
 
@@ -198,6 +207,7 @@ impl<T> Index<Position> for Grid<T> {
     /// assert_eq!(grid[Position::new(1, 1)], b'd');
     /// ```
     #[inline]
+    #[allow(clippy::cast_sign_loss)]
     fn index(&self, index: Position) -> &Self::Output {
         &self.bytes[(self.width * index.y + index.x) as usize]
     }
@@ -216,6 +226,7 @@ impl<T> IndexMut<Position> for Grid<T> {
     /// assert_eq!(grid[Position::new(0, 0)], b'x');
     /// ```
     #[inline]
+    #[allow(clippy::cast_sign_loss)]
     fn index_mut(&mut self, index: Position) -> &mut Self::Output {
         &mut self.bytes[(self.width * index.y + index.x) as usize]
     }

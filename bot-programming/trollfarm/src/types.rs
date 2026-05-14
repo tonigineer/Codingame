@@ -319,6 +319,7 @@ impl Troll {
             .map(|&c| self.position + c)
             .filter(|p| game_state.grid.contains(*p) && b".ABPL".contains(&game_state.grid[*p]))
             .collect();
+
         (!moves.is_empty()).then_some({
             self.heuristic_sort_moves(game_state, &mut moves);
             moves

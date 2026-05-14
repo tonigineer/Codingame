@@ -128,7 +128,7 @@ impl GameState {
             let mut input_line = String::new();
             io::stdin().read_line(&mut input_line).unwrap();
             let (x, y): (i32, i32) = {
-                let (a, b) = input_line.trim().split_once(" ").unwrap();
+                let (a, b) = input_line.trim().split_once(' ').unwrap();
                 (a.parse().unwrap(), b.parse().unwrap())
             };
             self.grid[Position::new(x, y)] = b'P';
@@ -139,14 +139,13 @@ impl GameState {
         (0..snakebot_count).for_each(|_| {
             let mut input_line = String::new();
             io::stdin().read_line(&mut input_line).unwrap();
-            let inputs = input_line.split(" ").collect::<Vec<_>>();
+            let inputs = input_line.split(' ').collect::<Vec<_>>();
             let snakebot_id = inputs[0].parse::<i32>().unwrap();
 
             let body: Vec<Position> = inputs[1]
                 .split(':')
-                .into_iter()
                 .map(|s| {
-                    let (x, y) = s.trim().split_once(",").unwrap();
+                    let (x, y) = s.trim().split_once(',').unwrap();
                     Position {
                         x: x.parse().unwrap(),
                         y: y.parse().unwrap(),
@@ -161,7 +160,7 @@ impl GameState {
         });
 
         self.snakes.iter().for_each(|s| {
-            eprintln!("{:?}", s);
+            eprintln!("{s:?}");
         });
     }
 

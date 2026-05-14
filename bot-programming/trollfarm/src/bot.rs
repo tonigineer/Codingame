@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 use crate::types::Player;
 use crate::game::Action;
 use crate::game::GameState;
@@ -11,6 +10,7 @@ pub struct Bot {
 }
 
 impl Bot {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             troll_ids: Vec::new(),
@@ -31,7 +31,7 @@ impl Bot {
         let output = self
             .final_actions
             .iter()
-            .map(|a| a.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(";");
 
@@ -51,19 +51,20 @@ impl Bot {
 
         // For now: pick first action per troll (drop > harvest > move > wait)
         self.final_actions.clear();
-        for (_, actions) in &my_actions {
+        for actions in my_actions.values() {
             if let Some(action) = actions.first() {
                 self.final_actions.push(action.clone());
             }
         }
 
-        eprintln!("My actions: {:?}", my_actions);
-        eprintln!("Opp actions: {:?}", opp_actions);
+        eprintln!("My actions: {my_actions:?}");
+        eprintln!("Opp actions: {opp_actions:?}");
     }
 
     // ------------------------------------------------------------------------
     // ------ Strategy
     // ------------------------------------------------------------------------
+    #[allow(clippy::unused_self)]
     fn find_all_actions(
         &self,
         game_state: &GameState,
@@ -89,5 +90,11 @@ impl Bot {
                 (troll.id, actions)
             })
             .collect()
+    }
+}
+
+impl Default for Bot {
+    fn default() -> Self {
+        Self::new()
     }
 }

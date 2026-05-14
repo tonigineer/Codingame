@@ -52,19 +52,20 @@ impl From<&str> for Grid<u8> {
     /// use aoc::common::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef");
-     /// assert_eq!(grid.width(), 3);
-     /// assert_eq!(grid.height(), 2);
-     /// assert_eq!(grid[Position::new(0, 0)], b'a');
-     /// assert_eq!(grid[Position::new(1, 1)], b'e');
-     /// ```
-       fn from(input: &str) -> Self {
-           let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
-           let width = i32::try_from(raw[0].len()).expect("width too large");
-           let height = i32::try_from(raw.len()).expect("height too large");
-           let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
-          for slice in &raw {
-              bytes.extend_from_slice(slice);
-          }
+    /// assert_eq!(grid.width(), 3);
+    /// assert_eq!(grid.height(), 2);
+    /// assert_eq!(grid[Position::new(0, 0)], b'a');
+    /// assert_eq!(grid[Position::new(1, 1)], b'e');
+    /// ```
+    #[allow(clippy::cast_sign_loss)]
+    fn from(input: &str) -> Self {
+        let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+        let width = i32::try_from(raw[0].len()).expect("width too large");
+        let height = i32::try_from(raw.len()).expect("height too large");
+        let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
+        for slice in &raw {
+            bytes.extend_from_slice(slice);
+        }
 
         Grid {
             width,
@@ -82,22 +83,23 @@ impl From<String> for Grid<u8> {
     /// # Examples
     ///
     /// ```
-     /// use aoc::common::{grid::*,position::*};
-     ///
-     /// let grid = Grid::from("abc\ndef".to_string());
-     /// assert_eq!(grid.width(), 3);
-     /// assert_eq!(grid.height(), 2);
-     /// assert_eq!(grid[Position::new(0, 0)], b'a');
-     /// assert_eq!(grid[Position::new(1, 1)], b'e');
-     /// ```
-       fn from(input: String) -> Self {
-           let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
-           let width = i32::try_from(raw[0].len()).expect("width too large");
-           let height = i32::try_from(raw.len()).expect("height too large");
-           let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
-          for slice in &raw {
-              bytes.extend_from_slice(slice);
-          }
+    /// use aoc::common::{grid::*,position::*};
+    ///
+    /// let grid = Grid::from("abc\ndef".to_string());
+    /// assert_eq!(grid.width(), 3);
+    /// assert_eq!(grid.height(), 2);
+    /// assert_eq!(grid[Position::new(0, 0)], b'a');
+    /// assert_eq!(grid[Position::new(1, 1)], b'e');
+    /// ```
+    #[allow(clippy::cast_sign_loss)]
+    fn from(input: String) -> Self {
+        let raw: Vec<_> = input.lines().map(str::as_bytes).collect();
+        let width = i32::try_from(raw[0].len()).expect("width too large");
+        let height = i32::try_from(raw.len()).expect("height too large");
+        let mut bytes = Vec::with_capacity((width as usize) * (height as usize));
+        for slice in &raw {
+            bytes.extend_from_slice(slice);
+        }
 
         Grid {
             width,
@@ -119,6 +121,7 @@ impl<T> Grid<T> {
     /// assert_eq!(grid.width(), 3);
     /// ```
     #[inline]
+    #[must_use]
     pub fn width(&self) -> i32 {
         self.width
     }
@@ -134,6 +137,7 @@ impl<T> Grid<T> {
     /// assert_eq!(grid.height(), 2);
     /// ```
     #[inline]
+    #[must_use]
     pub fn height(&self) -> i32 {
         self.height
     }
@@ -154,12 +158,15 @@ impl<T> Grid<T> {
     /// assert!(!grid.contains(Position::new(5, 5)));
     /// ```
     #[inline]
+    #[must_use]
     pub fn contains(&self, position: Position) -> bool {
         position.x >= 0 && position.x < self.width && position.y >= 0 && position.y < self.height
     }
 }
 
 impl<T: PartialEq + Copy> Grid<T> {
+    #![allow(clippy::missing_panics_doc)]
+    #[inline]
     /// Searches the grid for the first occurrence of `token` and returns its [`Position`].
     ///
     /// The search is performed in row-major order, starting from the top-left cell `(0, 0)`.
@@ -174,12 +181,13 @@ impl<T: PartialEq + Copy> Grid<T> {
     /// assert_eq!(grid.search(b'e'), Some(Position::new(1, 1)));
     /// assert_eq!(grid.search(b'z'), None);
     /// ```
-    #[inline]
     pub fn search(&self, token: T) -> Option<Position> {
-        self.bytes
-            .iter()
-            .position(|h| *h == token)
-            .map(|i| Position::new((i as i32) % self.width, (i as i32) / self.width))
+        self.bytes.iter().position(|h| *h == token).map(|i| {
+            Position::new(
+                i32::try_from(i).unwrap() % self.width,
+                i32::try_from(i).unwrap() / self.width,
+            )
+        })
     }
 }
 
@@ -198,6 +206,7 @@ impl<T> Index<Position> for Grid<T> {
     /// assert_eq!(grid[Position::new(1, 1)], b'd');
     /// ```
     #[inline]
+    #[allow(clippy::cast_sign_loss)]
     fn index(&self, index: Position) -> &Self::Output {
         &self.bytes[self.width as usize * index.y as usize + index.x as usize]
     }
@@ -216,6 +225,7 @@ impl<T> IndexMut<Position> for Grid<T> {
     /// assert_eq!(grid[Position::new(0, 0)], b'x');
     /// ```
     #[inline]
+    #[allow(clippy::cast_sign_loss)]
     fn index_mut(&mut self, index: Position) -> &mut Self::Output {
         &mut self.bytes[(self.width * index.y + index.x) as usize]
     }

@@ -28,6 +28,7 @@ pub enum Action {
 }
 
 impl Action {
+    #[must_use]
     pub fn troll_id(&self) -> i32 {
         match self {
             Action::Move(id, _) | Action::Harvest(id) | Action::Drop(id) | Action::Wait(id) => *id,
@@ -38,22 +39,24 @@ impl Action {
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Action::Move(id, pos) => write!(f, "MOVE {} {} {}", id, pos.x, pos.y),
-            Action::Harvest(id) => write!(f, "HARVEST {}", id),
-            Action::Drop(id) => write!(f, "DROP {}", id),
+            Action::Move(id, pos) => write!(f, "MOVE {id} {} {}", pos.x, pos.y),
+            Action::Harvest(id) => write!(f, "HARVEST {id}"),
+            Action::Drop(id) => write!(f, "DROP {id}"),
             Action::Wait(_) => write!(f, ""),
         }
     }
 }
 
 impl GameState {
+    #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn new() -> Self {
         let stdin = io::stdin();
         let mut lines = stdin.lock().lines().map(|l| l.unwrap());
         let mut next = || lines.next().unwrap();
 
         let (width, height) = next()
-            .split_once(" ")
+            .split_once(' ')
             .map(|(a, b)| (a.parse::<usize>().unwrap(), b.parse::<usize>().unwrap()))
             .unwrap();
 
@@ -80,6 +83,7 @@ impl GameState {
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub fn update(&mut self) {
         let stdin = io::stdin();
         let mut lines = stdin.lock().lines().map(|l| l.unwrap());
@@ -101,6 +105,7 @@ impl GameState {
         self.trolls = (0..troll_count).map(|_| Troll::parse(&next())).collect();
     }
 
+    #[expect(dead_code)]
     fn winner(&self) -> Option<Player> {
         match self.my_score.cmp(&self.opp_score) {
             std::cmp::Ordering::Equal => None,
@@ -146,6 +151,7 @@ impl GameState {
                     .iter()
                     .any(|t| t.id != *id && t.player == player && t.position == dest);
 
+                #[allow(clippy::collapsible_if)]
                 if !occupied {
                     if let Some(troll) = self.troll_mut(*id) {
                         troll.position = dest;
@@ -190,6 +196,7 @@ impl GameState {
         current
     }
 
+    #[allow(clippy::cast_sign_loss)]
     fn is_walkable(&self, pos: Position) -> bool {
         pos.x >= 0
             && pos.y >= 0
@@ -263,7 +270,7 @@ impl GameState {
             }
 
             // Apply harvested amounts
-            let tree_typ = self.trees[*tree_idx].typ.clone();
+            let tree_typ = self.trees[*tree_idx].typ;
             self.trees[*tree_idx].fruits = remaining_fruits;
 
             for (troll_id, amount) in &taken {
@@ -295,7 +302,7 @@ impl GameState {
                 let resources = troll.carried_resources();
                 if resources.is_empty() {
                     continue;
-                };
+                }
 
                 let inventory = if player == Player::Me {
                     &mut self.my_resources
@@ -331,6 +338,12 @@ impl GameState {
     }
 }
 
+impl Default for GameState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Game {
     pub turn: u8,
     pub game_state: GameState,
@@ -349,5 +362,11 @@ impl Game {
         self.turn += 1;
         self.game_state.update();
         eprintln!("Turn {} finished", self.turn);
+    }
+}
+
+impl Default for Game {
+    fn default() -> Self {
+        Self::new()
     }
 }

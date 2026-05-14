@@ -42,6 +42,8 @@ impl Default for GameState {
 }
 
 impl GameState {
+    #![allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn new() -> Self {
         let mut lines = io::stdin().lock().lines().map(|l| l.unwrap());
         let mut next = || lines.next().unwrap();
@@ -93,6 +95,7 @@ impl GameState {
         Ok(Snake::new(snake_id.parse()?, body))
     }
 
+    #[allow(clippy::cast_sign_loss)]
     pub fn update(&mut self) {
         let mut lines = io::stdin().lock().lines().map(|l| l.unwrap());
         let mut next = || lines.next().unwrap();

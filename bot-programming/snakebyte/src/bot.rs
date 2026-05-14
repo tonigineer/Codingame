@@ -43,7 +43,7 @@ impl Bot {
         let mv = self
             .moves
             .iter()
-            .map(|m| m.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<String>>()
             .join(";");
 
