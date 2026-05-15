@@ -96,6 +96,7 @@ impl Game {
     // --------------------------------------------------------------------
     // IO
     // --------------------------------------------------------------------
+    pub const MAX_TURNS: i32 = 100;
 
     #[must_use]
     #[allow(clippy::missing_panics_doc)]
@@ -208,7 +209,7 @@ impl Game {
 
     #[must_use]
     pub fn troll_count(&self, side: Side) -> i32 {
-        self.trolls.iter().filter(|t| t.side == side).count() as i32
+        i32::try_from(self.trolls.iter().filter(|t| t.side == side).count()).unwrap()
     }
 
     #[must_use]
@@ -282,7 +283,12 @@ impl Game {
 
                 // Plant: can plant any type the troll is carrying, if no tree here
                 if self.tree_at(troll.position).is_none() {
-                    for typ in &[TreeType::Plum, TreeType::Lemon, TreeType::Apple, TreeType::Banana] {
+                    for typ in &[
+                        TreeType::Plum,
+                        TreeType::Lemon,
+                        TreeType::Apple,
+                        TreeType::Banana,
+                    ] {
                         if troll.carries(typ) > 0 {
                             actions.push(Action::Plant(troll.id, *typ));
                         }
@@ -299,7 +305,12 @@ impl Game {
                 // Pick: can pick from shack if adjacent and has free capacity
                 if self.is_adjacent_to_shack(troll) && troll.free_capacity() > 0 {
                     let inv = self.inventory(side);
-                    for typ in &[TreeType::Plum, TreeType::Lemon, TreeType::Apple, TreeType::Banana] {
+                    for typ in &[
+                        TreeType::Plum,
+                        TreeType::Lemon,
+                        TreeType::Apple,
+                        TreeType::Banana,
+                    ] {
                         if inv.get(typ) > 0 {
                             actions.push(Action::Pick(troll.id, *typ));
                         }
@@ -334,7 +345,7 @@ impl Game {
     }
 
     #[must_use]
-    pub fn is_adjacent_to_shack(&self, troll: &Troll) -> bool {
+    fn is_adjacent_to_shack(&self, troll: &Troll) -> bool {
         let shack = self.shack(troll.side);
         troll.position.manhattan(&shack) == 1
     }
@@ -342,15 +353,20 @@ impl Game {
     #[must_use]
     pub fn reachable_positions(&self, troll: &Troll) -> Option<Vec<Position>> {
         // TODO: make it `global` for Player once every turn
-        let troll_positions = self.trolls.iter().map(|t| t.position).collect::<Vec<Position>>();
+        let troll_positions = self
+            .trolls
+            .iter()
+            .map(|t| t.position)
+            .collect::<Vec<Position>>();
 
         let mut moves: Vec<_> = CARDINALS
             .iter()
             .map(|&c| troll.position + c)
-            .filter(|p| self.grid.contains(*p)
-                && b".ABPL".contains(&self.grid[*p])
-                && !troll_positions.contains(p)
-            )
+            .filter(|p| {
+                self.grid.contains(*p)
+                    && b".ABPL".contains(&self.grid[*p])
+                    && !troll_positions.contains(p)
+            })
             .collect();
 
         if moves.is_empty() {
@@ -549,10 +565,7 @@ impl Game {
                 };
                 // Must carry at least 1 of that fruit and no tree already here
                 if troll.carries(typ) > 0 && self.tree_at(troll.position).is_none() {
-                    by_pos
-                        .entry(troll.position)
-                        .or_default()
-                        .push((*id, *typ));
+                    by_pos.entry(troll.position).or_default().push((*id, *typ));
                 }
             }
         }
@@ -703,7 +716,6 @@ impl Game {
             }
         }
     }
-
 }
 
 impl Default for Game {
