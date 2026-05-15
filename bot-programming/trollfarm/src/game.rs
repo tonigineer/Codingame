@@ -411,10 +411,7 @@ impl Game {
         self.apply_harvests(&all);
         let trees_before_plant = self.trees.len();
         self.apply_plants(&all);
-        let trees_before_chop = self.trees.len();
         self.apply_chops(&all);
-        // Newly planted trees that survived chop should not tick.
-        // Trees removed by chop reduce the count.
         let tick_count = trees_before_plant.min(self.trees.len());
         self.apply_picks(&all);
         self.apply_trains(&all);

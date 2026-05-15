@@ -9,6 +9,7 @@ pub struct Player {
     pub side: Side,
     pub actions: Vec<Action>,
     predicted: Option<Snapshot>,
+    prev_positions: HashMap<i32, Position>,
 }
 
 impl Player {
@@ -18,6 +19,7 @@ impl Player {
             side,
             actions: Vec::new(),
             predicted: None,
+            prev_positions: HashMap::new(),
         }
     }
 
@@ -27,6 +29,13 @@ impl Player {
 
     pub fn think(&mut self, game: &Game) {
         self.actions.clear();
+
+        // Record previous positions for anti-oscillation
+        let current_positions: HashMap<i32, Position> = game
+            .trolls_for(self.side)
+            .iter()
+            .map(|t| (t.id, t.position))
+            .collect();
 
         // Try a few troll configs and pick the best profitable one
         let train_configs = [
@@ -94,14 +103,14 @@ impl Player {
                 None => continue,
             };
 
-            // Priority: drop > harvest > chop > mine > plant > move > wait
+            // Priority: plant > drop > harvest > chop > mine > move
             let non_move = actions
                 .iter()
-                .find(|a| matches!(a, Action::Drop(_)))
+                .find(|a| matches!(a, Action::Plant(_, _)))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Drop(_))))
                 .or_else(|| actions.iter().find(|a| matches!(a, Action::Harvest(_))))
                 .or_else(|| actions.iter().find(|a| matches!(a, Action::Chop(_))))
-                .or_else(|| actions.iter().find(|a| matches!(a, Action::Mine(_))))
-                .or_else(|| actions.iter().find(|a| matches!(a, Action::Plant(_, _))));
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Mine(_))));
 
             if let Some(action) = non_move {
                 self.actions.push(action.clone());
@@ -109,13 +118,28 @@ impl Player {
             }
 
             // Try moves: pick first unclaimed destination
-            let move_action = actions.iter().find(|a| {
-                if let Action::Move(_, pos) = a {
-                    !claimed.contains(pos)
-                } else {
-                    false
-                }
-            });
+            // Try moves: pick first unclaimed destination, preferring non-backtrack
+            let move_action = actions
+                .iter()
+                .filter(|a| {
+                    if let Action::Move(_, pos) = a {
+                        !claimed.contains(pos)
+                    } else {
+                        false
+                    }
+                })
+                .min_by_key(|a| {
+                    if let Action::Move(id, pos) = a {
+                        // Penalize moving back to previous position
+                        if self.prev_positions.get(id) == Some(pos) {
+                            1
+                        } else {
+                            0
+                        }
+                    } else {
+                        0
+                    }
+                });
 
             if let Some(action) = move_action {
                 if let Action::Move(_, pos) = action {
@@ -126,6 +150,8 @@ impl Player {
                 claimed.insert(troll.position);
             }
         }
+
+        self.prev_positions = current_positions;
     }
 
     // --------------------------------------------------------------------
