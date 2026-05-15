@@ -1,56 +1,31 @@
-use std::fmt;
+use std::collections::HashMap;
 use std::io::{self, BufRead};
 
+use crate::position::{Position, CARDINALS};
 use crate::grid::Grid;
-use crate::position::Position;
-use crate::types::{Player, Resources, Tree, Troll};
+use crate::entities::{Inventory, Resource, Tree, Troll};
+
+// ------------------------------------------------------------------------
+// Game — owns all state
+// ------------------------------------------------------------------------
 
 #[derive(Clone)]
-pub struct GameState {
-    pub me: Player,
-    pub opp: Player,
+pub struct Game {
+    pub turn: u16,
     pub width: usize,
     pub height: usize,
     pub grid: Grid<u8>,
-    pub my_shack: Position,
-    pub opp_shack: Position,
-    pub my_resources: Resources,
-    pub opp_resources: Resources,
-    pub my_score: i32,
-    pub opp_score: i32,
+    pub shacks: [Position; 2],       // [Me, Opp]
+    pub inventories: [Inventory; 2], // [Me, Opp]
     pub trees: Vec<Tree>,
     pub trolls: Vec<Troll>,
 }
 
-#[derive(Debug, Clone)]
-pub enum Action {
-    Move(i32, Position),
-    Harvest(i32),
-    Drop(i32),
-    Wait(i32),
-}
+impl Game {
+    // --------------------------------------------------------------------
+    // IO
+    // --------------------------------------------------------------------
 
-impl Action {
-    #[must_use]
-    pub fn troll_id(&self) -> i32 {
-        match self {
-            Action::Move(id, _) | Action::Harvest(id) | Action::Drop(id) | Action::Wait(id) => *id,
-        }
-    }
-}
-
-impl fmt::Display for Action {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Action::Move(id, pos) => write!(f, "MOVE {id} {} {}", pos.x, pos.y),
-            Action::Harvest(id) => write!(f, "HARVEST {id}"),
-            Action::Drop(id) => write!(f, "DROP {id}"),
-            Action::Wait(_) => write!(f, ""),
-        }
-    }
-}
-
-impl GameState {
     #[must_use]
     #[allow(clippy::missing_panics_doc)]
     pub fn new() -> Self {
@@ -70,17 +45,12 @@ impl GameState {
         let opp_shack = grid.search(b'1').unwrap();
 
         Self {
-            me: Player::Me,
-            opp: Player::Opp,
+            turn: 0,
             width,
             height,
             grid,
-            my_shack,
-            opp_shack,
-            my_resources: Resources::new(),
-            opp_resources: Resources::new(),
-            my_score: 0,
-            opp_score: 0,
+            shacks: [my_shack, opp_shack],
+            inventories: [Inventory::new(), Inventory::new()],
             trees: Vec::new(),
             trolls: Vec::new(),
         }
@@ -88,12 +58,14 @@ impl GameState {
 
     #[allow(clippy::missing_panics_doc)]
     pub fn update(&mut self) {
+        self.turn += 1;
+
         let stdin = io::stdin();
         let mut lines = stdin.lock().lines().map(|l| l.unwrap());
         let mut next = || lines.next().unwrap();
 
-        self.my_resources = Resources::parse(&next());
-        self.opp_resources = Resources::parse(&next());
+        self.inventories[0] = Inventory::parse(&next());
+        self.inventories[1] = Inventory::parse(&next());
 
         let tree_count: usize = next().trim().parse().unwrap();
         self.trees = (0..tree_count).map(|_| Tree::parse(&next())).collect();
@@ -102,28 +74,176 @@ impl GameState {
             self.grid[tree.position] = tree.typ.to_byte();
         }
 
-        self.grid.print();
-
         let troll_count: usize = next().trim().parse().unwrap();
         self.trolls = (0..troll_count).map(|_| Troll::parse(&next())).collect();
+
+        eprintln!("Turn {}", self.turn);
     }
 
-    #[expect(dead_code)]
-    fn winner(&self) -> Option<Player> {
-        match self.my_score.cmp(&self.opp_score) {
-            std::cmp::Ordering::Equal => None,
-            std::cmp::Ordering::Greater => Some(Player::Me),
-            std::cmp::Ordering::Less => Some(Player::Opp),
+    pub fn output(actions: &[Action]) {
+        let output = actions
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(";");
+
+        println!(
+            "{}",
+            if output.is_empty() {
+                "WAIT".into()
+            } else {
+                output
+            }
+        );
+    }
+
+    // --------------------------------------------------------------------
+    // Accessors
+    // --------------------------------------------------------------------
+
+    #[must_use]
+    pub fn shack(&self, side: Side) -> Position {
+        match side {
+            Side::Me => self.shacks[0],
+            Side::Opp => self.shacks[1],
         }
     }
 
-    // ------------------------------------------------------------------------
-    // Simulation
-    // ------------------------------------------------------------------------
-    pub fn apply_actions(&mut self, actions: &[Action]) {
-        self.apply_moves(actions);
-        self.apply_harvests(actions);
-        self.apply_drops(actions);
+    #[must_use]
+    pub fn inventory(&self, side: Side) -> &Inventory {
+        match side {
+            Side::Me => &self.inventories[0],
+            Side::Opp => &self.inventories[1],
+        }
+    }
+
+    pub fn inventory_mut(&mut self, side: Side) -> &mut Inventory {
+        match side {
+            Side::Me => &mut self.inventories[0],
+            Side::Opp => &mut self.inventories[1],
+        }
+    }
+
+    #[must_use]
+    pub fn trolls_for(&self, side: Side) -> Vec<&Troll> {
+        self.trolls.iter().filter(|t| t.side == side).collect()
+    }
+
+    #[must_use]
+    pub fn winner(&self) -> Option<Side> {
+        let my_score = self.score(Side::Me);
+        let opp_score = self.score(Side::Opp);
+        match my_score.cmp(&opp_score) {
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => Some(Side::Me),
+            std::cmp::Ordering::Less => Some(Side::Opp),
+        }
+    }
+
+    fn score(&self, side: Side) -> i32 {
+        let inv = self.inventory(side);
+        inv.plum.amount() + inv.lemon.amount() + inv.apple.amount() + inv.banana.amount()
+    }
+
+    // --------------------------------------------------------------------
+    // Action enumeration — what can a troll do?
+    // --------------------------------------------------------------------
+
+    #[must_use]
+    pub fn actions_for(&self, side: Side) -> HashMap<i32, Vec<Action>> {
+        self.trolls
+            .iter()
+            .filter(|t| t.side == side)
+            .map(|troll| {
+                let mut actions = Vec::new();
+                if self.would_drop(troll).is_some() {
+                    actions.push(Action::Drop(troll.id));
+                }
+                if self.would_harvest(troll).is_some() {
+                    actions.push(Action::Harvest(troll.id));
+                }
+                if let Some(moves) = self.reachable_positions(troll) {
+                    for pos in moves {
+                        actions.push(Action::Move(troll.id, pos));
+                    }
+                }
+                actions.push(Action::Wait(troll.id));
+                (troll.id, actions)
+            })
+            .collect()
+    }
+
+    // --------------------------------------------------------------------
+    // Troll queries (moved from Troll impl — they need Game context)
+    // --------------------------------------------------------------------
+
+    #[must_use]
+    pub fn tree_at(&self, pos: Position) -> Option<&Tree> {
+        self.trees.iter().find(|t| t.position == pos)
+    }
+
+    #[must_use]
+    pub fn would_harvest(&self, troll: &Troll) -> Option<Resource> {
+        let free = troll.free_capacity();
+        if free == 0 {
+            return None;
+        }
+        self.tree_at(troll.position).and_then(|tree| {
+            let amount = free.min(troll.harvest_power).min(tree.fruits);
+            (amount > 0).then(|| Resource::from_tree(&tree.typ, amount))
+        })
+    }
+
+    #[must_use]
+    pub fn would_drop(&self, troll: &Troll) -> Option<Vec<Resource>> {
+        let shack = self.shack(troll.side);
+        (troll.position.manhattan(&shack) == 1 && troll.total_carried() > 0)
+            .then(|| troll.carried_resources())
+    }
+
+    #[must_use]
+    pub fn reachable_positions(&self, troll: &Troll) -> Option<Vec<Position>> {
+        let mut moves: Vec<_> = CARDINALS
+            .iter()
+            .map(|&c| troll.position + c)
+            .filter(|p| self.grid.contains(*p) && b".ABPL".contains(&self.grid[*p]))
+            .collect();
+
+        if moves.is_empty() {
+            return None;
+        }
+
+        // Heuristic sort
+        if troll.free_capacity() == 0 {
+            let shack = self.shack(troll.side);
+            moves.sort_by_key(|pos| shack.manhattan(pos));
+        } else {
+            moves.sort_by_key(|pos| {
+                self.trees
+                    .iter()
+                    .filter(|t| t.fruits > 0)
+                    .map(|t| t.position.manhattan(pos))
+                    .min()
+                    .unwrap_or(usize::MAX)
+            });
+        }
+
+        Some(moves)
+    }
+
+    // --------------------------------------------------------------------
+    // Simulation — play(actions_p1, actions_p2)
+    // --------------------------------------------------------------------
+
+    pub fn play(&mut self, my_actions: &[Action], opp_actions: &[Action]) {
+        let all: Vec<Action> = my_actions
+            .iter()
+            .chain(opp_actions.iter())
+            .cloned()
+            .collect();
+        self.apply_moves(&all);
+        self.apply_harvests(&all);
+        self.apply_drops(&all);
         self.tick_trees();
     }
 
@@ -143,14 +263,13 @@ impl GameState {
                 };
                 let speed = troll.movement_speed;
                 let start = troll.position;
-
                 let dest = self.resolve_move(start, *target, speed);
 
-                let player = troll.player;
+                let side = troll.side;
                 let occupied = self
                     .trolls
                     .iter()
-                    .any(|t| t.id != *id && t.player == player && t.position == dest);
+                    .any(|t| t.id != *id && t.side == side && t.position == dest);
 
                 #[allow(clippy::collapsible_if)]
                 if !occupied {
@@ -214,15 +333,13 @@ impl GameState {
                     continue;
                 };
                 let troll_pos = troll.position;
-
                 if let Some(tree_idx) = self.trees.iter().position(|t| t.position == troll_pos) {
                     requests.push((*id, tree_idx));
                 }
             }
         }
 
-        let mut by_tree: std::collections::HashMap<usize, Vec<i32>> =
-            std::collections::HashMap::new();
+        let mut by_tree: HashMap<usize, Vec<i32>> = HashMap::new();
         for (troll_id, tree_idx) in &requests {
             by_tree.entry(*tree_idx).or_default().push(*troll_id);
         }
@@ -230,8 +347,7 @@ impl GameState {
         for (tree_idx, troll_ids) in &by_tree {
             let tree = &self.trees[*tree_idx];
             let mut remaining_fruits = tree.fruits;
-
-            let mut taken: std::collections::HashMap<i32, i32> = std::collections::HashMap::new();
+            let mut taken: HashMap<i32, i32> = HashMap::new();
             let mut active: Vec<i32> = troll_ids.clone();
 
             while remaining_fruits > 0 && !active.is_empty() {
@@ -281,14 +397,10 @@ impl GameState {
                 let Some(troll) = self.troll(*id) else {
                     continue;
                 };
-                let player = troll.player;
+                let side = troll.side;
                 let pos = troll.position;
 
-                let shack = if player == Player::Me {
-                    self.my_shack
-                } else {
-                    self.opp_shack
-                };
+                let shack = self.shack(side);
                 if pos.manhattan(&shack) != 1 {
                     continue;
                 }
@@ -298,12 +410,7 @@ impl GameState {
                     continue;
                 }
 
-                let inventory = if player == Player::Me {
-                    &mut self.my_resources
-                } else {
-                    &mut self.opp_resources
-                };
-
+                let inventory = self.inventory_mut(side);
                 for r in &resources {
                     inventory.add(r);
                 }
@@ -323,7 +430,6 @@ impl GameState {
             if tree.cooldown > 0 {
                 continue;
             }
-            // cooldown just hit 0 — tree acts this turn
             if tree.size < 4 {
                 tree.size += 1;
                 tree.cooldown = tree.cooldown_time();
@@ -331,40 +437,73 @@ impl GameState {
                 tree.fruits += 1;
                 tree.cooldown = tree.cooldown_time();
             }
-            // max size + full fruits: cooldown stays 0, nothing to do
         }
-    }
-}
-
-impl Default for GameState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub struct Game {
-    pub turn: u8,
-    pub game_state: GameState,
-}
-
-impl Game {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            turn: 0,
-            game_state: GameState::new(),
-        }
-    }
-
-    pub fn update(&mut self) {
-        self.turn += 1;
-        self.game_state.update();
-        eprintln!("Turn {} finished", self.turn);
     }
 }
 
 impl Default for Game {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ------------------------------------------------------------------------
+// Action
+// ------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub enum Action {
+    Move(i32, Position),
+    Harvest(i32),
+    Drop(i32),
+    Wait(i32),
+}
+
+impl Action {
+    #[must_use]
+    pub fn troll_id(&self) -> i32 {
+        match self {
+            Action::Move(id, _) | Action::Harvest(id) | Action::Drop(id) | Action::Wait(id) => *id,
+        }
+    }
+}
+
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Action::Move(id, pos) => write!(f, "MOVE {id} {} {}", pos.x, pos.y),
+            Action::Harvest(id) => write!(f, "HARVEST {id}"),
+            Action::Drop(id) => write!(f, "DROP {id}"),
+            Action::Wait(_) => write!(f, ""),
+        }
+    }
+}
+
+// ------------------------------------------------------------------------
+// Side — which player
+// ------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Side {
+    Me,
+    Opp,
+}
+
+impl Side {
+    #[must_use]
+    pub fn from_id(id: i32) -> Self {
+        match id {
+            0 => Side::Me,
+            1 => Side::Opp,
+            _ => unimplemented!("PlayerID does not exist."),
+        }
+    }
+
+    #[must_use]
+    pub fn other(&self) -> Self {
+        match self {
+            Side::Me => Side::Opp,
+            Side::Opp => Side::Me,
+        }
     }
 }

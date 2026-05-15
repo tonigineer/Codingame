@@ -1,45 +1,34 @@
-use crate::game::GameState;
 use crate::position::Position;
+use std::ops::AddAssign;
+use crate::game::Side;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Player {
-    Me,
-    Opp,
-}
-
-impl Player {
-    fn from_id(player_id: i32) -> Self {
-        match player_id {
-            0 => Player::Me,
-            1 => Player::Opp,
-            _ => unimplemented!("PlayerID does not exist."),
-        }
-    }
-}
+// ------------------------------------------------------------------------
+// Resource / Inventory
+// ------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
 pub enum Resource {
-    Banana(i32),
     Plum(i32),
-    Apple(i32),
     Lemon(i32),
+    Apple(i32),
+    Banana(i32),
 }
 
 impl Resource {
     #[must_use]
     pub fn from_tree(typ: &TreeType, amount: i32) -> Self {
         match typ {
+            TreeType::Plum => Resource::Plum(amount),
+            TreeType::Lemon => Resource::Lemon(amount),
             TreeType::Apple => Resource::Apple(amount),
             TreeType::Banana => Resource::Banana(amount),
-            TreeType::Lemon => Resource::Lemon(amount),
-            TreeType::Plum => Resource::Plum(amount),
         }
     }
 
     #[must_use]
     pub fn amount(&self) -> i32 {
         match self {
-            Resource::Apple(n) | Resource::Banana(n) | Resource::Lemon(n) | Resource::Plum(n) => *n,
+            Resource::Plum(n) | Resource::Lemon(n) | Resource::Apple(n) | Resource::Banana(n) => *n,
         }
     }
 
@@ -48,8 +37,6 @@ impl Resource {
         self.amount() == 0
     }
 }
-
-use std::ops::AddAssign;
 
 impl AddAssign for Resource {
     fn add_assign(&mut self, other: Self) {
@@ -64,7 +51,7 @@ impl AddAssign for Resource {
 }
 
 #[derive(Debug, Clone)]
-pub struct Resources {
+pub struct Inventory {
     pub plum: Resource,
     pub lemon: Resource,
     pub apple: Resource,
@@ -73,8 +60,7 @@ pub struct Resources {
     pub wood: i32,
 }
 
-impl Resources {
-    #![allow(clippy::missing_panics_doc)]
+impl Inventory {
     #[rustfmt::skip]
     #[must_use]
     pub fn new() -> Self {
@@ -95,7 +81,6 @@ impl Resources {
             .split_whitespace()
             .map(|s| s.parse().unwrap())
             .collect();
-
         Self {
             plum:   Resource::Plum(r[0]),
             lemon:  Resource::Lemon(r[1]),
@@ -116,11 +101,15 @@ impl Resources {
     }
 }
 
-impl Default for Resources {
+impl Default for Inventory {
     fn default() -> Self {
         Self::new()
     }
 }
+
+// ------------------------------------------------------------------------
+// Tree
+// ------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
 pub enum TreeType {
@@ -153,20 +142,17 @@ pub struct Tree {
 }
 
 impl Tree {
-    #![allow(clippy::missing_panics_doc)]
     #[rustfmt::skip]
     #[must_use]
     pub fn parse(line: &str) -> Self {
         let d: Vec<&str> = line.split_whitespace().collect();
-
         let typ = match d[0] {
-            "APPLE" => TreeType::Apple,
+            "PLUM"   => TreeType::Plum,
+            "LEMON"  => TreeType::Lemon,
+            "APPLE"  => TreeType::Apple,
             "BANANA" => TreeType::Banana,
-            "LEMON" => TreeType::Lemon,
-            "PLUM" => TreeType::Plum,
             _ => unimplemented!("Unknown tree type"),
         };
-
         Self {
             typ,
             position:   Position::new(d[1].parse().unwrap(), d[2].parse().unwrap()),
@@ -188,10 +174,14 @@ impl Tree {
     }
 }
 
+// ------------------------------------------------------------------------
+// Troll
+// ------------------------------------------------------------------------
+
 #[derive(Debug, Clone)]
 pub struct Troll {
     pub id: i32,
-    pub player: Player,
+    pub side: Side,
     pub position: Position,
     pub movement_speed: i32,
     pub carry_capacity: i32,
@@ -203,7 +193,6 @@ pub struct Troll {
 }
 
 impl Troll {
-    #![allow(clippy::missing_panics_doc)]
     #[rustfmt::skip]
     #[must_use]
     pub fn parse(line: &str) -> Self {
@@ -211,10 +200,9 @@ impl Troll {
             .split_whitespace()
             .map(|s| s.parse().unwrap())
             .collect();
-
         Self {
             id:             d[0],
-            player:         Player::from_id(d[1]),
+            side:           Side::from_id(d[1]),
             position:       Position::new(d[2], d[3]),
             movement_speed: d[4],
             carry_capacity: d[5],
@@ -228,106 +216,27 @@ impl Troll {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // ------ Harvesting
-    // ------------------------------------------------------------------------
-
-    fn tree_here<'a>(&self, game_state: &'a GameState) -> Option<&'a Tree> {
-        game_state
-            .trees
-            .iter()
-            .find(|t| t.position == self.position)
+    #[must_use]
+    pub fn total_carried(&self) -> i32 {
+        self.carry_plum + self.carry_lemon + self.carry_apple + self.carry_banana
     }
 
     #[must_use]
-    pub fn would_harvest(&self, game_state: &GameState) -> Option<Resource> {
-        let free_capacity = self.free_capacity();
-        if free_capacity == 0 {
-            return None;
-        }
-
-        self.tree_here(game_state).and_then(|tree| {
-            let amount = free_capacity.min(self.harvest_power).min(tree.fruits);
-            (amount > 0).then(|| Resource::from_tree(&tree.typ, amount))
-        })
-    }
-
-    // ------------------------------------------------------------------------
-    // ------ Dropping into shack
-    // ------------------------------------------------------------------------
-
-    #[must_use]
-    pub fn carried_resources(&self) -> Vec<Resource> {
-        [
-            Resource::Apple(self.carry_apple),
-            Resource::Banana(self.carry_banana),
-            Resource::Lemon(self.carry_lemon),
-            Resource::Plum(self.carry_plum),
-        ]
-        .into_iter()
-        .filter(|r| !r.is_empty())
-        .collect()
-    }
-
-    fn is_adjacent_to_shack(&self, game_state: &GameState) -> bool {
-        self.position.manhattan(&game_state.my_shack) == 1
-    }
-
-    #[must_use]
-    pub fn would_drop(&self, game_state: &GameState) -> Option<Vec<Resource>> {
-        (self.is_adjacent_to_shack(game_state) && self.total_carried() > 0)
-            .then(|| self.carried_resources())
-    }
-
-    // ------------------------------------------------------------------------
-    // ------ Moving
-    // ------------------------------------------------------------------------
-
-    /// Sort moves by nearest trees with fruits. Just temporary, we don't want to
-    /// use heuristic :)
-    fn heuristic_sort_moves(&self, game_state: &GameState, moves: &mut [Position]) {
-        // Bring back to shack
-        if self.free_capacity() == 0 {
-            moves.sort_by_key(|pos| game_state.my_shack.manhattan(pos));
-            return;
-        }
-
-        // Find nearest tree with fruit
-        moves.sort_by_key(|pos| {
-            game_state
-                .trees
-                .iter()
-                .filter(|t| t.fruits > 0)
-                .map(|t| t.position.manhattan(pos))
-                .min()
-                .unwrap_or(usize::MAX)
-        });
-    }
-
-    #[must_use]
-    pub fn reachable_positions(&self, game_state: &GameState) -> Option<Vec<Position>> {
-        let mut moves: Vec<_> = crate::position::CARDINALS
-            .iter()
-            .map(|&c| self.position + c)
-            .filter(|p| game_state.grid.contains(*p) && b".ABPL".contains(&game_state.grid[*p]))
-            .collect();
-
-        (!moves.is_empty()).then_some({
-            self.heuristic_sort_moves(game_state, &mut moves);
-            moves
-        })
-    }
-
-    // ------------------------------------------------------------------------
-    // ------ Helper
-    // ------------------------------------------------------------------------
-    fn free_capacity(&self) -> i32 {
+    pub fn free_capacity(&self) -> i32 {
         self.carry_capacity - self.total_carried()
     }
 
     #[must_use]
-    pub fn total_carried(&self) -> i32 {
-        self.carry_plum + self.carry_lemon + self.carry_apple + self.carry_banana
+    pub fn carried_resources(&self) -> Vec<Resource> {
+        [
+            Resource::Plum(self.carry_plum),
+            Resource::Lemon(self.carry_lemon),
+            Resource::Apple(self.carry_apple),
+            Resource::Banana(self.carry_banana),
+        ]
+        .into_iter()
+        .filter(|r| !r.is_empty())
+        .collect()
     }
 
     pub fn add_carried(&mut self, typ: &TreeType, amount: i32) {

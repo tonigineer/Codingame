@@ -1,19 +1,19 @@
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
-pub const ORIGIN: Position = Position { x: 0, y: 0 };
+// pub const ORIGIN: Position = Position { x: 0, y: 0 };
 pub const RIGHT: Position = Position { x: 1, y: 0 };
 pub const DOWN: Position = Position { x: 0, y: 1 };
 pub const LEFT: Position = Position { x: -1, y: 0 };
 pub const UP: Position = Position { x: 0, y: -1 };
 
 pub const CARDINALS: [Position; 4] = [RIGHT, DOWN, LEFT, UP];
-pub const DIAGONALS: [Position; 4] = [
-    Position { x: 1, y: 1 },
-    Position { x: -1, y: 1 },
-    Position { x: -1, y: -1 },
-    Position { x: 1, y: -1 },
-];
+// pub const DIAGONALS: [Position; 4] = [
+//     Position { x: 1, y: 1 },
+//     Position { x: -1, y: 1 },
+//     Position { x: -1, y: -1 },
+//     Position { x: 1, y: -1 },
+// ];
 
 /// A 2D position with integer coordinates.
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

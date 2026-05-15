@@ -1,4 +1,4 @@
-use crate::position::Position;
+use super::position::Position;
 use std::ops::{Index, IndexMut};
 
 /// A rectangular grid of elements stored in row-major order.

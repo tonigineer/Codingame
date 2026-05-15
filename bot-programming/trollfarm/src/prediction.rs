@@ -1,6 +1,7 @@
-use crate::game::{Action, GameState};
+use crate::game::Game;
 use crate::position::Position;
-use crate::types::{Player, Resources, Tree, Troll};
+use crate::entities::{Inventory, Tree, Troll};
+use crate::game::{Action, Side};
 
 // ------------------------------------------------------------------------
 // Snapshot types
@@ -65,15 +66,15 @@ impl SnapshotTroll {
 }
 
 #[derive(Debug, Clone)]
-struct SnapshotResources {
+struct SnapshotInventory {
     plum: i32,
     lemon: i32,
     apple: i32,
     banana: i32,
 }
 
-impl SnapshotResources {
-    fn from(r: &Resources) -> Self {
+impl SnapshotInventory {
+    fn from(r: &Inventory) -> Self {
         Self {
             plum: r.plum.amount(),
             lemon: r.lemon.amount(),
@@ -82,7 +83,7 @@ impl SnapshotResources {
         }
     }
 
-    fn diff(&self, r: &Resources) -> Vec<String> {
+    fn diff(&self, r: &Inventory) -> Vec<String> {
         let mut diffs = Vec::new();
         if self.plum != r.plum.amount() {
             diffs.push(format!(
@@ -157,7 +158,7 @@ impl SnapshotTree {
 
 #[derive(Debug, Clone)]
 pub struct Snapshot {
-    my_resources: SnapshotResources,
+    inventory: SnapshotInventory,
     trolls: Vec<SnapshotTroll>,
     trees: Vec<SnapshotTree>,
 }
@@ -167,21 +168,21 @@ pub struct Snapshot {
 // ------------------------------------------------------------------------
 
 pub trait Predictable {
-    fn snapshot(&self, actions: &[Action]) -> Snapshot;
+    fn snapshot(&self, my_actions: &[Action], opp_actions: &[Action]) -> Snapshot;
     fn compare(&self, snapshot: &Snapshot);
 }
 
-impl Predictable for GameState {
-    fn snapshot(&self, actions: &[Action]) -> Snapshot {
+impl Predictable for Game {
+    fn snapshot(&self, my_actions: &[Action], opp_actions: &[Action]) -> Snapshot {
         let mut sim = self.clone();
-        sim.apply_actions(actions);
+        sim.play(my_actions, opp_actions);
 
         Snapshot {
-            my_resources: SnapshotResources::from(&sim.my_resources),
+            inventory: SnapshotInventory::from(sim.inventory(Side::Me)),
             trolls: sim
                 .trolls
                 .iter()
-                .filter(|t| t.player == Player::Me)
+                .filter(|t| t.side == Side::Me)
                 .map(SnapshotTroll::from)
                 .collect(),
             trees: sim.trees.iter().map(SnapshotTree::from).collect(),
@@ -191,10 +192,10 @@ impl Predictable for GameState {
     fn compare(&self, snapshot: &Snapshot) {
         let mut ok = true;
 
-        // Compare resources
-        for diff in snapshot.my_resources.diff(&self.my_resources) {
+        // Compare inventory
+        for diff in snapshot.inventory.diff(self.inventory(Side::Me)) {
             ok = false;
-            eprintln!("[SIM MISMATCH] resources: {diff}");
+            eprintln!("[SIM MISMATCH] inventory: {diff}");
         }
 
         // Compare my trolls
@@ -216,14 +217,16 @@ impl Predictable for GameState {
             }
         }
 
-        // Compare trees
+        // Compare trees (skip those with opponent trolls — can't predict their harvest)
         for pred_tree in &snapshot.trees {
-            let opp_harvesting = self.trolls.iter()
-                 .any(|t| t.player == Player::Opp && t.position == pred_tree.position);
+            let opp_harvesting = self
+                .trolls
+                .iter()
+                .any(|t| t.side == Side::Opp && t.position == pred_tree.position);
 
-             if opp_harvesting {
-                 continue;
-             }
+            if opp_harvesting {
+                continue;
+            }
 
             match self.trees.iter().find(|t| t.position == pred_tree.position) {
                 Some(actual) => {
