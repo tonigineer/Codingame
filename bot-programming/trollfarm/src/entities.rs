@@ -1,5 +1,5 @@
-use crate::position::Position;
 use crate::game::Side;
+use crate::position::Position;
 use std::ops::AddAssign;
 
 // ------------------------------------------------------------------------
@@ -128,6 +128,13 @@ impl Inventory {
             TreeType::Banana => self.banana.amount(),
         }
     }
+
+    /// Score: each fruit = 1 point, wood = 4 points, iron = 0
+    #[must_use]
+    pub fn score(&self) -> i32 {
+        self.plum.amount() + self.lemon.amount() + self.apple.amount() + self.banana.amount()
+            + self.wood * 4
+    }
 }
 
 impl Default for Inventory {
@@ -212,6 +219,7 @@ impl Tree {
         }
     }
 
+    /// Normal cooldown (not near water)
     #[must_use]
     pub fn cooldown_time(&self) -> i32 {
         match self.typ {
@@ -222,6 +230,17 @@ impl Tree {
         }
     }
 
+    /// Cooldown when adjacent to water
+    #[must_use]
+    pub fn cooldown_time_water(&self) -> i32 {
+        match self.typ {
+            TreeType::Plum => 3,
+            TreeType::Lemon => 3,
+            TreeType::Apple => 2,
+            TreeType::Banana => 4,
+        }
+    }
+
     #[must_use]
     pub fn initial_cooldown(typ: TreeType) -> i32 {
         match typ {
@@ -229,6 +248,37 @@ impl Tree {
             TreeType::Lemon => 8,
             TreeType::Apple => 9,
             TreeType::Banana => 6,
+        }
+    }
+
+    #[must_use]
+    pub fn initial_cooldown_water(typ: TreeType) -> i32 {
+        match typ {
+            TreeType::Plum => 3,
+            TreeType::Lemon => 3,
+            TreeType::Apple => 2,
+            TreeType::Banana => 4,
+        }
+    }
+
+    /// Health for a given type and size
+    #[rustfmt::skip]
+    #[must_use]
+    pub fn max_health(typ: TreeType, size: i32) -> i32 {
+        match (typ, size) {
+            (TreeType::Plum,   1) | (TreeType::Lemon, 1) => 6,
+            (TreeType::Plum,   2) | (TreeType::Lemon, 2) => 8,
+            (TreeType::Plum,   3) | (TreeType::Lemon, 3) => 10,
+            (TreeType::Plum,   4) | (TreeType::Lemon, 4) => 12,
+            (TreeType::Apple,  1) => 11,
+            (TreeType::Apple,  2) => 14,
+            (TreeType::Apple,  3) => 17,
+            (TreeType::Apple,  4) => 20,
+            (TreeType::Banana, 1) => 3,
+            (TreeType::Banana, 2) => 4,
+            (TreeType::Banana, 3) => 5,
+            (TreeType::Banana, 4) => 6,
+            _ => 10,
         }
     }
 }
@@ -250,6 +300,8 @@ pub struct Troll {
     pub carry_lemon: i32,
     pub carry_apple: i32,
     pub carry_banana: i32,
+    pub carry_iron: i32,
+    pub carry_wood: i32,
 }
 
 impl Troll {
@@ -272,13 +324,15 @@ impl Troll {
             carry_lemon:    d[9],
             carry_apple:    d[10],
             carry_banana:   d[11],
-            //              d[12], d[13] reserved
+            carry_iron:     d[12],
+            carry_wood:     d[13],
         }
     }
 
     #[must_use]
     pub fn total_carried(&self) -> i32 {
         self.carry_plum + self.carry_lemon + self.carry_apple + self.carry_banana
+            + self.carry_iron + self.carry_wood
     }
 
     #[must_use]
@@ -309,6 +363,12 @@ impl Troll {
         }
     }
 
+    /// True if carrying anything at all (fruits, iron, or wood)
+    #[must_use]
+    pub fn has_cargo(&self) -> bool {
+        self.total_carried() > 0
+    }
+
     pub fn add_carried(&mut self, typ: &TreeType, amount: i32) {
         match typ {
             TreeType::Plum => self.carry_plum += amount,
@@ -327,5 +387,7 @@ impl Troll {
         self.carry_lemon = 0;
         self.carry_apple = 0;
         self.carry_banana = 0;
+        self.carry_iron = 0;
+        self.carry_wood = 0;
     }
 }

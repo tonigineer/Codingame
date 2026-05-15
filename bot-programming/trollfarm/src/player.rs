@@ -1,10 +1,9 @@
+use crate::entities::{Tree, TreeType, Troll};
+use crate::game::{Action, Game, Side};
 use crate::position::{Position, CARDINALS};
-use crate::game::Game;
 use crate::prediction::{Predictable, Snapshot};
-use crate::game::{Action, Side};
-use crate::entities::{Troll, Tree, TreeType};
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 pub struct Player {
     pub side: Side,
@@ -30,8 +29,16 @@ impl Player {
         self.actions.clear();
 
         // Try a few troll configs and pick the best profitable one
-        let train_configs = [(1, 1, 1, 0), (2, 1, 1, 0), (1, 2, 1, 0), (1, 1, 2, 0), (2, 2, 1, 0)];
-        let best_train = train_configs.iter()
+        let train_configs = [
+            (1, 1, 1, 0),
+            (2, 1, 1, 0),
+            (1, 2, 1, 0),
+            (1, 1, 2, 0),
+            (2, 2, 1, 0),
+            (1, 1, 1, 1), // with chop
+        ];
+        let best_train = train_configs
+            .iter()
             .map(|&(ms, cc, hp, cp)| (ms, cc, hp, cp, self.eval_training(game, ms, cc, hp, cp)))
             .filter(|(_, _, _, _, score)| *score > 0)
             .max_by_key(|(_, _, _, _, score)| *score);
@@ -43,13 +50,12 @@ impl Player {
         let all_actions = game.actions_for(self.side);
         let mut claimed: HashSet<Position> = HashSet::new();
 
-        // Check planing actions
+        // Filter out bad plant actions
         let mut filtered: HashMap<i32, Vec<Action>> = HashMap::new();
         for troll in game.trolls_for(self.side) {
             let Some(actions) = all_actions.get(&troll.id) else {
                 continue;
             };
-
             let kept: Vec<Action> = actions
                 .iter()
                 .filter(|a| match a {
@@ -58,12 +64,11 @@ impl Player {
                 })
                 .cloned()
                 .collect();
-
             filtered.insert(troll.id, kept);
         }
         let all_actions = filtered;
 
-        // Pre-claim positions of trolls that won't move (drop/harvest/plant/wait)
+        // Pre-claim positions of trolls that won't move
         for troll in game.trolls_for(self.side) {
             let actions = match all_actions.get(&troll.id) {
                 Some(a) => a,
@@ -71,28 +76,32 @@ impl Player {
             };
             let chosen = actions
                 .iter()
-                .find(|a|  matches!(a, Action::Plant(_, _)))
-                .or_else(|| actions.iter().find(|a | matches!(a, Action::Drop(_))))
-                .or_else(|| actions.iter().find(|a| matches!(a, Action::Harvest(_))));
+                .find(|a| matches!(a, Action::Plant(_, _)))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Drop(_))))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Harvest(_))))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Chop(_))))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Mine(_))));
 
             if chosen.is_some() {
                 claimed.insert(troll.position);
             }
         }
 
-        // Now assign actions, resolving move conflicts
+        // Assign actions, resolving move conflicts
         for troll in game.trolls_for(self.side) {
             let actions = match all_actions.get(&troll.id) {
                 Some(a) => a,
                 None => continue,
             };
 
-            // Try priority: drop > harvest > plant
+            // Priority: drop > harvest > chop > mine > plant > move > wait
             let non_move = actions
                 .iter()
-                .find(|a|  matches!(a, Action::Plant(_, _)))
-                .or_else(|| actions.iter().find(|a | matches!(a, Action::Drop(_))))
-                .or_else(|| actions.iter().find(|a| matches!(a, Action::Harvest(_))));
+                .find(|a| matches!(a, Action::Drop(_)))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Harvest(_))))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Chop(_))))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Mine(_))))
+                .or_else(|| actions.iter().find(|a| matches!(a, Action::Plant(_, _))));
 
             if let Some(action) = non_move {
                 self.actions.push(action.clone());
@@ -126,10 +135,9 @@ impl Player {
     pub fn best_plant_positions(&self, game: &Game) -> Vec<Position> {
         let shack = game.shack(self.side);
         let mut candidates: Vec<Position> = Vec::new();
-        let mut visited = std::collections::HashSet::new();
+        let mut visited = HashSet::new();
         let mut queue = std::collections::VecDeque::new();
 
-        // Seed: shack's direct neighbors (shack itself isn't walkable)
         visited.insert(shack);
         for &c in CARDINALS.iter() {
             let next = shack + c;
@@ -146,7 +154,6 @@ impl Player {
             return candidates[..3].to_vec();
         }
 
-        // BFS outward from those neighbors
         while let Some(pos) = queue.pop_front() {
             for &c in CARDINALS.iter() {
                 let next = pos + c;
@@ -180,7 +187,6 @@ impl Player {
             return 0;
         }
 
-        // Only plant on one of the 3 best spots
         let spots = self.best_plant_positions(game);
         if !spots.contains(&troll.position) {
             return 0;
@@ -189,7 +195,13 @@ impl Player {
         let shack = game.shack(self.side);
         let dist = troll.position.manhattan(&shack) as i32;
 
-        let cooldown = Tree::initial_cooldown(typ);
+        let near_water = game.is_near_water(troll.position);
+        let cooldown = if near_water {
+            Tree::initial_cooldown_water(typ)
+        } else {
+            Tree::initial_cooldown(typ)
+        };
+
         let grow_turns = 3 * cooldown;
         let turns_until_first_fruit = grow_turns + cooldown;
 
@@ -207,7 +219,10 @@ impl Player {
             return 0;
         }
 
-        deliverable - 1 + (10 - cooldown) - dist
+        // Bonus for water-adjacent planting
+        let water_bonus = if near_water { 5 } else { 0 };
+
+        deliverable - 1 + (10 - cooldown) - dist + water_bonus
     }
 
     pub fn eval_training(&self, game: &Game, ms: i32, cc: i32, hp: i32, cp: i32) -> i32 {
@@ -221,36 +236,28 @@ impl Player {
         }
 
         let cost = game.train_cost(self.side, ms, cc, hp, cp);
-        let total_cost = cost.plum + cost.lemon + cost.apple + cost.banana;
+        let total_cost = cost.plum + cost.lemon + cost.apple + cost.iron;
 
         let shack = game.shack(self.side);
 
-        // Find the nearest tree with fruit (or that will produce fruit)
-        let avg_tree_dist = game.trees.iter()
+        let avg_tree_dist = game
+            .trees
+            .iter()
             .map(|t| t.position.manhattan(&shack) as i32)
             .min()
             .unwrap_or(5);
 
-        // Troll spawns at shack. One harvest cycle:
-        //   walk to tree + harvest (1 turn) + walk back + drop (1 turn)
         let round_trip = 2 * avg_tree_dist + 2;
-
-        // First turn is spent spawning — troll can't act until next turn
         let usable_turns = remaining - 1;
 
         if usable_turns <= round_trip {
             return -1;
         }
 
-        // How many full delivery cycles?
         let cycles = usable_turns / round_trip;
-
-        // Each cycle delivers min(carry_capacity, harvest_power, fruits_available)
-        // Assume trees have fruit most of the time — use min(cc, hp) as throughput
         let per_trip = cc.min(hp);
         let total_delivered = cycles * per_trip;
 
-        // Net value: what the troll brings home minus what we spent to make it
         total_delivered - total_cost
     }
 
@@ -259,7 +266,6 @@ impl Player {
     // --------------------------------------------------------------------
 
     pub fn simulate(&mut self, game: &Game) {
-        // For now we pass empty opponent actions — we don't know them
         self.predicted = Some(game.snapshot(&self.actions, &[]));
     }
 
