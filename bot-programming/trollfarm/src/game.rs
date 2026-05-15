@@ -1,12 +1,82 @@
 use std::collections::HashMap;
 use std::io::{self, BufRead};
 
-use crate::position::{Position, CARDINALS};
+use crate::entities::{Inventory, Resource, Tree, TreeType, Troll};
 use crate::grid::Grid;
-use crate::entities::{Inventory, Resource, Tree, Troll};
+use crate::position::{Position, CARDINALS};
 
 // ------------------------------------------------------------------------
-// Game — owns all state
+// Side
+// ------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Side {
+    Me,
+    Opp,
+}
+
+impl Side {
+    #[must_use]
+    pub fn from_id(id: i32) -> Self {
+        match id {
+            0 => Side::Me,
+            1 => Side::Opp,
+            _ => unimplemented!("PlayerID does not exist."),
+        }
+    }
+
+    #[must_use]
+    pub fn other(&self) -> Self {
+        match self {
+            Side::Me => Side::Opp,
+            Side::Opp => Side::Me,
+        }
+    }
+}
+
+// ------------------------------------------------------------------------
+// Action
+// ------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub enum Action {
+    Move(i32, Position),
+    Harvest(i32),
+    Plant(i32, TreeType),
+    Pick(i32, TreeType),
+    Drop(i32),
+    Train(i32, i32, i32, i32), // moveSpeed, carryCap, harvestPow, chopPow
+}
+
+impl Action {
+    #[must_use]
+    pub fn troll_id(&self) -> Option<i32> {
+        match self {
+            Action::Move(id, _)
+            | Action::Harvest(id)
+            | Action::Plant(id, _)
+            | Action::Pick(id, _)
+            | Action::Drop(id) => Some(*id),
+            Action::Train(..) => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Action::Move(id, pos) => write!(f, "MOVE {id} {} {}", pos.x, pos.y),
+            Action::Harvest(id) => write!(f, "HARVEST {id}"),
+            Action::Plant(id, typ) => write!(f, "PLANT {id} {typ}"),
+            Action::Pick(id, typ) => write!(f, "PICK {id} {typ}"),
+            Action::Drop(id) => write!(f, "DROP {id}"),
+            Action::Train(ms, cc, hp, cp) => write!(f, "TRAIN {ms} {cc} {hp} {cp}"),
+        }
+    }
+}
+
+// ------------------------------------------------------------------------
+// Game
 // ------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -15,10 +85,11 @@ pub struct Game {
     pub width: usize,
     pub height: usize,
     pub grid: Grid<u8>,
-    pub shacks: [Position; 2],       // [Me, Opp]
-    pub inventories: [Inventory; 2], // [Me, Opp]
+    pub shacks: [Position; 2],
+    pub inventories: [Inventory; 2],
     pub trees: Vec<Tree>,
     pub trolls: Vec<Troll>,
+    next_troll_id: i32,
 }
 
 impl Game {
@@ -53,6 +124,7 @@ impl Game {
             inventories: [Inventory::new(), Inventory::new()],
             trees: Vec::new(),
             trolls: Vec::new(),
+            next_troll_id: 100,
         }
     }
 
@@ -76,6 +148,11 @@ impl Game {
 
         let troll_count: usize = next().trim().parse().unwrap();
         self.trolls = (0..troll_count).map(|_| Troll::parse(&next())).collect();
+
+        // Track highest troll id for simulation
+        if let Some(max_id) = self.trolls.iter().map(|t| t.id).max() {
+            self.next_troll_id = max_id + 1;
+        }
 
         eprintln!("Turn {}", self.turn);
     }
@@ -130,6 +207,11 @@ impl Game {
     }
 
     #[must_use]
+    pub fn troll_count(&self, side: Side) -> i32 {
+        self.trolls.iter().filter(|t| t.side == side).count() as i32
+    }
+
+    #[must_use]
     pub fn winner(&self) -> Option<Side> {
         let my_score = self.score(Side::Me);
         let opp_score = self.score(Side::Opp);
@@ -145,8 +227,39 @@ impl Game {
         inv.plum.amount() + inv.lemon.amount() + inv.apple.amount() + inv.banana.amount()
     }
 
+    #[must_use]
+    pub fn tree_at(&self, pos: Position) -> Option<&Tree> {
+        self.trees.iter().find(|t| t.position == pos)
+    }
+
     // --------------------------------------------------------------------
-    // Action enumeration — what can a troll do?
+    // Training cost calculation
+    // --------------------------------------------------------------------
+
+    /// Cost for a single attribute = num_existing_trolls + attribute^2
+    #[must_use]
+    pub fn train_cost(&self, side: Side, ms: i32, cc: i32, hp: i32, _cp: i32) -> TrainCost {
+        let n = self.troll_count(side);
+        TrainCost {
+            plum: n + ms * ms,
+            lemon: n + cc * cc,
+            apple: n + hp * hp,
+            banana: 0, // reserved (chopPower)
+        }
+    }
+
+    #[must_use]
+    pub fn can_train(&self, side: Side, ms: i32, cc: i32, hp: i32, cp: i32) -> bool {
+        let cost = self.train_cost(side, ms, cc, hp, cp);
+        let inv = self.inventory(side);
+        inv.plum.amount() >= cost.plum
+            && inv.lemon.amount() >= cost.lemon
+            && inv.apple.amount() >= cost.apple
+            && inv.banana.amount() >= cost.banana
+    }
+
+    // --------------------------------------------------------------------
+    // Action enumeration
     // --------------------------------------------------------------------
 
     #[must_use]
@@ -156,31 +269,51 @@ impl Game {
             .filter(|t| t.side == side)
             .map(|troll| {
                 let mut actions = Vec::new();
+
+                // Drop:
                 if self.would_drop(troll).is_some() {
                     actions.push(Action::Drop(troll.id));
                 }
+
+                // Harvest:
                 if self.would_harvest(troll).is_some() {
                     actions.push(Action::Harvest(troll.id));
                 }
+
+                // Plant: can plant any type the troll is carrying, if no tree here
+                if self.tree_at(troll.position).is_none() {
+                    for typ in &[TreeType::Plum, TreeType::Lemon, TreeType::Apple, TreeType::Banana] {
+                        if troll.carries(typ) > 0 {
+                            actions.push(Action::Plant(troll.id, *typ));
+                        }
+                    }
+                }
+
+                // Move:
                 if let Some(moves) = self.reachable_positions(troll) {
                     for pos in moves {
                         actions.push(Action::Move(troll.id, pos));
                     }
                 }
-                actions.push(Action::Wait(troll.id));
+
+                // Pick: can pick from shack if adjacent and has free capacity
+                if self.is_adjacent_to_shack(troll) && troll.free_capacity() > 0 {
+                    let inv = self.inventory(side);
+                    for typ in &[TreeType::Plum, TreeType::Lemon, TreeType::Apple, TreeType::Banana] {
+                        if inv.get(typ) > 0 {
+                            actions.push(Action::Pick(troll.id, *typ));
+                        }
+                    }
+                }
+
                 (troll.id, actions)
             })
             .collect()
     }
 
     // --------------------------------------------------------------------
-    // Troll queries (moved from Troll impl — they need Game context)
+    // Troll queries
     // --------------------------------------------------------------------
-
-    #[must_use]
-    pub fn tree_at(&self, pos: Position) -> Option<&Tree> {
-        self.trees.iter().find(|t| t.position == pos)
-    }
 
     #[must_use]
     pub fn would_harvest(&self, troll: &Troll) -> Option<Resource> {
@@ -196,24 +329,34 @@ impl Game {
 
     #[must_use]
     pub fn would_drop(&self, troll: &Troll) -> Option<Vec<Resource>> {
-        let shack = self.shack(troll.side);
-        (troll.position.manhattan(&shack) == 1 && troll.total_carried() > 0)
+        (self.is_adjacent_to_shack(troll) && troll.total_carried() > 0)
             .then(|| troll.carried_resources())
     }
 
     #[must_use]
+    pub fn is_adjacent_to_shack(&self, troll: &Troll) -> bool {
+        let shack = self.shack(troll.side);
+        troll.position.manhattan(&shack) == 1
+    }
+
+    #[must_use]
     pub fn reachable_positions(&self, troll: &Troll) -> Option<Vec<Position>> {
+        // TODO: make it `global` for Player once every turn
+        let troll_positions = self.trolls.iter().map(|t| t.position).collect::<Vec<Position>>();
+
         let mut moves: Vec<_> = CARDINALS
             .iter()
             .map(|&c| troll.position + c)
-            .filter(|p| self.grid.contains(*p) && b".ABPL".contains(&self.grid[*p]))
+            .filter(|p| self.grid.contains(*p)
+                && b".ABPL".contains(&self.grid[*p])
+                && !troll_positions.contains(p)
+            )
             .collect();
 
         if moves.is_empty() {
             return None;
         }
 
-        // Heuristic sort
         if troll.free_capacity() == 0 {
             let shack = self.shack(troll.side);
             moves.sort_by_key(|pos| shack.manhattan(pos));
@@ -232,7 +375,7 @@ impl Game {
     }
 
     // --------------------------------------------------------------------
-    // Simulation — play(actions_p1, actions_p2)
+    // Simulation
     // --------------------------------------------------------------------
 
     pub fn play(&mut self, my_actions: &[Action], opp_actions: &[Action]) {
@@ -243,8 +386,12 @@ impl Game {
             .collect();
         self.apply_moves(&all);
         self.apply_harvests(&all);
+        let trees_before_plant = self.trees.len();
+        self.apply_plants(&all);
+        self.apply_picks(&all);
         self.apply_drops(&all);
-        self.tick_trees();
+        self.apply_trains(&all);
+        self.tick_trees(trees_before_plant);
     }
 
     fn troll_mut(&mut self, id: i32) -> Option<&mut Troll> {
@@ -391,6 +538,85 @@ impl Game {
         }
     }
 
+    fn apply_plants(&mut self, actions: &[Action]) {
+        // Group plant requests by position to handle conflicts
+        let mut by_pos: HashMap<Position, Vec<(i32, TreeType)>> = HashMap::new();
+
+        for action in actions {
+            if let Action::Plant(id, typ) = action {
+                let Some(troll) = self.troll(*id) else {
+                    continue;
+                };
+                // Must carry at least 1 of that fruit and no tree already here
+                if troll.carries(typ) > 0 && self.tree_at(troll.position).is_none() {
+                    by_pos
+                        .entry(troll.position)
+                        .or_default()
+                        .push((*id, *typ));
+                }
+            }
+        }
+
+        for (pos, planters) in &by_pos {
+            // Check if all planters on this cell plant the same type
+            let first_typ = planters[0].1;
+            let all_same = planters.iter().all(|(_, typ)| *typ == first_typ);
+
+            if !all_same {
+                // Different types: nothing happens, but all lose their seed
+                // Actually per rules: "nothing will happen" — so no seed lost
+                continue;
+            }
+
+            // All same type: plant the tree, each planter loses 1 seed
+            self.trees.push(Tree {
+                typ: first_typ,
+                position: *pos,
+                size: 1,
+                health: 10,
+                fruits: 0,
+                cooldown: Tree::initial_cooldown(first_typ),
+            });
+            self.grid[*pos] = first_typ.to_byte();
+
+            for (troll_id, typ) in planters {
+                if let Some(troll) = self.troll_mut(*troll_id) {
+                    troll.remove_carried(typ, 1);
+                }
+            }
+        }
+    }
+
+    fn apply_picks(&mut self, actions: &[Action]) {
+        for action in actions {
+            if let Action::Pick(id, typ) = action {
+                let Some(troll) = self.troll(*id) else {
+                    continue;
+                };
+                let side = troll.side;
+
+                if !self.is_adjacent_to_shack(troll) {
+                    continue;
+                }
+                if troll.free_capacity() <= 0 {
+                    continue;
+                }
+
+                let inv = self.inventory(side);
+                if inv.get(typ) <= 0 {
+                    continue;
+                }
+
+                // Remove from inventory, add to troll
+                self.inventory_mut(side)
+                    .remove(&Resource::from_tree(typ, 1));
+                if let Some(troll) = self.troll_mut(*id) {
+                    troll.add_carried(typ, 1);
+                }
+            }
+        }
+    }
+
     fn apply_drops(&mut self, actions: &[Action]) {
         for action in actions {
             if let Action::Drop(id) = action {
@@ -422,8 +648,46 @@ impl Game {
         }
     }
 
-    fn tick_trees(&mut self) {
-        for tree in &mut self.trees {
+    fn apply_trains(&mut self, actions: &[Action]) {
+        for action in actions {
+            if let Action::Train(ms, cc, hp, cp) = action {
+                // Figure out which side issued this action
+                // For simulation we need to determine the side — we check both
+                for side in &[Side::Me, Side::Opp] {
+                    if !self.can_train(*side, *ms, *cc, *hp, *cp) {
+                        continue;
+                    }
+
+                    let cost = self.train_cost(*side, *ms, *cc, *hp, *cp);
+                    let inv = self.inventory_mut(*side);
+                    inv.remove(&Resource::Plum(cost.plum));
+                    inv.remove(&Resource::Lemon(cost.lemon));
+                    inv.remove(&Resource::Apple(cost.apple));
+                    inv.remove(&Resource::Banana(cost.banana));
+
+                    let shack = self.shack(*side);
+                    self.trolls.push(Troll {
+                        id: self.next_troll_id,
+                        side: *side,
+                        position: shack,
+                        movement_speed: *ms,
+                        carry_capacity: *cc,
+                        harvest_power: *hp,
+                        chop_power: *cp,
+                        carry_plum: 0,
+                        carry_lemon: 0,
+                        carry_apple: 0,
+                        carry_banana: 0,
+                    });
+                    self.next_troll_id += 1;
+                    break; // Only one side can train per Train action
+                }
+            }
+        }
+    }
+
+    fn tick_trees(&mut self, count: usize) {
+        for tree in &mut self.trees[..count] {
             if tree.cooldown > 0 {
                 tree.cooldown -= 1;
             }
@@ -439,6 +703,7 @@ impl Game {
             }
         }
     }
+
 }
 
 impl Default for Game {
@@ -448,62 +713,13 @@ impl Default for Game {
 }
 
 // ------------------------------------------------------------------------
-// Action
+// TrainCost
 // ------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub enum Action {
-    Move(i32, Position),
-    Harvest(i32),
-    Drop(i32),
-    Wait(i32),
-}
-
-impl Action {
-    #[must_use]
-    pub fn troll_id(&self) -> i32 {
-        match self {
-            Action::Move(id, _) | Action::Harvest(id) | Action::Drop(id) | Action::Wait(id) => *id,
-        }
-    }
-}
-
-impl std::fmt::Display for Action {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Action::Move(id, pos) => write!(f, "MOVE {id} {} {}", pos.x, pos.y),
-            Action::Harvest(id) => write!(f, "HARVEST {id}"),
-            Action::Drop(id) => write!(f, "DROP {id}"),
-            Action::Wait(_) => write!(f, ""),
-        }
-    }
-}
-
-// ------------------------------------------------------------------------
-// Side — which player
-// ------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Side {
-    Me,
-    Opp,
-}
-
-impl Side {
-    #[must_use]
-    pub fn from_id(id: i32) -> Self {
-        match id {
-            0 => Side::Me,
-            1 => Side::Opp,
-            _ => unimplemented!("PlayerID does not exist."),
-        }
-    }
-
-    #[must_use]
-    pub fn other(&self) -> Self {
-        match self {
-            Side::Me => Side::Opp,
-            Side::Opp => Side::Me,
-        }
-    }
+pub struct TrainCost {
+    pub plum: i32,
+    pub lemon: i32,
+    pub apple: i32,
+    pub banana: i32,
 }

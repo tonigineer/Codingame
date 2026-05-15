@@ -1,8 +1,8 @@
 pub mod entities;
 pub mod game;
 pub mod grid;
-pub mod position;
 pub mod player;
+pub mod position;
 pub mod prediction;
 
 use std::time::Instant;

@@ -1,6 +1,6 @@
 use crate::position::Position;
-use std::ops::AddAssign;
 use crate::game::Side;
+use std::ops::AddAssign;
 
 // ------------------------------------------------------------------------
 // Resource / Inventory
@@ -35,6 +35,16 @@ impl Resource {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.amount() == 0
+    }
+
+    #[must_use]
+    pub fn tree_type(&self) -> TreeType {
+        match self {
+            Resource::Plum(_) => TreeType::Plum,
+            Resource::Lemon(_) => TreeType::Lemon,
+            Resource::Apple(_) => TreeType::Apple,
+            Resource::Banana(_) => TreeType::Banana,
+        }
     }
 }
 
@@ -99,6 +109,25 @@ impl Inventory {
             Resource::Banana(_) => self.banana += *resource,
         }
     }
+
+    pub fn remove(&mut self, resource: &Resource) {
+        match resource {
+            Resource::Plum(n) => self.plum += Resource::Plum(-n),
+            Resource::Lemon(n) => self.lemon += Resource::Lemon(-n),
+            Resource::Apple(n) => self.apple += Resource::Apple(-n),
+            Resource::Banana(n) => self.banana += Resource::Banana(-n),
+        }
+    }
+
+    #[must_use]
+    pub fn get(&self, typ: &TreeType) -> i32 {
+        match typ {
+            TreeType::Plum => self.plum.amount(),
+            TreeType::Lemon => self.lemon.amount(),
+            TreeType::Apple => self.apple.amount(),
+            TreeType::Banana => self.banana.amount(),
+        }
+    }
 }
 
 impl Default for Inventory {
@@ -111,7 +140,7 @@ impl Default for Inventory {
 // Tree
 // ------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreeType {
     Plum,
     Lemon,
@@ -128,6 +157,33 @@ impl TreeType {
             TreeType::Lemon => b'L',
             TreeType::Plum => b'P',
         }
+    }
+
+    #[must_use]
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "PLUM" => TreeType::Plum,
+            "LEMON" => TreeType::Lemon,
+            "APPLE" => TreeType::Apple,
+            "BANANA" => TreeType::Banana,
+            _ => unimplemented!("Unknown tree type: {s}"),
+        }
+    }
+
+    #[must_use]
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            TreeType::Plum => "PLUM",
+            TreeType::Lemon => "LEMON",
+            TreeType::Apple => "APPLE",
+            TreeType::Banana => "BANANA",
+        }
+    }
+}
+
+impl std::fmt::Display for TreeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
     }
 }
 
@@ -146,15 +202,8 @@ impl Tree {
     #[must_use]
     pub fn parse(line: &str) -> Self {
         let d: Vec<&str> = line.split_whitespace().collect();
-        let typ = match d[0] {
-            "PLUM"   => TreeType::Plum,
-            "LEMON"  => TreeType::Lemon,
-            "APPLE"  => TreeType::Apple,
-            "BANANA" => TreeType::Banana,
-            _ => unimplemented!("Unknown tree type"),
-        };
         Self {
-            typ,
+            typ:        TreeType::from_str(d[0]),
             position:   Position::new(d[1].parse().unwrap(), d[2].parse().unwrap()),
             size:       d[3].parse().unwrap(),
             health:     d[4].parse().unwrap(),
@@ -166,6 +215,16 @@ impl Tree {
     #[must_use]
     pub fn cooldown_time(&self) -> i32 {
         match self.typ {
+            TreeType::Plum => 8,
+            TreeType::Lemon => 8,
+            TreeType::Apple => 9,
+            TreeType::Banana => 6,
+        }
+    }
+
+    #[must_use]
+    pub fn initial_cooldown(typ: TreeType) -> i32 {
+        match typ {
             TreeType::Plum => 8,
             TreeType::Lemon => 8,
             TreeType::Apple => 9,
@@ -186,6 +245,7 @@ pub struct Troll {
     pub movement_speed: i32,
     pub carry_capacity: i32,
     pub harvest_power: i32,
+    pub chop_power: i32,
     pub carry_plum: i32,
     pub carry_lemon: i32,
     pub carry_apple: i32,
@@ -207,7 +267,7 @@ impl Troll {
             movement_speed: d[4],
             carry_capacity: d[5],
             harvest_power:  d[6],
-            //              d[7] reserved
+            chop_power:     d[7],
             carry_plum:     d[8],
             carry_lemon:    d[9],
             carry_apple:    d[10],
@@ -239,6 +299,16 @@ impl Troll {
         .collect()
     }
 
+    #[must_use]
+    pub fn carries(&self, typ: &TreeType) -> i32 {
+        match typ {
+            TreeType::Plum => self.carry_plum,
+            TreeType::Lemon => self.carry_lemon,
+            TreeType::Apple => self.carry_apple,
+            TreeType::Banana => self.carry_banana,
+        }
+    }
+
     pub fn add_carried(&mut self, typ: &TreeType, amount: i32) {
         match typ {
             TreeType::Plum => self.carry_plum += amount,
@@ -246,6 +316,10 @@ impl Troll {
             TreeType::Apple => self.carry_apple += amount,
             TreeType::Banana => self.carry_banana += amount,
         }
+    }
+
+    pub fn remove_carried(&mut self, typ: &TreeType, amount: i32) {
+        self.add_carried(typ, -amount);
     }
 
     pub fn clear_carried(&mut self) {
