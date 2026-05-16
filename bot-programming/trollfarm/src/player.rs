@@ -60,18 +60,18 @@ impl Player {
         // --- Check if plans are still possible (tree may have been chopped,
         //     or fruit harvested by someone else). Filter on latest_plans,
         //     NOT self.plans which was already moved out.
-        let latest_plans: Vec<Plan> = self.plans.drain(..).filter(|p| {
-            match p.action {
+        let latest_plans: Vec<Plan> = self
+            .plans
+            .drain(..)
+            .filter(|p| match p.action {
                 Action::Harvest(_) => {
                     b"ABPL".contains(&game.grid[p.to])
                         && game.tree_at(p.to).map(|t| t.fruits > 0).unwrap_or(false)
                 }
-                Action::Chop(_) => {
-                    game.tree_at(p.to).map(|t| t.health > 0).unwrap_or(false)
-                }
+                Action::Chop(_) => game.tree_at(p.to).map(|t| t.health > 0).unwrap_or(false),
                 _ => true,
-            }
-        }).collect();
+            })
+            .collect();
 
         // --- Planned action can be carried out (troll arrived at destination)
         for troll in trolls.iter() {
@@ -101,12 +101,12 @@ impl Player {
                 continue;
             }
 
-            // Fruit: only harvest if tree actually has fruit, and needed
+            // Fruit: only harvest if tree actually has fruit
             if b"ABPL".contains(grid_char) {
-                let has_fruit = game.tree_at(troll.position)
+                let has_fruit = game
+                    .tree_at(troll.position)
                     .map(|t| t.fruits > 0 && self.priority.weight_for_tree(t) > 0)
                     .unwrap_or(false);
-
                 if has_fruit {
                     self.actions.push(Action::Harvest(troll.id));
                     busy.insert(troll.id);
@@ -130,19 +130,25 @@ impl Player {
             {
                 let destination = plan.to;
 
+                // Try to path toward destination; only commit if we can actually move
+                let mut moved = false;
                 if let Some(path) = reconstruct_path(troll.position, destination, &troll_dist_map) {
                     if !path.is_empty() {
                         let steps = path.len().min(troll.movement_speed as usize);
                         let new_position = path[steps - 1];
                         move_intents.push((troll.id, troll.position, new_position));
+                        moved = true;
                     }
-                };
+                }
 
-                claimed_targets.insert(destination);
-                self.plans.push(*plan);
-                busy.insert(troll.id);
-
-                continue;
+                if moved {
+                    claimed_targets.insert(destination);
+                    self.plans.push(*plan);
+                    busy.insert(troll.id);
+                    continue;
+                }
+                // Path blocked or empty — fall through to find_best_target
+                // which can pick an alternate drop tile or new target
             }
 
             // --- New plan: find best target based on priority ---
@@ -310,7 +316,7 @@ impl Player {
 
             // Favour close trees with high-priority fruit
             let harvestable = fruits.min(troll.free_capacity());
-            let score = harvestable + weight - tile_dist;
+            let score = harvestable + weight - tile_dist / 2;
 
             if best.is_none() || score > best.unwrap().2 {
                 best = Some((Action::Harvest(troll.id), tree.position, score));
@@ -335,17 +341,14 @@ impl Player {
                         None => continue,
                     };
 
-                    let shack_return = shack_dist_map
-                        .get(&adj)
-                        .map(|(d, _)| *d)
-                        .unwrap_or(9999);
+                    let shack_return = shack_dist_map.get(&adj).map(|(d, _)| *d).unwrap_or(9999);
 
                     let round_trip = tile_dist + shack_return;
                     if round_trip >= game.turns_remaining() {
                         continue;
                     }
 
-                    let score = troll.free_capacity() + self.priority.iron - tile_dist;
+                    let score = troll.free_capacity() + self.priority.iron - tile_dist / 2;
 
                     if best.is_none() || score > best.unwrap().2 {
                         best = Some((Action::Mine(troll.id), adj, score));
@@ -381,7 +384,7 @@ impl Player {
                 let wood_yield = tree.size;
                 let carriable = wood_yield.min(troll.free_capacity());
 
-                let score = carriable + self.priority.wood - tile_dist - chop_turns;
+                let score = carriable + self.priority.wood - tile_dist / 2 - chop_turns;
 
                 if best.is_none() || score > best.unwrap().2 {
                     best = Some((Action::Chop(troll.id), tree.position, score));
@@ -567,7 +570,7 @@ impl Priority {
         self.lemon = (min_fruit_stock - inv.get(&TreeType::Lemon)).max(0);
         self.plum = (min_fruit_stock - inv.get(&TreeType::Plum)).max(0);
         self.iron = (min_iron_stock - inv.iron).max(0);
-        self.wood = (180 / game.turns_remaining().max(1)).min(1);
+        self.wood = 180 / game.turns_remaining().max(1);
     }
 
     fn weight_for_tree(&self, tree: &Tree) -> i32 {
