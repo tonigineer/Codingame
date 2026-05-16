@@ -52,26 +52,28 @@ impl Player {
         let mut claimed: HashSet<Position> = HashSet::new();
         let mut claimed_targets: HashSet<Position> = HashSet::new();
 
-        let latest_plans = self.plans.clone();
-        self.plans.clear();
-
         // --- Training new trolls
         if let Some(action) = self.training(game) {
             self.actions.push(action);
         }
 
-        // --- Check if plans are still possible (tree may have been chopped)
-        self.plans = self
-            .plans
-            .drain(..)
-            .filter(|p| match p.action {
-                Action::Harvest(_) => b"ABPL".contains(&game.grid[p.to]),
-                Action::Chop(_) => b"+".contains(&game.grid[p.to]),
+        // --- Check if plans are still possible (tree may have been chopped,
+        //     or fruit harvested by someone else). Filter on latest_plans,
+        //     NOT self.plans which was already moved out.
+        let latest_plans: Vec<Plan> = self.plans.drain(..).filter(|p| {
+            match p.action {
+                Action::Harvest(_) => {
+                    b"ABPL".contains(&game.grid[p.to])
+                        && game.tree_at(p.to).map(|t| t.fruits > 0).unwrap_or(false)
+                }
+                Action::Chop(_) => {
+                    game.tree_at(p.to).map(|t| t.health > 0).unwrap_or(false)
+                }
                 _ => true,
-            })
-            .collect();
+            }
+        }).collect();
 
-        // --- Planned action can be carried out
+        // --- Planned action can be carried out (troll arrived at destination)
         for troll in trolls.iter() {
             if let Some(plan) = latest_plans.iter().find(|p| p.troll_id == troll.id) {
                 if plan.to == troll.position {
@@ -82,7 +84,7 @@ impl Player {
             }
         }
 
-        // --- Check troll without plan can directly harvest
+        // --- Check troll without plan can directly harvest (opportunistic)
         let currently_busy = busy.clone();
         for troll in trolls.iter().filter(|t| !currently_busy.contains(&t.id)) {
             if troll.free_capacity() == 0 {
@@ -90,14 +92,26 @@ impl Player {
             }
 
             let grid_char = &game.grid[troll.position];
-            if b"ABPL+".contains(grid_char) {
-                let action = match grid_char {
-                    b'+' => Action::Mine(troll.id),
-                    _ => Action::Harvest(troll.id),
-                };
-                self.actions.push(action);
+
+            // Iron: can always mine if standing adjacent
+            if b"+".contains(grid_char) && troll.chop_power > 0 {
+                self.actions.push(Action::Mine(troll.id));
                 busy.insert(troll.id);
                 claimed.insert(troll.position);
+                continue;
+            }
+
+            // Fruit: only harvest if tree actually has fruit, and needed
+            if b"ABPL".contains(grid_char) {
+                let has_fruit = game.tree_at(troll.position)
+                    .map(|t| t.fruits > 0 && self.priority.weight_for_tree(t) > 0)
+                    .unwrap_or(false);
+
+                if has_fruit {
+                    self.actions.push(Action::Harvest(troll.id));
+                    busy.insert(troll.id);
+                    claimed.insert(troll.position);
+                }
             }
         }
 
@@ -109,7 +123,7 @@ impl Player {
         for troll in trolls.iter().filter(|t| !currently_busy.contains(&t.id)) {
             let troll_dist_map = bfs_distance_map(troll.position, game, &claimed);
 
-            // --- Continue with plan and its action
+            // --- Continue with existing plan
             if let Some(plan) = latest_plans
                 .iter()
                 .find(|p| p.troll_id == troll.id && !busy.contains(&troll.id))
@@ -124,7 +138,7 @@ impl Player {
                     }
                 };
 
-                claimed_targets.insert(destination.clone());
+                claimed_targets.insert(destination);
                 self.plans.push(*plan);
                 busy.insert(troll.id);
 
@@ -148,7 +162,7 @@ impl Player {
                     }
                 }
 
-                claimed_targets.insert(destination.clone());
+                claimed_targets.insert(destination);
                 self.plans.push(Plan {
                     troll_id: troll.id,
                     to: destination,
@@ -190,7 +204,6 @@ impl Player {
                 final_claimed.insert(to);
             } else {
                 // Target blocked — try to find any free adjacent tile
-                // to make progress rather than sitting still
                 let alt = CARDINALS
                     .iter()
                     .map(|&c| from + c)
@@ -200,7 +213,6 @@ impl Player {
                             && !final_claimed.contains(&p)
                     })
                     .min_by_key(|p| {
-                        // Prefer tiles closer to our plan destination
                         let plan_dest = self
                             .plans
                             .iter()
@@ -213,10 +225,9 @@ impl Player {
                 if let Some(alt_pos) = alt {
                     self.actions.push(Action::Move(id, alt_pos));
                     final_claimed.insert(alt_pos);
+                } else {
+                    eprintln!("Troll {id} is completely stuck.");
                 }
-
-                eprintln!("Troll {id} is completely stuck.");
-                // else: completely stuck, skip this turn
             }
         }
 
@@ -237,7 +248,7 @@ impl Player {
         claimed_targets: &HashSet<Position>,
     ) -> Option<(Action, Position)> {
         //
-        // --- 1. Cargo full > droppping
+        // --- 1. Cargo full > dropping
         //
         if troll.has_cargo() && troll.free_capacity() == 0 {
             return self.find_deliver_target(game, troll, troll_dist_map, shack);
@@ -264,7 +275,10 @@ impl Player {
             };
 
             // Distance from tree back to shack (for round-trip estimate)
-            let shack_return = shack_dist_map.get(&tree.position).map(|(d, _)| *d).unwrap();
+            let shack_return = shack_dist_map
+                .get(&tree.position)
+                .map(|(d, _)| *d)
+                .unwrap_or(9999);
 
             // Round trip not worth it
             let round_trip = tile_dist + shack_return;
@@ -307,7 +321,6 @@ impl Player {
         if troll.chop_power > 0 && self.priority.iron > 0 {
             for &mine in game.mines.iter() {
                 for &c in CARDINALS.iter() {
-                    // Find a walkable tile adjacent to this iron
                     let adj = mine + c;
                     if !game.grid.contains(adj) || !b".ABPL".contains(&game.grid[adj]) {
                         continue;
@@ -317,16 +330,16 @@ impl Player {
                         continue;
                     }
 
-                    // Distance to tree
                     let tile_dist = match troll_dist_map.get(&adj) {
                         Some((d, _)) => *d,
                         None => continue,
                     };
 
-                    // Distance from tree back to shack (for round-trip estimate)
-                    let shack_return = shack_dist_map.get(&adj).map(|(d, _)| *d).unwrap();
+                    let shack_return = shack_dist_map
+                        .get(&adj)
+                        .map(|(d, _)| *d)
+                        .unwrap_or(9999);
 
-                    // Round trip not worth it
                     let round_trip = tile_dist + shack_return;
                     if round_trip >= game.turns_remaining() {
                         continue;
@@ -353,18 +366,18 @@ impl Player {
                     None => continue,
                 };
 
-                // Turns to chop the tree down
                 let chop_turns = (tree.health + troll.chop_power - 1) / troll.chop_power;
 
-                // Only chop trees of decent size; do not care at the end.
-                let shack_return = shack_dist_map.get(&tree.position).map(|(d, _)| *d).unwrap();
+                let shack_return = shack_dist_map
+                    .get(&tree.position)
+                    .map(|(d, _)| *d)
+                    .unwrap_or(9999);
                 let round_trip = tile_dist + chop_turns + shack_return;
 
                 if tree.size < 2 && round_trip >= game.turns_remaining() {
                     continue;
                 }
 
-                // Wood yield: tree.size pieces
                 let wood_yield = tree.size;
                 let carriable = wood_yield.min(troll.free_capacity());
 
@@ -392,7 +405,6 @@ impl Player {
         troll_dist_map: &HashMap<Position, (i32, Position)>,
         shack: &Position,
     ) -> Option<(Action, Position)> {
-        // Find the closest walkable tile adjacent to the shack
         let best_adj = CARDINALS
             .iter()
             .map(|&c| *shack + c)
@@ -404,11 +416,10 @@ impl Player {
     }
 
     // ========================================================================
-    // Traininig
+    // Training
     // ========================================================================
 
     fn training(&self, game: &Game) -> Option<Action> {
-        // --- Don't spawn new trolls, chopping wood is needed now
         if game.turns_remaining() < 120 {
             return None;
         }
@@ -426,11 +437,9 @@ impl Player {
             for cc in 1..=5 {
                 for hp in 1..=5 {
                     for cp in 1..=5 {
-                        // At least on attribute must be better in order to train a new troll
                         let dominated =
                             cc <= best_cc && hp <= best_hp && cp <= best_cp && ms <= best_ms;
 
-                        // First turn can be `any` troll
                         if dominated && game.turn > 1 {
                             continue;
                         }
@@ -441,7 +450,6 @@ impl Player {
 
                         let score = cc + hp + cp + ms;
 
-                        // Train best troll that is possible
                         if best.is_none() || score > best.as_ref().unwrap().1 {
                             best = Some((Action::Train(ms, cc, hp, cp), score));
                         }
