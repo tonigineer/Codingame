@@ -1,6 +1,5 @@
 use crate::entities::{TreeType, Tree, Troll};
 use crate::game::{Action, Game, Side};
-use crate::grid;
 use crate::position::{CARDINALS, Position};
 use crate::prediction::{Predictable, Snapshot};
 
@@ -10,7 +9,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 // Player
 // ========================================================================
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct Plan {
     troll_id: i32,
     to: Position,
@@ -43,6 +42,8 @@ impl Player {
     pub fn think(&mut self, game: &Game) {
         self.actions.clear();
 
+        eprintln!("{:?}", self.plans);
+
         self.priority.update(game);
 
         let shack = game.shack(self.side);
@@ -58,8 +59,7 @@ impl Player {
         }
 
         // --- Check if plans are still possible (tree may have been chopped,
-        //     or fruit harvested by someone else). Filter on latest_plans,
-        //     NOT self.plans which was already moved out.
+        //     or fruit harvested by someone else).
         let latest_plans: Vec<Plan> = self
             .plans
             .drain(..)
@@ -93,7 +93,6 @@ impl Player {
 
             let grid_char = &game.grid[troll.position];
 
-            // Iron: can always mine if standing adjacent
             if b"+".contains(grid_char) && troll.chop_power > 0 {
                 self.actions.push(Action::Mine(troll.id));
                 busy.insert(troll.id);
@@ -101,7 +100,6 @@ impl Player {
                 continue;
             }
 
-            // Fruit: only harvest if tree actually has fruit
             if b"ABPL".contains(grid_char) {
                 let has_fruit = game
                     .tree_at(troll.position)
@@ -115,13 +113,20 @@ impl Player {
             }
         }
 
-        let shack_dist_map = bfs_distance_map(shack, game, &claimed);
-        let mut move_intents: Vec<(i32, Position, Position)> = Vec::new(); // (troll_id, from, to)
+        // BFS for path planning uses NO blocked tiles — claimed trolls are
+        // stationary only this turn and will move next turn. Blocking them
+        // in the BFS causes unnecessary detours. Collisions are resolved
+        // separately below.
+        let no_blocked = HashSet::new();
+        let shack_dist_map = bfs_distance_map(shack, game, &no_blocked);
+
+        // (troll_id, from, path_tiles_up_to_speed, speed)
+        let mut move_intents: Vec<(i32, Position, Vec<Position>, i32)> = Vec::new();
 
         // --- Movement or new plans
         let currently_busy = busy.clone();
         for troll in trolls.iter().filter(|t| !currently_busy.contains(&t.id)) {
-            let troll_dist_map = bfs_distance_map(troll.position, game, &claimed);
+            let troll_dist_map = bfs_distance_map(troll.position, game, &no_blocked);
 
             // --- Continue with existing plan
             if let Some(plan) = latest_plans
@@ -130,13 +135,17 @@ impl Player {
             {
                 let destination = plan.to;
 
-                // Try to path toward destination; only commit if we can actually move
                 let mut moved = false;
                 if let Some(path) = reconstruct_path(troll.position, destination, &troll_dist_map) {
                     if !path.is_empty() {
                         let steps = path.len().min(troll.movement_speed as usize);
-                        let new_position = path[steps - 1];
-                        move_intents.push((troll.id, troll.position, new_position));
+                        let path_slice: Vec<Position> = path[..steps].to_vec();
+                        move_intents.push((
+                            troll.id,
+                            troll.position,
+                            path_slice,
+                            troll.movement_speed,
+                        ));
                         moved = true;
                     }
                 }
@@ -147,8 +156,6 @@ impl Player {
                     busy.insert(troll.id);
                     continue;
                 }
-                // Path blocked or empty — fall through to find_best_target
-                // which can pick an alternate drop tile or new target
             }
 
             // --- New plan: find best target based on priority ---
@@ -163,8 +170,13 @@ impl Player {
                 if let Some(path) = reconstruct_path(troll.position, destination, &troll_dist_map) {
                     if !path.is_empty() {
                         let steps = path.len().min(troll.movement_speed as usize);
-                        let new_position = path[steps - 1];
-                        move_intents.push((troll.id, troll.position, new_position));
+                        let path_slice: Vec<Position> = path[..steps].to_vec();
+                        move_intents.push((
+                            troll.id,
+                            troll.position,
+                            path_slice,
+                            troll.movement_speed,
+                        ));
                     }
                 }
 
@@ -179,13 +191,17 @@ impl Player {
         }
 
         // --- Resolve collisions ---
+        // Now we check actual occupied tiles: claimed (trolls doing actions
+        // this turn) plus tiles committed by earlier move resolutions.
         let mut final_claimed: HashSet<Position> = claimed.clone();
 
         // Detect swaps (A→B and B→A) — allow both
         let mut swap_ids: HashSet<i32> = HashSet::new();
         for i in &move_intents {
             for j in &move_intents {
-                if i.0 != j.0 && i.2 == j.1 && j.2 == i.1 {
+                let i_to = i.2.last().copied().unwrap_or(i.1);
+                let j_to = j.2.last().copied().unwrap_or(j.1);
+                if i.0 != j.0 && i_to == j.1 && j_to == i.1 {
                     swap_ids.insert(i.0);
                     swap_ids.insert(j.0);
                 }
@@ -193,46 +209,69 @@ impl Player {
         }
 
         // Process swaps first
-        for &(id, _from, to) in &move_intents {
-            if swap_ids.contains(&id) {
-                self.actions.push(Action::Move(id, to));
-                final_claimed.insert(to);
+        for (id, _from, path, _speed) in &move_intents {
+            if swap_ids.contains(id) {
+                if let Some(&to) = path.last() {
+                    self.actions.push(Action::Move(*id, to));
+                    final_claimed.insert(to);
+                }
             }
         }
 
-        // Process non-swap moves
-        for &(id, from, to) in &move_intents {
-            if swap_ids.contains(&id) {
+        // Process non-swap moves: check ALL tiles in the path
+        for (id, from, path, speed) in &move_intents {
+            if swap_ids.contains(id) {
                 continue;
             }
-            if !final_claimed.contains(&to) {
-                self.actions.push(Action::Move(id, to));
+
+            let all_clear = path.iter().all(|p| !final_claimed.contains(p));
+
+            if all_clear && !path.is_empty() {
+                let to = *path.last().unwrap();
+                self.actions.push(Action::Move(*id, to));
                 final_claimed.insert(to);
             } else {
-                // Target blocked — try to find any free adjacent tile
-                let alt = CARDINALS
+                // Some tile in the path is blocked — re-BFS avoiding
+                // final_claimed (these ARE actually occupied this turn)
+                let plan_dest = self
+                    .plans
                     .iter()
-                    .map(|&c| from + c)
-                    .filter(|&p| {
-                        game.grid.contains(p)
-                            && b".ABPL".contains(&game.grid[p])
-                            && !final_claimed.contains(&p)
-                    })
-                    .min_by_key(|p| {
-                        let plan_dest = self
-                            .plans
-                            .iter()
-                            .find(|pl| pl.troll_id == id)
-                            .map(|pl| pl.to)
-                            .unwrap_or(from);
-                        p.manhattan(&plan_dest)
-                    });
+                    .find(|pl| pl.troll_id == *id)
+                    .map(|pl| pl.to)
+                    .unwrap_or(*from);
 
-                if let Some(alt_pos) = alt {
-                    self.actions.push(Action::Move(id, alt_pos));
-                    final_claimed.insert(alt_pos);
-                } else {
-                    eprintln!("Troll {id} is completely stuck.");
+                let alt_dist_map = bfs_distance_map(*from, game, &final_claimed);
+
+                let mut found = false;
+                if let Some(alt_path) = reconstruct_path(*from, plan_dest, &alt_dist_map) {
+                    if !alt_path.is_empty() {
+                        let steps = alt_path.len().min(*speed as usize);
+                        if alt_path[..steps].iter().all(|p| !final_claimed.contains(p)) {
+                            let alt_to = alt_path[steps - 1];
+                            self.actions.push(Action::Move(*id, alt_to));
+                            final_claimed.insert(alt_to);
+                            found = true;
+                        }
+                    }
+                }
+
+                if !found {
+                    let mut candidates: Vec<(Position, i32)> = alt_dist_map
+                        .iter()
+                        .filter(|(p, (d, _))| {
+                            *d >= 1 && *d <= *speed as i32 && !final_claimed.contains(p)
+                        })
+                        .map(|(&p, &(d, _))| (p, p.manhattan(&plan_dest) as i32))
+                        .collect();
+
+                    candidates.sort_by_key(|(_, dist_to_goal)| *dist_to_goal);
+
+                    if let Some(&(alt_pos, _)) = candidates.first() {
+                        self.actions.push(Action::Move(*id, alt_pos));
+                        final_claimed.insert(alt_pos);
+                    } else {
+                        eprintln!("Troll {id} is completely stuck.");
+                    }
                 }
             }
         }
@@ -268,31 +307,26 @@ impl Player {
                 continue;
             }
 
-            // Skip fruits that are not needed
             let weight = self.priority.weight_for_tree(tree);
             if weight == 0 {
                 continue;
             }
 
-            // Distance to tree
             let tile_dist = match troll_dist_map.get(&tree.position) {
                 Some((d, _)) => *d,
                 None => continue,
             };
 
-            // Distance from tree back to shack (for round-trip estimate)
             let shack_return = shack_dist_map
                 .get(&tree.position)
                 .map(|(d, _)| *d)
                 .unwrap_or(9999);
 
-            // Round trip not worth it
             let round_trip = tile_dist + shack_return;
             if round_trip >= game.turns_remaining() {
                 continue;
             }
 
-            // Fruits at arrival
             #[rustfmt::skip]
             let fruit_at_arrival = |tree: &Tree, tile_dist: i32| -> i32 {
                 let mut fruits = tree.fruits;
@@ -314,9 +348,8 @@ impl Player {
                 continue;
             }
 
-            // Favour close trees with high-priority fruit
             let harvestable = fruits.min(troll.free_capacity());
-            let score = harvestable + weight - tile_dist / 2;
+            let score = harvestable + weight - tile_dist;
 
             if best.is_none() || score > best.unwrap().2 {
                 best = Some((Action::Harvest(troll.id), tree.position, score));
@@ -348,7 +381,7 @@ impl Player {
                         continue;
                     }
 
-                    let score = troll.free_capacity() + self.priority.iron - tile_dist / 2;
+                    let score = troll.free_capacity() + self.priority.iron - tile_dist;
 
                     if best.is_none() || score > best.unwrap().2 {
                         best = Some((Action::Mine(troll.id), adj, score));
@@ -384,7 +417,7 @@ impl Player {
                 let wood_yield = tree.size;
                 let carriable = wood_yield.min(troll.free_capacity());
 
-                let score = carriable + self.priority.wood - tile_dist / 2 - chop_turns;
+                let score = carriable + self.priority.wood - tile_dist - chop_turns;
 
                 if best.is_none() || score > best.unwrap().2 {
                     best = Some((Action::Chop(troll.id), tree.position, score));
@@ -392,7 +425,6 @@ impl Player {
             }
         }
 
-        // If carrying cargo and found nothing better, deliver
         if best.is_none() && troll.has_cargo() {
             return self.find_deliver_target(game, troll, troll_dist_map, shack);
         }
@@ -570,7 +602,7 @@ impl Priority {
         self.lemon = (min_fruit_stock - inv.get(&TreeType::Lemon)).max(0);
         self.plum = (min_fruit_stock - inv.get(&TreeType::Plum)).max(0);
         self.iron = (min_iron_stock - inv.iron).max(0);
-        self.wood = 180 / game.turns_remaining().max(1);
+        self.wood = (180 / game.turns_remaining().max(1)).min(1);
     }
 
     fn weight_for_tree(&self, tree: &Tree) -> i32 {
