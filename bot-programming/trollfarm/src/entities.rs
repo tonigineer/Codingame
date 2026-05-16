@@ -336,6 +336,7 @@ impl Troll {
     }
 
     #[must_use]
+    // Remaining carrying capacity.
     pub fn free_capacity(&self) -> i32 {
         self.carry_capacity - self.total_carried()
     }

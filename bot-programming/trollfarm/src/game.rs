@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::io::{self, BufRead};
 
+use itertools::Itertools;
+
 use crate::entities::{Inventory, Resource, Tree, TreeType, Troll};
 use crate::grid::Grid;
 use crate::position::{Position, CARDINALS};
@@ -38,7 +40,7 @@ impl Side {
 // Action
 // ------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum Action {
     Move(i32, Position),
     Harvest(i32),
@@ -95,6 +97,7 @@ pub struct Game {
     pub height: usize,
     pub grid: Grid<u8>,
     pub shacks: [Position; 2],
+    pub mines: Vec<Position>,
     pub inventories: [Inventory; 2],
     pub trees: Vec<Tree>,
     pub trolls: Vec<Troll>,
@@ -126,12 +129,25 @@ impl Game {
         let my_shack = grid.search(b'0').unwrap();
         let opp_shack = grid.search(b'1').unwrap();
 
+        let mines = (0..height)
+            .cartesian_product(0..width)
+            .filter_map(|(y, x)| {
+                let pos = Position::new(x as i32, y as i32);
+                if grid.contains(pos) && grid[pos] == b'+' {
+                    Some(pos)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         Self {
             turn: 0,
             width,
             height,
             grid,
             shacks: [my_shack, opp_shack],
+            mines,
             inventories: [Inventory::new(), Inventory::new()],
             trees: Vec::new(),
             trolls: Vec::new(),
@@ -194,6 +210,10 @@ impl Game {
             Side::Me => self.shacks[0],
             Side::Opp => self.shacks[1],
         }
+    }
+
+    pub fn turns_remaining(&self) -> i32 {
+        Game::MAX_TURNS - self.turn as i32
     }
 
     #[must_use]
@@ -315,12 +335,20 @@ impl Game {
                     }
                 }
                 // Mine: adjacent to iron, has chop_power and free capacity
-                if self.is_adjacent_to_iron(troll) && troll.chop_power > 0 && troll.free_capacity() > 0 {
+                if self.is_adjacent_to_iron(troll)
+                    && troll.chop_power > 0
+                    && troll.free_capacity() > 0
+                {
                     actions.push(Action::Mine(troll.id));
                 }
                 // Plant
                 if self.tree_at(troll.position).is_none() {
-                    for typ in &[TreeType::Plum, TreeType::Lemon, TreeType::Apple, TreeType::Banana] {
+                    for typ in &[
+                        TreeType::Plum,
+                        TreeType::Lemon,
+                        TreeType::Apple,
+                        TreeType::Banana,
+                    ] {
                         if troll.carries(typ) > 0 {
                             actions.push(Action::Plant(troll.id, *typ));
                         }
@@ -329,7 +357,12 @@ impl Game {
                 // Pick
                 if self.is_adjacent_to_shack(troll) && troll.free_capacity() > 0 {
                     let inv = self.inventory(side);
-                    for typ in &[TreeType::Plum, TreeType::Lemon, TreeType::Apple, TreeType::Banana] {
+                    for typ in &[
+                        TreeType::Plum,
+                        TreeType::Lemon,
+                        TreeType::Apple,
+                        TreeType::Banana,
+                    ] {
                         if inv.get(typ) > 0 {
                             actions.push(Action::Pick(troll.id, *typ));
                         }
@@ -447,7 +480,8 @@ impl Game {
         let mut final_positions: HashMap<(Side, Position), i32> = HashMap::new();
 
         // First, place all non-moving trolls
-        let moving_ids: std::collections::HashSet<i32> = moves.iter().map(|(id, _, _)| *id).collect();
+        let moving_ids: std::collections::HashSet<i32> =
+            moves.iter().map(|(id, _, _)| *id).collect();
         for troll in &self.trolls {
             if !moving_ids.contains(&troll.id) {
                 final_positions.insert((troll.side, troll.position), troll.id);
@@ -738,7 +772,8 @@ impl Game {
                     continue;
                 }
 
-                self.inventory_mut(side).remove(&Resource::from_tree(typ, 1));
+                self.inventory_mut(side)
+                    .remove(&Resource::from_tree(typ, 1));
                 if let Some(troll) = self.troll_mut(*id) {
                     troll.add_carried(typ, 1);
                 }

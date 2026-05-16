@@ -26,6 +26,7 @@ def inline(file_path: Path) -> str:
 
 if __name__ == "__main__":
     flat = inline(project_dir / "main.rs")
+    flat = "\n".join([line.replace("    ", " ") for line in flat.splitlines() if not line.strip().startswith("/")])
     flat += "\n"
     out = project_dir / "main.rs.flattened"
     out.write_text(flat)
