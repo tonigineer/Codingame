@@ -1,4 +1,4 @@
-use crate::entities::Troll;
+use crate::entities::{TreeType, Troll};
 use crate::game::{Action, Game, Side};
 use crate::position::{Position, CARDINALS};
 use crate::prediction::{Predictable, Snapshot};
@@ -172,7 +172,7 @@ impl ShackInfo {
 /// Algorithm:
 ///   While steps remain in the horizon:
 ///     1. BFS from current pos once → get distances to all trees and shack.
-///     2. Score each tree by fruit‑per‑step for the full round trip.
+///     2. Score each tree by (fruit × weight) / steps for the full round trip.
 ///     3. Walk → harvest → walk to shack → drop. Repeat.
 fn plan_troll(
     troll: &TrollSim,
@@ -181,6 +181,7 @@ fn plan_troll(
     game: &Game,
     horizon: i32,
     used_trees: &mut HashSet<Position>,
+    tree_weights: &HashMap<TreeType, i32>,
 ) -> TrollPlan {
     let mut plan = TrollPlan {
         troll_id,
@@ -193,12 +194,12 @@ fn plan_troll(
     let capacity = troll.capacity;
     let mut steps_left = horizon;
 
-    // Snapshot of fruit availability (decremented as we harvest in simulation)
-    let mut fruit_remaining: HashMap<Position, i32> = game
+    // Snapshot of fruit availability with tree type (decremented as we harvest)
+    let mut fruit_remaining: HashMap<Position, (i32, TreeType)> = game
         .trees
         .iter()
         .filter(|t| t.fruits > 0)
-        .map(|t| (t.position, t.fruits))
+        .map(|t| (t.position, (t.fruits, t.typ)))
         .collect();
 
     // Safety: cap iterations to prevent infinite loops
@@ -236,7 +237,7 @@ fn plan_troll(
             continue;
         }
 
-        // --- Find best tree ---
+        // --- Find best tree (weighted by type) ---
         let free_space = capacity - carried;
         if free_space <= 0 {
             continue;
@@ -244,7 +245,7 @@ fn plan_troll(
 
         let mut best: Option<(Position, i32)> = None; // (tree_pos, score)
 
-        for (&tree_pos, &fruits) in &fruit_remaining {
+        for (&tree_pos, &(fruits, tree_type)) in &fruit_remaining {
             if fruits <= 0 || used_trees.contains(&tree_pos) {
                 continue;
             }
@@ -265,7 +266,9 @@ fn plan_troll(
                 continue;
             }
 
-            let score = harvestable * 1000 / total_steps.max(1);
+            let weight = tree_weights.get(&tree_type).copied().unwrap_or(100);
+            let score = harvestable * weight / total_steps.max(1);
+
             if best.is_none() || score > best.unwrap().1 {
                 best = Some((tree_pos, score));
             }
@@ -283,7 +286,7 @@ fn plan_troll(
             }
 
             // Harvest
-            let avail = fruit_remaining.get(&tree_pos).copied().unwrap_or(0);
+            let avail = fruit_remaining.get(&tree_pos).map(|(f, _)| *f).unwrap_or(0);
             let harvestable = avail.min(capacity - carried);
             let mut harvested = 0;
             while harvested < harvestable && steps_left > 0 {
@@ -294,7 +297,7 @@ fn plan_troll(
                 steps_left -= 1;
             }
 
-            if let Some(fr) = fruit_remaining.get_mut(&tree_pos) {
+            if let Some((fr, _)) = fruit_remaining.get_mut(&tree_pos) {
                 *fr -= harvested;
                 if *fr <= 0 {
                     used_trees.insert(tree_pos);
@@ -407,6 +410,15 @@ impl Player {
         // Pre‑compute shack adjacency + distance map (one BFS for the whole turn)
         let shack_info = ShackInfo::compute(shack, game);
 
+        // Compute tree‑type weights based on inventory needs and game phase
+        let tree_weights = self.compute_tree_weights(game);
+        eprintln!("[WEIGHTS] A={} P={} L={} B={}",
+            tree_weights.get(&TreeType::Apple).unwrap_or(&0),
+            tree_weights.get(&TreeType::Plum).unwrap_or(&0),
+            tree_weights.get(&TreeType::Lemon).unwrap_or(&0),
+            tree_weights.get(&TreeType::Banana).unwrap_or(&0),
+        );
+
         // Build troll sims
         let troll_sims: Vec<(i32, TrollSim)> = trolls
             .iter()
@@ -440,7 +452,7 @@ impl Player {
         let mut plans: HashMap<i32, TrollPlan> = HashMap::new();
 
         for (troll_id, sim) in &ordered {
-            let plan = plan_troll(sim, *troll_id, &shack_info, game, horizon, &mut used_trees);
+            let plan = plan_troll(sim, *troll_id, &shack_info, game, horizon, &mut used_trees, &tree_weights);
             eprintln!(
                 "[PLAN] troll {} : {} steps, delivers {} fruit",
                 troll_id,
@@ -481,30 +493,171 @@ impl Player {
     }
 
     // ====================================================================
-    // TRAINING — cc2 first, then cc3
+    // TREE‑TYPE WEIGHTS — prioritise training fruit early, bananas late
+    // ====================================================================
+
+    fn compute_tree_weights(&self, game: &Game) -> HashMap<TreeType, i32> {
+        let inv = game.inventory(self.side);
+        let turn = game.turn as i32;
+
+        // Minimum stock we want of each training fruit (plum, lemon, apple)
+        // to ensure we can keep training trolls.
+        let min_stock = 12;
+
+        let plum_need = (min_stock - inv.get(&TreeType::Plum)).max(0);
+        let lemon_need = (min_stock - inv.get(&TreeType::Lemon)).max(0);
+        let apple_need = (min_stock - inv.get(&TreeType::Apple)).max(0);
+
+        // Base weight: 100 = neutral. Higher = more desirable.
+        // Before turn 150: boost training fruits that are low in stock.
+        // After turn 150: shift hard toward bananas (pure points).
+        let banana_phase = turn >= 150;
+
+        let mut weights = HashMap::new();
+
+        if banana_phase {
+            // Bananas are king — training fruits only if critically low
+            weights.insert(TreeType::Banana, 300);
+            weights.insert(TreeType::Plum,   if plum_need > 0  { 200 } else { 50 });
+            weights.insert(TreeType::Lemon,  if lemon_need > 0 { 200 } else { 50 });
+            weights.insert(TreeType::Apple,  if apple_need > 0  { 200 } else { 50 });
+        } else {
+            // Early/mid game: keep training fruit stocked, bananas are a nice bonus
+            weights.insert(TreeType::Banana, 120);
+            weights.insert(TreeType::Plum,   100 + plum_need * 200);
+            weights.insert(TreeType::Lemon,  100 + lemon_need * 200);
+            weights.insert(TreeType::Apple,  100 + apple_need * 200);
+        }
+
+        weights
+    }
+
+    // ====================================================================
+    // TRAINING — maximize stats, new troll must beat all existing ones
     // ====================================================================
 
     fn pick_training(&self, game: &Game) -> Option<Action> {
-        let remaining = self.remaining(game);
-        if remaining < 30 {
+        let turn = game.turn as i32;
+        if turn >= 180 {
             return None;
         }
 
-        // Priority order: train a troll with cc=2 first, then cc=3
-        // Config: (ms, cc, hp, cp)
-        let configs = [
-            (1, 2, 1, 0), // cc=2 is our first priority
-            (1, 3, 1, 0), // cc=3 is our second priority
-        ];
+        let remaining = self.remaining(game);
+        // Need enough turns for a new troll to be useful (reach a tree and return)
+        if remaining < 20 {
+            return None;
+        }
 
-        for &(ms, cc, hp, cp) in &configs {
-            if game.can_train(self.side, ms, cc, hp, cp) {
-                eprintln!("[TRAIN] training troll with cc={cc}");
-                return Some(Action::Train(ms, cc, hp, cp));
+        let trolls = game.trolls_for(self.side);
+
+        // Current best stats among all trolls
+        let best_cc = trolls.iter().map(|t| t.carry_capacity).max().unwrap();
+        let best_hp = trolls.iter().map(|t| t.harvest_power).max().unwrap();
+        let best_cp = trolls.iter().map(|t| t.chop_power).max().unwrap();
+        let best_ms = trolls.iter().map(|t| t.movement_speed).max().unwrap();
+
+        // Effective inventory: current stock + fruit on nearby trees (within ~8 BFS steps)
+        // that are likely to be collected soon
+        let inv = game.inventory(self.side);
+        let shack = game.shack(self.side);
+        let shack_info = ShackInfo::compute(shack, game);
+        let nearby = self.estimate_nearby_fruit(game, &shack_info, 8);
+
+        let eff_plum  = inv.get(&TreeType::Plum)  + nearby.0;
+        let eff_lemon = inv.get(&TreeType::Lemon) + nearby.1;
+        let eff_apple = inv.get(&TreeType::Apple) + nearby.2;
+
+        // Generate candidate configs where the new troll is strictly better
+        // than all existing trolls in at least one stat and no worse in others.
+        // Priority order: cc > hp > cp, ms stays at 1 (speed is less impactful).
+        //
+        // Strategy: start from the current best stats and try to push one higher,
+        // then check affordability with effective inventory.
+
+        let mut best_candidate: Option<(Action, i32)> = None;
+
+        // Explore: ms in [1, best_ms+2], cc in [1, best_cc+2],
+        //          hp in [1, best_hp+2], cp in [1, best_cp+2]
+        // But new troll must be strictly better, so at least one stat > best.
+        let ms_range = 1..=(best_ms + 1).min(4);
+        let cc_range = 1..=(best_cc + 2).min(4);
+        let hp_range = 1..=(best_hp + 2).min(4);
+        let cp_range = 1..=(best_cp + 2).min(4);
+
+        for ms in ms_range {
+            for cc in cc_range.clone() {
+                for hp in hp_range.clone() {
+                    for cp in cp_range.clone() {
+                        // Must be strictly better: at least one stat exceeds
+                        // the best among all existing trolls
+                        let dominated = cc <= best_cc && hp <= best_hp
+                            && cp <= best_cp && ms <= best_ms;
+                        if dominated {
+                            continue;
+                        }
+
+                        if !game.can_train(self.side, ms, cc, hp, cp) {
+                            continue;
+                        }
+
+                        // Check if effective resources could cover it
+                        // (can_train already checks actual inventory, but we
+                        //  want to also rank by how comfortably we can afford it)
+                        let cost = game.train_cost(self.side, ms, cc, hp, cp);
+                        let surplus_plum  = eff_plum  - cost.plum;
+                        let surplus_lemon = eff_lemon - cost.lemon;
+                        let surplus_apple = eff_apple - cost.apple;
+
+                        // Score: prioritize cc heavily, then hp, then cp
+                        // Penalize configs that drain our effective reserves
+                        let stat_score = cc * 100 + hp * 40 + cp * 20 + ms * 10;
+                        let surplus_score = (surplus_plum + surplus_lemon + surplus_apple).min(20) * 5;
+                        let score = stat_score + surplus_score;
+
+                        if best_candidate.is_none() || score > best_candidate.as_ref().unwrap().1 {
+                            best_candidate = Some((Action::Train(ms, cc, hp, cp), score));
+                        }
+                    }
+                }
             }
         }
 
-        None
+        if let Some((action, _)) = &best_candidate {
+            match action {
+                Action::Train(ms, cc, hp, cp) => {
+                    eprintln!("[TRAIN] ms={ms} cc={cc} hp={hp} cp={cp} (best existing: cc={best_cc} hp={best_hp} cp={best_cp})");
+                }
+                _ => {}
+            }
+        }
+
+        best_candidate.map(|(a, _)| a)
+    }
+
+    /// Estimate fruit on trees within `max_dist` BFS steps of the shack
+    /// that are likely to be collected soon. Returns (plum, lemon, apple).
+    fn estimate_nearby_fruit(&self, game: &Game, shack_info: &ShackInfo, max_dist: i32) -> (i32, i32, i32) {
+        let mut plum = 0;
+        let mut lemon = 0;
+        let mut apple = 0;
+
+        for tree in &game.trees {
+            if tree.fruits <= 0 {
+                continue;
+            }
+            let dist = shack_info.dist_from(tree.position).unwrap_or(9999);
+            if dist > max_dist {
+                continue;
+            }
+            match tree.typ {
+                TreeType::Plum   => plum  += tree.fruits,
+                TreeType::Lemon  => lemon += tree.fruits,
+                TreeType::Apple  => apple += tree.fruits,
+                TreeType::Banana => {} // bananas aren't used for training
+            }
+        }
+
+        (plum, lemon, apple)
     }
 
     // ====================================================================

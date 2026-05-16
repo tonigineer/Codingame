@@ -147,7 +147,7 @@ impl Default for Inventory {
 // Tree
 // ------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TreeType {
     Plum,
     Lemon,
