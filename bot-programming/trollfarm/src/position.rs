@@ -28,7 +28,7 @@ impl Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let p = Position::new(3, 4);
     /// assert_eq!(p.x, 3);
@@ -49,7 +49,7 @@ impl Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let a = Position::new(1, 2);
     /// let b = Position::new(4, 6);
@@ -72,7 +72,7 @@ impl Hash for Position {
     ///
     /// ```
     /// use std::collections::HashSet;
-    /// use aoc::common::position::Position;
+    /// use trollfarm::position::*;
     ///
     /// let mut set = HashSet::new();
     /// set.insert(Position::new(1, 2));
@@ -93,7 +93,7 @@ impl Add for Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let a = Position::new(1, 2);
     /// let b = Position::new(3, 4);
@@ -111,7 +111,7 @@ impl AddAssign for Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let mut p = Position::new(1, 2);
     /// p += Position::new(3, 4);
@@ -132,7 +132,7 @@ impl Sub for Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let a = Position::new(5, 7);
     /// let b = Position::new(2, 3);
@@ -150,7 +150,7 @@ impl SubAssign for Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let mut p = Position::new(5, 7);
     /// p -= Position::new(2, 3);
@@ -171,7 +171,7 @@ impl Mul<i32> for Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let p = Position::new(2, 3);
     /// assert_eq!(p * 4, Position::new(8, 12));
@@ -190,7 +190,7 @@ impl Div<i32> for Position {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::position::*;
+    /// use trollfarm::position::*;
     ///
     /// let p = Position::new(8, 12);
     /// assert_eq!(p / 4, Position::new(2, 3));

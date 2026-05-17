@@ -2,15 +2,18 @@ use crate::entities::{TreeType, Tree, Troll};
 use crate::game::{Action, Game, Side};
 use crate::position::{CARDINALS, Position};
 use crate::prediction::{Predictable, Snapshot};
+use crate::utils::*;
+use crate::player_training::Training;
+use crate::players::{Test};
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 // ========================================================================
 // Player
 // ========================================================================
 
 #[derive(Debug, Copy, Clone)]
-struct Plan {
+pub struct Plan {
     troll_id: i32,
     to: Position,
     action: Action,
@@ -24,6 +27,8 @@ pub struct Player {
     priority: Priority,
     plans: Vec<Plan>,
 }
+
+impl Training for Player {}
 
 impl Player {
     #[must_use]
@@ -42,6 +47,8 @@ impl Player {
     pub fn think(&mut self, game: &Game) {
         self.actions.clear();
 
+        Test::testing();
+
         eprintln!("{:?}", self.plans);
 
         self.priority.update(game);
@@ -54,12 +61,19 @@ impl Player {
         let mut claimed_targets: HashSet<Position> = HashSet::new();
 
         // --- Training new trolls
-        if let Some(action) = self.training(game) {
+        if let Some(action) = Player::training(&game, self.side) {
             self.actions.push(action);
         }
 
-        // --- Check if plans are still possible (tree may have been chopped,
-        //     or fruit harvested by someone else).
+        // --- Planting new trees
+        // if let Some(action) = Player::planting(&game, self.side) {
+        //     self.actions.push(action);
+        // }
+
+        // --- Plant trees
+        // self.planting(game, &mut busy, &mut claimed, &mut claimed_targets);
+
+        // --- Check if plans are still possible
         let latest_plans: Vec<Plan> = self
             .plans
             .drain(..)
@@ -80,6 +94,7 @@ impl Player {
                     self.actions.push(plan.action);
                     busy.insert(troll.id);
                     claimed.insert(troll.position);
+                    claimed_targets.insert(troll.position);
                 }
             }
         }
@@ -97,6 +112,7 @@ impl Player {
                 self.actions.push(Action::Mine(troll.id));
                 busy.insert(troll.id);
                 claimed.insert(troll.position);
+                claimed_targets.insert(troll.position);
                 continue;
             }
 
@@ -109,16 +125,21 @@ impl Player {
                     self.actions.push(Action::Harvest(troll.id));
                     busy.insert(troll.id);
                     claimed.insert(troll.position);
+                    claimed_targets.insert(troll.position);
                 }
             }
         }
 
-        // BFS for path planning uses NO blocked tiles — claimed trolls are
-        // stationary only this turn and will move next turn. Blocking them
-        // in the BFS causes unnecessary detours. Collisions are resolved
-        // separately below.
+        // Also mark targets of plans that are still in-progress (trolls
+        // en route from last turn that haven't arrived yet)
+        for plan in &latest_plans {
+            if !busy.contains(&plan.troll_id) {
+                claimed_targets.insert(plan.to);
+            }
+        }
+
         let no_blocked = HashSet::new();
-        let shack_dist_map = bfs_distance_map(shack, game, &no_blocked);
+        let shack_dist_map = bfs_distance_map(shack, &game.grid, &no_blocked);
 
         // (troll_id, from, path_tiles_up_to_speed, speed)
         let mut move_intents: Vec<(i32, Position, Vec<Position>, i32)> = Vec::new();
@@ -126,7 +147,7 @@ impl Player {
         // --- Movement or new plans
         let currently_busy = busy.clone();
         for troll in trolls.iter().filter(|t| !currently_busy.contains(&t.id)) {
-            let troll_dist_map = bfs_distance_map(troll.position, game, &no_blocked);
+            let troll_dist_map = bfs_distance_map(troll.position, &game.grid, &no_blocked);
 
             // --- Continue with existing plan
             if let Some(plan) = latest_plans
@@ -151,11 +172,15 @@ impl Player {
                 }
 
                 if moved {
-                    claimed_targets.insert(destination);
+                    // claimed_targets already has this destination from the
+                    // pre-loop insertion above
                     self.plans.push(*plan);
                     busy.insert(troll.id);
                     continue;
                 }
+                // Fall through: plan's destination was already in claimed_targets,
+                // remove it so find_best_target can reassign
+                claimed_targets.remove(&plan.to);
             }
 
             // --- New plan: find best target based on priority ---
@@ -191,8 +216,6 @@ impl Player {
         }
 
         // --- Resolve collisions ---
-        // Now we check actual occupied tiles: claimed (trolls doing actions
-        // this turn) plus tiles committed by earlier move resolutions.
         let mut final_claimed: HashSet<Position> = claimed.clone();
 
         // Detect swaps (A→B and B→A) — allow both
@@ -231,8 +254,6 @@ impl Player {
                 self.actions.push(Action::Move(*id, to));
                 final_claimed.insert(to);
             } else {
-                // Some tile in the path is blocked — re-BFS avoiding
-                // final_claimed (these ARE actually occupied this turn)
                 let plan_dest = self
                     .plans
                     .iter()
@@ -240,7 +261,7 @@ impl Player {
                     .map(|pl| pl.to)
                     .unwrap_or(*from);
 
-                let alt_dist_map = bfs_distance_map(*from, game, &final_claimed);
+                let alt_dist_map = bfs_distance_map(*from, &game.grid, &final_claimed);
 
                 let mut found = false;
                 if let Some(alt_path) = reconstruct_path(*from, plan_dest, &alt_dist_map) {
@@ -292,9 +313,6 @@ impl Player {
         shack: &Position,
         claimed_targets: &HashSet<Position>,
     ) -> Option<(Action, Position)> {
-        //
-        // --- 1. Cargo full > dropping
-        //
         if troll.has_cargo() && troll.free_capacity() == 0 {
             return self.find_deliver_target(game, troll, troll_dist_map, shack);
         }
@@ -330,7 +348,6 @@ impl Player {
             #[rustfmt::skip]
             let fruit_at_arrival = |tree: &Tree, tile_dist: i32| -> i32 {
                 let mut fruits = tree.fruits;
-
                 let remaining = tile_dist - tree.cooldown;
                 if remaining >= 0 {
                     fruits += 1;
@@ -349,14 +366,14 @@ impl Player {
             }
 
             let harvestable = fruits.min(troll.free_capacity());
-            let score = harvestable + weight - tile_dist;
+            let score = harvestable + weight * 2 - tile_dist;
 
             if best.is_none() || score > best.unwrap().2 {
                 best = Some((Action::Harvest(troll.id), tree.position, score));
             }
         }
 
-        // --- 3. Score iron mining spots (if troll can mine)
+        // --- 3. Score iron mining spots
         if troll.chop_power > 0 && self.priority.iron > 0 {
             for &mine in game.mines.iter() {
                 for &c in CARDINALS.iter() {
@@ -364,25 +381,19 @@ impl Player {
                     if !game.grid.contains(adj) || !b".ABPL".contains(&game.grid[adj]) {
                         continue;
                     }
-
                     if claimed_targets.contains(&adj) {
                         continue;
                     }
-
                     let tile_dist = match troll_dist_map.get(&adj) {
                         Some((d, _)) => *d,
                         None => continue,
                     };
-
                     let shack_return = shack_dist_map.get(&adj).map(|(d, _)| *d).unwrap_or(9999);
-
                     let round_trip = tile_dist + shack_return;
                     if round_trip >= game.turns_remaining() {
                         continue;
                     }
-
-                    let score = troll.free_capacity() + self.priority.iron - tile_dist;
-
+                    let score = troll.free_capacity() + self.priority.iron * 2 - tile_dist;
                     if best.is_none() || score > best.unwrap().2 {
                         best = Some((Action::Mine(troll.id), adj, score));
                     }
@@ -390,35 +401,28 @@ impl Player {
             }
         }
 
-        // --- 4. Score each tree for chopping (if troll can chop and wood is needed)
+        // --- 4. Score each tree for chopping
         if troll.chop_power > 0 && self.priority.wood > 0 {
             for tree in game.trees.iter() {
                 if claimed_targets.contains(&tree.position) {
                     continue;
                 }
-
                 let tile_dist = match troll_dist_map.get(&tree.position) {
                     Some((d, _)) => *d,
                     None => continue,
                 };
-
                 let chop_turns = (tree.health + troll.chop_power - 1) / troll.chop_power;
-
                 let shack_return = shack_dist_map
                     .get(&tree.position)
                     .map(|(d, _)| *d)
                     .unwrap_or(9999);
                 let round_trip = tile_dist + chop_turns + shack_return;
-
                 if tree.size < 2 && round_trip >= game.turns_remaining() {
                     continue;
                 }
-
                 let wood_yield = tree.size;
                 let carriable = wood_yield.min(troll.free_capacity());
-
-                let score = carriable + self.priority.wood - tile_dist - chop_turns;
-
+                let score = carriable + self.priority.wood * 2 - tile_dist - chop_turns;
                 if best.is_none() || score > best.unwrap().2 {
                     best = Some((Action::Chop(troll.id), tree.position, score));
                 }
@@ -432,7 +436,6 @@ impl Player {
         best.map(|(action, pos, _)| (action, pos))
     }
 
-    /// --- Find the best shack-adjacent tile to deliver cargo.
     fn find_deliver_target(
         &self,
         game: &Game,
@@ -451,52 +454,6 @@ impl Player {
     }
 
     // ========================================================================
-    // Training
-    // ========================================================================
-
-    fn training(&self, game: &Game) -> Option<Action> {
-        if game.turns_remaining() < 120 {
-            return None;
-        }
-
-        let trolls = game.trolls_for(self.side);
-
-        let best_cc = trolls.iter().map(|t| t.carry_capacity).max().unwrap();
-        let best_hp = trolls.iter().map(|t| t.harvest_power).max().unwrap();
-        let best_cp = trolls.iter().map(|t| t.chop_power).max().unwrap();
-        let best_ms = trolls.iter().map(|t| t.movement_speed).max().unwrap();
-
-        let mut best: Option<(Action, i32)> = None;
-
-        for ms in 1..=5 {
-            for cc in 1..=5 {
-                for hp in 1..=5 {
-                    for cp in 1..=5 {
-                        let dominated =
-                            cc <= best_cc && hp <= best_hp && cp <= best_cp && ms <= best_ms;
-
-                        if dominated && game.turn > 1 {
-                            continue;
-                        }
-
-                        if !game.can_train(self.side, ms, cc, hp, cp) {
-                            continue;
-                        }
-
-                        let score = cc + hp + cp + ms;
-
-                        if best.is_none() || score > best.as_ref().unwrap().1 {
-                            best = Some((Action::Train(ms, cc, hp, cp), score));
-                        }
-                    }
-                }
-            }
-        }
-
-        best.map(|(action, _)| action)
-    }
-
-    // ========================================================================
     // Simulation
     // ========================================================================
 
@@ -509,61 +466,6 @@ impl Player {
             game.compare(snapshot);
         }
     }
-}
-
-// ========================================================================
-// BFS utilities
-// ========================================================================
-
-fn bfs_distance_map(
-    from: Position,
-    game: &Game,
-    blocked: &HashSet<Position>,
-) -> HashMap<Position, (i32, Position)> {
-    let mut map: HashMap<Position, (i32, Position)> = HashMap::new();
-    let mut queue: VecDeque<Position> = VecDeque::new();
-    map.insert(from, (0, from));
-    queue.push_back(from);
-
-    while let Some(cur) = queue.pop_front() {
-        let cur_dist = map[&cur].0;
-        for &c in CARDINALS.iter() {
-            let next = cur + c;
-            if map.contains_key(&next) || !game.grid.contains(next) {
-                continue;
-            }
-            if !b".ABPL".contains(&game.grid[next]) {
-                continue;
-            }
-            if blocked.contains(&next) {
-                continue;
-            }
-            map.insert(next, (cur_dist + 1, cur));
-            queue.push_back(next);
-        }
-    }
-    map
-}
-
-fn reconstruct_path(
-    from: Position,
-    to: Position,
-    dist_map: &HashMap<Position, (i32, Position)>,
-) -> Option<Vec<Position>> {
-    if from == to {
-        return Some(Vec::new());
-    }
-    if !dist_map.contains_key(&to) {
-        return None;
-    }
-    let mut path = Vec::new();
-    let mut cur = to;
-    while cur != from {
-        path.push(cur);
-        cur = dist_map[&cur].1;
-    }
-    path.reverse();
-    Some(path)
 }
 
 // ====================================================================
@@ -607,6 +509,15 @@ impl Priority {
 
     fn weight_for_tree(&self, tree: &Tree) -> i32 {
         match tree.typ {
+            TreeType::Apple => self.apple,
+            TreeType::Banana => self.banana,
+            TreeType::Lemon => self.lemon,
+            TreeType::Plum => self.plum,
+        }
+    }
+
+    fn weight_for_type(&self, typ: TreeType) -> i32 {
+        match typ {
             TreeType::Apple => self.apple,
             TreeType::Banana => self.banana,
             TreeType::Lemon => self.lemon,

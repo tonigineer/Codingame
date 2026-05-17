@@ -22,7 +22,7 @@ impl Grid<u8> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("ab\ncd");
     /// grid.print();
@@ -50,7 +50,7 @@ impl From<&str> for Grid<u8> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef");
     /// assert_eq!(grid.width(), 3);
@@ -84,7 +84,7 @@ impl From<String> for Grid<u8> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef".to_string());
     /// assert_eq!(grid.width(), 3);
@@ -116,7 +116,7 @@ impl<T> Grid<T> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef");
     /// assert_eq!(grid.width(), 3);
@@ -132,7 +132,7 @@ impl<T> Grid<T> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef");
     /// assert_eq!(grid.height(), 2);
@@ -152,7 +152,7 @@ impl<T> Grid<T> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef");
     /// assert!(grid.contains(Position::new(0, 0)));
@@ -174,7 +174,7 @@ impl<T: PartialEq + Copy> Grid<T> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("abc\ndef");
     /// assert_eq!(grid.search(b'e'), Some(Position::new(1, 1)));
@@ -200,7 +200,7 @@ impl<T> Index<Position> for Grid<T> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let grid = Grid::from("ab\ncd");
     /// assert_eq!(grid[Position::new(0, 0)], b'a');
@@ -219,7 +219,7 @@ impl<T> IndexMut<Position> for Grid<T> {
     /// # Examples
     ///
     /// ```
-    /// use aoc::common::{grid::*,position::*};
+    /// use trollfarm::{grid::*,position::*};
     ///
     /// let mut grid = Grid::from("ab\ncd");
     /// grid[Position::new(0, 0)] = b'x';
