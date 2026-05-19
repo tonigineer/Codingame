@@ -3,7 +3,7 @@ use std::io::{self, BufRead};
 
 use itertools::Itertools;
 
-use crate::entities::{Inventory, Resource, Tree, TreeType, Troll};
+use crate::entities::{Inventory, Resource, ResourceType, Tree, TreeType, Troll};
 use crate::grid::Grid;
 use crate::position::{Position, CARDINALS};
 
@@ -304,10 +304,10 @@ impl Game {
     pub fn can_train(&self, side: Side, ms: i32, cc: i32, hp: i32, cp: i32) -> bool {
         let cost = self.train_cost(side, ms, cc, hp, cp);
         let inv = self.inventory(side);
-        inv.plum.amount() >= cost.plum
-            && inv.lemon.amount() >= cost.lemon
-            && inv.apple.amount() >= cost.apple
-            && inv.iron >= cost.iron
+        inv.plum.amount >= cost.plum
+            && inv.lemon.amount >= cost.lemon
+            && inv.apple.amount >= cost.apple
+            && inv.iron.amount >= cost.iron
     }
 
     // --------------------------------------------------------------------
@@ -363,7 +363,7 @@ impl Game {
                         TreeType::Apple,
                         TreeType::Banana,
                     ] {
-                        if inv.get(typ) > 0 {
+                        if inv.get_by_tree(typ) > 0 {
                             actions.push(Action::Pick(troll.id, *typ));
                         }
                     }
@@ -475,8 +475,6 @@ impl Game {
         }
 
         // Phase 2: check for same-team collisions against final positions
-        // A troll's destination is invalid if another troll on the same team
-        // ends up there (either moving there or staying put)
         let mut final_positions: HashMap<(Side, Position), i32> = HashMap::new();
 
         // First, place all non-moving trolls
@@ -616,7 +614,7 @@ impl Game {
 
             for (troll_id, amount) in &taken {
                 if let Some(troll) = self.troll_mut(*troll_id) {
-                    troll.add_carried(&tree_typ, *amount);
+                    troll.add_carried(ResourceType::from_tree(&tree_typ), *amount);
                 }
             }
         }
@@ -663,7 +661,7 @@ impl Game {
 
             for (troll_id, typ) in planters {
                 if let Some(troll) = self.troll_mut(*troll_id) {
-                    troll.remove_carried(typ, 1);
+                    troll.remove_carried(ResourceType::from_tree(typ), 1);
                 }
             }
         }
@@ -738,7 +736,7 @@ impl Game {
 
                 for (troll_id, amount) in &taken {
                     if let Some(troll) = self.troll_mut(*troll_id) {
-                        troll.carry_wood += amount;
+                        troll.add_carried(ResourceType::Wood, *amount);
                     }
                 }
 
@@ -768,14 +766,14 @@ impl Game {
                 }
 
                 let inv = self.inventory(side);
-                if inv.get(typ) <= 0 {
+                if inv.get_by_tree(typ) <= 0 {
                     continue;
                 }
 
                 self.inventory_mut(side)
                     .remove(&Resource::from_tree(typ, 1));
                 if let Some(troll) = self.troll_mut(*id) {
-                    troll.add_carried(typ, 1);
+                    troll.add_carried(ResourceType::from_tree(typ), 1);
                 }
             }
         }
@@ -799,17 +797,13 @@ impl Game {
                     continue;
                 }
 
-                // Transfer fruit resources
+                // Transfer all carried resources (fruits, iron, wood)
                 let resources = troll.carried_resources();
-                let iron = troll.carry_iron;
-                let wood = troll.carry_wood;
 
                 let inventory = self.inventory_mut(side);
                 for r in &resources {
                     inventory.add(r);
                 }
-                inventory.iron += iron;
-                inventory.wood += wood;
 
                 if let Some(troll) = self.troll_mut(*id) {
                     troll.clear_carried();
@@ -828,10 +822,10 @@ impl Game {
 
                     let cost = self.train_cost(*side, *ms, *cc, *hp, *cp);
                     let inv = self.inventory_mut(*side);
-                    inv.remove(&Resource::Plum(cost.plum));
-                    inv.remove(&Resource::Lemon(cost.lemon));
-                    inv.remove(&Resource::Apple(cost.apple));
-                    inv.iron -= cost.iron;
+                    inv.remove(&Resource::new(ResourceType::Plum, cost.plum));
+                    inv.remove(&Resource::new(ResourceType::Lemon, cost.lemon));
+                    inv.remove(&Resource::new(ResourceType::Apple, cost.apple));
+                    inv.remove(&Resource::new(ResourceType::Iron, cost.iron));
 
                     let shack = self.shack(*side);
                     self.trolls.push(Troll {
@@ -872,7 +866,7 @@ impl Game {
                 let amount = troll.chop_power.min(troll.free_capacity());
                 if amount > 0 {
                     if let Some(troll) = self.troll_mut(*id) {
-                        troll.carry_iron += amount;
+                        troll.add_carried(ResourceType::Iron, amount);
                     }
                 }
             }

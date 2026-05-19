@@ -1,6 +1,6 @@
 use crate::game::{Action, Game, Side};
-
 /// Turn after which no new trolls will be trained.
+
 const STOP_TRAINING_AFTER_TURN: u16 = 180;
 
 /// Maximum value for any single troll stat.

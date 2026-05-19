@@ -70,24 +70,24 @@ struct SnapshotInventory {
 impl SnapshotInventory {
     fn from(r: &Inventory) -> Self {
         Self {
-            plum: r.plum.amount(),
-            lemon: r.lemon.amount(),
-            apple: r.apple.amount(),
-            banana: r.banana.amount(),
-            iron: r.iron,
-            wood: r.wood,
+            plum: r.plum.amount,
+            lemon: r.lemon.amount,
+            apple: r.apple.amount,
+            banana: r.banana.amount,
+            iron: r.iron.amount,
+            wood: r.wood.amount,
         }
     }
 
     fn diff(&self, r: &Inventory) -> Vec<String> {
         let mut diffs = Vec::new();
         let checks: &[(&str, i32, i32)] = &[
-            ("plum", self.plum, r.plum.amount()),
-            ("lemon", self.lemon, r.lemon.amount()),
-            ("apple", self.apple, r.apple.amount()),
-            ("banana", self.banana, r.banana.amount()),
-            ("iron", self.iron, r.iron),
-            ("wood", self.wood, r.wood),
+            ("plum", self.plum, r.plum.amount),
+            ("lemon", self.lemon, r.lemon.amount),
+            ("apple", self.apple, r.apple.amount),
+            ("banana", self.banana, r.banana.amount),
+            ("iron", self.iron, r.iron.amount),
+            ("wood", self.wood, r.wood.amount),
         ];
         for (name, pred, act) in checks {
             if pred != act {

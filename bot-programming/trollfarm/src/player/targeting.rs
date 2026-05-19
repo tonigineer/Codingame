@@ -170,12 +170,14 @@ impl Player {
                         continue;
                     }
 
+                    // TODO: check if iron is needed
                     if b"+".contains(&game.grid[adj_position]) {
                         self.actions.push(Action::Mine(troll.id));
                         self.trolls_busy.insert(troll.id);
                         self.positions_claimed.insert(troll.position);
                         self.claimed_entities.insert(troll.position);
 
+                        eprintln!("OPPORTUNISTIC MOVE {}", troll.id);
                         continue 'troll;
                     }
                 }
@@ -192,6 +194,7 @@ impl Player {
                     self.positions_claimed.insert(troll.position);
                     self.claimed_entities.insert(troll.position);
 
+                    eprintln!("OPPORTUNISTIC MOVE {}", troll.id);
                     continue 'troll;
                 }
             }

@@ -6,57 +6,59 @@ use std::ops::AddAssign;
 // Resource / Inventory
 // ------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ResourceType {
+    Plum,
+    Lemon,
+    Apple,
+    Banana,
+    Iron,
+    Wood,
+}
+
+impl ResourceType {
+    pub fn from_tree(typ: &TreeType) -> Self {
+        match typ {
+            TreeType::Plum => ResourceType::Plum,
+            TreeType::Lemon => ResourceType::Lemon,
+            TreeType::Apple => ResourceType::Apple,
+            TreeType::Banana => ResourceType::Banana,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-pub enum Resource {
-    Plum(i32),
-    Lemon(i32),
-    Apple(i32),
-    Banana(i32),
+pub struct Resource {
+    pub typ: ResourceType,
+    pub amount: i32,
 }
 
 impl Resource {
     #[must_use]
-    pub fn from_tree(typ: &TreeType, amount: i32) -> Self {
-        match typ {
-            TreeType::Plum => Resource::Plum(amount),
-            TreeType::Lemon => Resource::Lemon(amount),
-            TreeType::Apple => Resource::Apple(amount),
-            TreeType::Banana => Resource::Banana(amount),
-        }
+    pub fn new(typ: ResourceType, amount: i32) -> Self {
+        Self { typ, amount }
     }
 
     #[must_use]
-    pub fn amount(&self) -> i32 {
-        match self {
-            Resource::Plum(n) | Resource::Lemon(n) | Resource::Apple(n) | Resource::Banana(n) => *n,
-        }
+    pub fn from_tree(typ: &TreeType, amount: i32) -> Self {
+        Self::new(ResourceType::from_tree(typ), amount)
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.amount() == 0
-    }
-
-    #[must_use]
-    pub fn tree_type(&self) -> TreeType {
-        match self {
-            Resource::Plum(_) => TreeType::Plum,
-            Resource::Lemon(_) => TreeType::Lemon,
-            Resource::Apple(_) => TreeType::Apple,
-            Resource::Banana(_) => TreeType::Banana,
-        }
+        self.amount == 0
     }
 }
 
 impl AddAssign for Resource {
     fn add_assign(&mut self, other: Self) {
-        match (self, other) {
-            (Resource::Plum(a), Resource::Plum(b))
-            | (Resource::Lemon(a), Resource::Lemon(b))
-            | (Resource::Apple(a), Resource::Apple(b))
-            | (Resource::Banana(a), Resource::Banana(b)) => *a += b,
-            _ => panic!("Cannot add different resource types"),
-        }
+        assert!(
+            self.typ == other.typ,
+            "Cannot add different resource types: {:?} += {:?}",
+            self.typ,
+            other.typ
+        );
+        self.amount += other.amount;
     }
 }
 
@@ -66,8 +68,8 @@ pub struct Inventory {
     pub lemon: Resource,
     pub apple: Resource,
     pub banana: Resource,
-    pub iron: i32,
-    pub wood: i32,
+    pub iron: Resource,
+    pub wood: Resource,
 }
 
 impl Inventory {
@@ -75,12 +77,12 @@ impl Inventory {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            plum:   Resource::Plum(0),
-            lemon:  Resource::Lemon(0),
-            apple:  Resource::Apple(0),
-            banana: Resource::Banana(0),
-            iron:   0,
-            wood:   0,
+            plum:   Resource::new(ResourceType::Plum, 0),
+            lemon:  Resource::new(ResourceType::Lemon, 0),
+            apple:  Resource::new(ResourceType::Apple, 0),
+            banana: Resource::new(ResourceType::Banana, 0),
+            iron:   Resource::new(ResourceType::Iron, 0),
+            wood:   Resource::new(ResourceType::Wood, 0),
         }
     }
 
@@ -92,48 +94,56 @@ impl Inventory {
             .map(|s| s.parse().unwrap())
             .collect();
         Self {
-            plum:   Resource::Plum(r[0]),
-            lemon:  Resource::Lemon(r[1]),
-            apple:  Resource::Apple(r[2]),
-            banana: Resource::Banana(r[3]),
-            iron:   r[4],
-            wood:   r[5],
+            plum:   Resource::new(ResourceType::Plum, r[0]),
+            lemon:  Resource::new(ResourceType::Lemon, r[1]),
+            apple:  Resource::new(ResourceType::Apple, r[2]),
+            banana: Resource::new(ResourceType::Banana, r[3]),
+            iron:   Resource::new(ResourceType::Iron, r[4]),
+            wood:   Resource::new(ResourceType::Wood, r[5]),
         }
     }
 
     pub fn add(&mut self, resource: &Resource) {
-        match resource {
-            Resource::Plum(_) => self.plum += *resource,
-            Resource::Lemon(_) => self.lemon += *resource,
-            Resource::Apple(_) => self.apple += *resource,
-            Resource::Banana(_) => self.banana += *resource,
-        }
+        self.get_mut(resource.typ).amount += resource.amount;
     }
 
     pub fn remove(&mut self, resource: &Resource) {
-        match resource {
-            Resource::Plum(n) => self.plum += Resource::Plum(-n),
-            Resource::Lemon(n) => self.lemon += Resource::Lemon(-n),
-            Resource::Apple(n) => self.apple += Resource::Apple(-n),
-            Resource::Banana(n) => self.banana += Resource::Banana(-n),
+        self.get_mut(resource.typ).amount -= resource.amount;
+    }
+
+    #[must_use]
+    pub fn get(&self, typ: ResourceType) -> i32 {
+        match typ {
+            ResourceType::Plum => self.plum.amount,
+            ResourceType::Lemon => self.lemon.amount,
+            ResourceType::Apple => self.apple.amount,
+            ResourceType::Banana => self.banana.amount,
+            ResourceType::Iron => self.iron.amount,
+            ResourceType::Wood => self.wood.amount,
+        }
+    }
+
+    pub fn get_mut(&mut self, typ: ResourceType) -> &mut Resource {
+        match typ {
+            ResourceType::Plum => &mut self.plum,
+            ResourceType::Lemon => &mut self.lemon,
+            ResourceType::Apple => &mut self.apple,
+            ResourceType::Banana => &mut self.banana,
+            ResourceType::Iron => &mut self.iron,
+            ResourceType::Wood => &mut self.wood,
         }
     }
 
     #[must_use]
-    pub fn get(&self, typ: &TreeType) -> i32 {
-        match typ {
-            TreeType::Plum => self.plum.amount(),
-            TreeType::Lemon => self.lemon.amount(),
-            TreeType::Apple => self.apple.amount(),
-            TreeType::Banana => self.banana.amount(),
-        }
+    pub fn get_by_tree(&self, typ: &TreeType) -> i32 {
+        self.get(ResourceType::from_tree(typ))
     }
 
     /// Score: each fruit = 1 point, wood = 4 points, iron = 0
     #[must_use]
     pub fn score(&self) -> i32 {
-        self.plum.amount() + self.lemon.amount() + self.apple.amount() + self.banana.amount()
-            + self.wood * 4
+        self.plum.amount + self.lemon.amount + self.apple.amount + self.banana.amount
+            + self.wood.amount * 4
     }
 }
 
@@ -184,6 +194,16 @@ impl TreeType {
             TreeType::Lemon => "LEMON",
             TreeType::Apple => "APPLE",
             TreeType::Banana => "BANANA",
+        }
+    }
+
+    #[must_use]
+    pub fn as_resource_type(&self) -> ResourceType {
+        match self {
+            TreeType::Apple => ResourceType::Apple,
+            TreeType::Banana => ResourceType::Banana,
+            TreeType::Lemon => ResourceType::Lemon,
+            TreeType::Plum => ResourceType::Plum,
         }
     }
 }
@@ -336,7 +356,6 @@ impl Troll {
     }
 
     #[must_use]
-    // Remaining carrying capacity.
     pub fn free_capacity(&self) -> i32 {
         self.carry_capacity - self.total_carried()
     }
@@ -344,10 +363,12 @@ impl Troll {
     #[must_use]
     pub fn carried_resources(&self) -> Vec<Resource> {
         [
-            Resource::Plum(self.carry_plum),
-            Resource::Lemon(self.carry_lemon),
-            Resource::Apple(self.carry_apple),
-            Resource::Banana(self.carry_banana),
+            Resource::new(ResourceType::Plum, self.carry_plum),
+            Resource::new(ResourceType::Lemon, self.carry_lemon),
+            Resource::new(ResourceType::Apple, self.carry_apple),
+            Resource::new(ResourceType::Banana, self.carry_banana),
+            Resource::new(ResourceType::Iron, self.carry_iron),
+            Resource::new(ResourceType::Wood, self.carry_wood),
         ]
         .into_iter()
         .filter(|r| !r.is_empty())
@@ -356,30 +377,39 @@ impl Troll {
 
     #[must_use]
     pub fn carries(&self, typ: &TreeType) -> i32 {
+        self.carries_resource(ResourceType::from_tree(typ))
+    }
+
+    #[must_use]
+    pub fn carries_resource(&self, typ: ResourceType) -> i32 {
         match typ {
-            TreeType::Plum => self.carry_plum,
-            TreeType::Lemon => self.carry_lemon,
-            TreeType::Apple => self.carry_apple,
-            TreeType::Banana => self.carry_banana,
+            ResourceType::Plum => self.carry_plum,
+            ResourceType::Lemon => self.carry_lemon,
+            ResourceType::Apple => self.carry_apple,
+            ResourceType::Banana => self.carry_banana,
+            ResourceType::Iron => self.carry_iron,
+            ResourceType::Wood => self.carry_wood,
         }
     }
 
-    /// True if carrying anything at all (fruits, iron, or wood)
+    /// True if carrying anything at all
     #[must_use]
     pub fn has_cargo(&self) -> bool {
         self.total_carried() > 0
     }
 
-    pub fn add_carried(&mut self, typ: &TreeType, amount: i32) {
+    pub fn add_carried(&mut self, typ: ResourceType, amount: i32) {
         match typ {
-            TreeType::Plum => self.carry_plum += amount,
-            TreeType::Lemon => self.carry_lemon += amount,
-            TreeType::Apple => self.carry_apple += amount,
-            TreeType::Banana => self.carry_banana += amount,
+            ResourceType::Plum => self.carry_plum += amount,
+            ResourceType::Lemon => self.carry_lemon += amount,
+            ResourceType::Apple => self.carry_apple += amount,
+            ResourceType::Banana => self.carry_banana += amount,
+            ResourceType::Iron => self.carry_iron += amount,
+            ResourceType::Wood => self.carry_wood += amount,
         }
     }
 
-    pub fn remove_carried(&mut self, typ: &TreeType, amount: i32) {
+    pub fn remove_carried(&mut self, typ: ResourceType, amount: i32) {
         self.add_carried(typ, -amount);
     }
 

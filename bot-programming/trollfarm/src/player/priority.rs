@@ -1,4 +1,4 @@
-use crate::entities::{Tree, TreeType};
+use crate::entities::{ResourceType, Tree, TreeType};
 use crate::game::{Game, Side};
 
 pub struct Priority {
@@ -28,11 +28,11 @@ impl Priority {
         let min_fruit_stock = 16;
         let min_iron_stock = 10;
 
-        self.apple = (min_fruit_stock - inv.get(&TreeType::Apple)).max(0);
-        self.banana = (min_fruit_stock - inv.get(&TreeType::Banana)).max(0);
-        self.lemon = (min_fruit_stock - inv.get(&TreeType::Lemon)).max(0);
-        self.plum = (min_fruit_stock - inv.get(&TreeType::Plum)).max(0);
-        self.iron = (min_iron_stock - inv.iron).max(0);
+        self.apple = (min_fruit_stock - inv.get_by_tree(&TreeType::Apple)).max(0);
+        self.banana = (min_fruit_stock - inv.get_by_tree(&TreeType::Banana)).max(0);
+        self.lemon = (min_fruit_stock - inv.get_by_tree(&TreeType::Lemon)).max(0);
+        self.plum = (min_fruit_stock - inv.get_by_tree(&TreeType::Plum)).max(0);
+        self.iron = (min_iron_stock - inv.get(ResourceType::Iron)).max(0);
         self.wood = (180 / game.turns_remaining().max(1)).min(1);
     }
 

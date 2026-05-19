@@ -78,67 +78,61 @@ impl Player {
         let trolls = game.trolls_for(self.side);
 
         // --- 1. Training new trolls
-        if let Some(action) = self.training(&game, self.side) {
-            // match action {
-            //     Action::Train(ms, cc, hp, cp) => {
-            //         let inv = game.inventory(self.side);
-            //         inv.remove(&crate::entities::Resource::Plum((ms)));
-            //         inv.remove(&crate::entities::Resource::Lemon((cc)));
-            //         inv.remove(&crate::entities::Resource::Apple((hp)));
-            //         inv.remove(&crate::entities::Resource::Iron((cp)));
-            //     }
-            //     _ => {}
-            // }
+        if let Some(action) = self.training(game, self.side) {
             self.actions.push(action);
         }
 
         // --- 2. Planting new trees (placeholder)
-        // if let Some(action) = Self::planting(game, self.side) {
-        //     self.actions.push(action);
-        // }
-        {
-            // --- 3. Validate existing plans
-            let latest_plans: Vec<Plan> = self
-                .plans
-                .drain(..)
-                .filter(|p| match p.action {
-                    Action::Harvest(_) => {
-                        b"ABPL".contains(&game.grid[p.to])
-                            && game.tree_at(p.to).map(|t| t.fruits > 0).unwrap_or(false)
-                    }
-                    Action::Chop(_) => game.tree_at(p.to).map(|t| t.health > 0).unwrap_or(false),
-                    _ => true,
-                })
-                .collect();
-
-            // --- 4. Execute arrived plans
-            for troll in trolls.iter() {
-                if let Some(plan) = latest_plans.iter().find(|p| p.troll_id == troll.id) {
-                    if plan.to == troll.position {
-                        self.actions.push(plan.action);
-                        self.trolls_busy.insert(troll.id);
-                        self.positions_claimed.insert(troll.position);
-                        self.claimed_entities.insert(troll.position);
-                    }
-                }
-            }
-
-            // --- 5. Opportunistic harvesting/mining for idle trolls
-            self.opportunistic_actions(&game, &trolls);
-
-            // Mark in-progress plan destinations
-            for plan in &latest_plans {
-                if !self.trolls_busy.contains(&plan.troll_id) {
-                    self.claimed_entities.insert(plan.to);
-                }
-            }
-
-            // --- 6. Movement and new plan assignment
-            let move_intents = self.assign_moves(game, &trolls, &shack, &latest_plans);
-
-            // --- 7. Resolve collisions and emit MOVE actions
-            self.resolve_collisions(&game, &move_intents);
-            self.prev_positions = trolls.iter().map(|t| (t.id, t.position)).collect();
+        if let Some(plan) = self.planting(game) {
+            // Remve plan if troll already has a plan (helps not dropping
+            // fruit which was planned for planting.
+            self.plans.pop_if(|p| p.troll_id == plan.troll_id);
+            self.plans.push(plan);
         }
+
+        // --- 3. Validate existing plan
+        let latest_plans: Vec<Plan> = self
+            .plans
+            .drain(..)
+            .filter(|p| match p.action {
+                // Tree for harvest does not exist anymore
+                Action::Harvest(_) => {
+                    b"ABPL".contains(&game.grid[p.to])
+                        && game.tree_at(p.to).map(|t| t.fruits > 0).unwrap_or(false)
+                }
+                // Tree for chopping does not exist anymore
+                Action::Chop(_) => game.tree_at(p.to).map(|t| t.health > 0).unwrap_or(false),
+                _ => true,
+            })
+            .collect();
+
+        // --- 4. Execute arrived plans
+        for troll in trolls.iter() {
+            if let Some(plan) = latest_plans.iter().find(|p| p.troll_id == troll.id) {
+                if plan.to == troll.position {
+                    self.actions.push(plan.action);
+                    self.trolls_busy.insert(troll.id);
+                    self.positions_claimed.insert(troll.position);
+                    self.claimed_entities.insert(troll.position);
+                }
+            }
+        }
+
+        // --- 5. Opportunistic harvesting/mining for idle trolls
+        self.opportunistic_actions(&game, &trolls);
+
+        // Mark in-progress plan destinations
+        for plan in &latest_plans {
+            if !self.trolls_busy.contains(&plan.troll_id) {
+                self.claimed_entities.insert(plan.to);
+            }
+        }
+
+        // --- 6. Movement and new plan assignment
+        let move_intents = self.assign_moves(game, &trolls, &shack, &latest_plans);
+
+        // --- 7. Resolve collisions and emit MOVE actions
+        self.resolve_collisions(&game, &move_intents);
+        self.prev_positions = trolls.iter().map(|t| (t.id, t.position)).collect();
     }
 }
