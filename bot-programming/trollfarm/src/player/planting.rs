@@ -8,17 +8,8 @@ use std::collections::{HashMap, HashSet};
 
 use super::Player;
 
-const MAX_PLANT_DIST: i32 = 4;
-const TREE_SCAN_RADIUS: i32 = 8;
-const HARVEST_SATURATION_THRESHOLD: f32 = 1.5;
-
-struct PlantCandidate {
-    troll_id: i32,
-    tree_type: TreeType,
-    target: Position,
-    carries_seed: bool,
-    score: i32,
-}
+/// Fruit types the first troll should plant, balanced.
+const FRUIT_TYPES: [TreeType; 3] = [TreeType::Plum, TreeType::Apple, TreeType::Lemon];
 
 impl Player {
     pub fn planting(&mut self, game: &Game) -> Option<Plan> {
@@ -26,89 +17,152 @@ impl Player {
         let trolls = game.trolls_for(self.side);
         let inv = game.inventory(self.side);
 
+        // Only the first troll (carry_capacity == 1) does planting
+        let troll = match trolls.iter().find(|t| t.carry_capacity == 1) {
+            Some(t) => *t,
+            None => return None,
+        };
+
         let no_blocked = HashSet::new();
         let shack_dist_map = bfs_distance_map(shack, &game.grid, &no_blocked);
 
-        let plant_spots = self.find_plant_spots(game, &shack_dist_map);
-        if plant_spots.is_empty() {
+        let spots = self.find_early_plant_spots(game, &shack_dist_map);
+        if spots.is_empty() {
             return None;
         }
 
-        let tree_priority = self.rank_tree_types_by_scarcity(game, &shack_dist_map);
+        let adjacent_to_shack = troll.position.manhattan(&shack) == 1;
 
-        if self.harvest_saturated(game, &trolls, &shack_dist_map) {
-            return None;
+        // --- Priority 1: Already carrying any fruit seed → plant it
+        let carried_type = FRUIT_TYPES
+            .iter()
+            .find(|t| troll.carries_resource(t.as_resource_type()) > 0)
+            .copied();
+
+        eprintln!("{:?}", carried_type);
+
+        if let Some(typ) = carried_type {
+            let best_spot = self.best_spot_for_troll(troll.position, &spots);
+            eprintln!(
+                "[PLANTING] troll {} will plant {:?} at {:?}",
+                troll.id, typ, best_spot
+            );
+            return Some(Plan {
+                troll_id: troll.id,
+                to: best_spot,
+                action: Action::Plant(troll.id, typ),
+            });
         }
 
-        // --- Score all (troll, tree_type, spot) combinations
-        let mut candidates: Vec<PlantCandidate> = Vec::new();
+        // // --- Priority 1b: A Pick plan is about to execute this turn
+        // //     (troll is at plan destination and plan action is Pick).
+        // //     Look ahead: after picking, the troll will have a seed,
+        // //     so pre-create the Plant plan for the best spot.
+        // if let Some(plan) = self.plans.iter().find(|p| p.troll_id == troll.id) {
+        //     if let Action::Pick(_, pick_type) = plan.action {
+        //         if plan.to == troll.position {
+        //             let best_spot = self.best_spot_for_troll(troll.position, &spots);
+        //             eprintln!(
+        //                 "[PLANTING] troll {} pick {:?} executing, pre-planning plant at {:?}",
+        //                 troll.id, pick_type, best_spot
+        //             );
+        //             return Some(Plan {
+        //                 troll_id: troll.id,
+        //                 to: best_spot,
+        //                 action: Action::Plant(troll.id, pick_type),
+        //             });
+        //         }
+        //     }
+        // }
 
-        for (tree_type, abundance) in tree_priority.iter().take(2) {
-            for troll in trolls.iter() {
-                let carries_seed = troll.carries_resource(tree_type.as_resource_type()) > 0;
-                let could_pickup = troll.position.manhattan(&shack) == 1
-                    && !troll.has_cargo()
-                    && inv.get_by_tree(tree_type) > 0;
+        // // Pick the tree type we have the fewest of nearby (balanced planting)
+        let tree_type = self.least_abundant_fruit(game, &shack_dist_map)?;
+        let seed_in_inv = inv.get_by_tree(&tree_type) > 0;
 
-                if !carries_seed && !could_pickup {
-                    continue;
-                }
+        // // --- Priority 2: Adjacent to shack, no cargo, seed available → pick up now
+        // if adjacent_to_shack && !troll.has_cargo() && seed_in_inv {
+        //     eprintln!(
+        //         "[PLANTING] troll {} picking {:?}",
+        //         troll.id, tree_type
+        //     );
+        //     return Some(Plan {
+        //         troll_id: troll.id,
+        //         to: troll.position,
+        //         action: Action::Pick(troll.id, tree_type),
+        //     });
+        // }
 
-                let pickup_penalty = if could_pickup && !carries_seed {
-                    troll.movement_speed
-                } else {
-                    0
-                };
+        // --- Priority 3: Move toward shack / plant spot
+        if !troll.has_cargo() && seed_in_inv {
+            let best_spot = self.best_spot_for_troll(troll.position, &spots);
 
-                for &(pos, spot_score) in &plant_spots {
-                    let dist = troll.position.manhattan(&pos) as i32;
-                    candidates.push(PlantCandidate {
-                        troll_id: troll.id,
-                        tree_type: *tree_type,
-                        target: pos,
-                        carries_seed,
-                        score: dist + abundance + pickup_penalty - spot_score,
-                    });
-                }
+            let spot_dist = shack_dist_map
+                .get(&best_spot)
+                .map(|(d, _)| *d)
+                .unwrap_or(9999);
+
+            if spot_dist == 1 {
+                // Spot is shack-adjacent: move there, pick on arrival
+                eprintln!(
+                    "[PLANTING] troll {} moving to plant spot {:?} (shack-adjacent, will pick {:?})",
+                    troll.id, best_spot, tree_type
+                );
+                return Some(Plan {
+                    troll_id: troll.id,
+                    to: best_spot,
+                    action: Action::Pick(troll.id, tree_type),
+                });
             }
-        }
 
-        candidates.sort_by_key(|c| c.score);
+            // Dist 2+: walk to shack-adjacent tile first
+            let shack_adj = crate::position::CARDINALS
+                .iter()
+                .map(|&c| shack + c)
+                .filter(|&p| game.grid.contains(p) && b".ABPL".contains(&game.grid[p]))
+                .min_by_key(|p| {
+                    let to_spot = p.manhattan(&best_spot) as i32;
+                    let to_troll = troll.position.manhattan(p) as i32;
+                    to_troll + to_spot
+                });
 
-        // Prefer trolls already carrying a seed (no pickup needed)
-        if let Some(c) = candidates.iter().find(|c| c.carries_seed) {
-            eprintln!("[PLANTING] troll {} will plant {:?} at {:?}", c.troll_id, c.tree_type, c.target);
-            return Some(Plan {
-                troll_id: c.troll_id,
-                to: c.target,
-                action: Action::Plant(c.troll_id, c.tree_type),
-            });
-        }
-
-        // Otherwise, issue a pickup command (troll stays in place this turn)
-        if let Some(c) = candidates.iter().find(|c| !c.carries_seed) {
-            let troll_pos = trolls.iter().find(|t| t.id == c.troll_id).unwrap().position;
-            eprintln!("[PLANTING] troll {} will pick {:?} then plant", c.troll_id, c.tree_type);
-            return Some(Plan {
-                troll_id: c.troll_id,
-                to: troll_pos,
-                action: Action::Pick(c.troll_id, c.tree_type),
-            });
+            if let Some(adj) = shack_adj {
+                eprintln!(
+                    "[PLANTING] troll {} walking to shack via {:?} to pick {:?}",
+                    troll.id, adj, tree_type
+                );
+                return Some(Plan {
+                    troll_id: troll.id,
+                    to: adj,
+                    action: Action::Pick(troll.id, tree_type),
+                });
+            }
         }
 
         None
     }
 
-    /// Find walkable empty tiles near the shack, scored by distance and water proximity.
-    fn find_plant_spots(
+    /// Find empty tiles near shack for planting:
+    ///   - dist 1: adjacent to shack (pick seed, plant, repeat without travel)
+    ///   - dist 2: one step away
+    ///   - dist 3: only if near water (worth the extra walk for faster growth)
+    fn find_early_plant_spots(
         &self,
         game: &Game,
         shack_dist_map: &HashMap<Position, (i32, Position)>,
     ) -> Vec<(Position, i32)> {
         let mut spots: Vec<(Position, i32)> = shack_dist_map
             .iter()
-            .filter(|(_, (dist, _))| *dist > 1 && *dist <= MAX_PLANT_DIST)
-            .filter(|(pos, _)| game.grid[**pos] == b'.')
+            .filter(|(pos, (dist, _))| {
+                let empty = game.grid[**pos] == b'.' && game.tree_at(**pos).is_none();
+                if !empty {
+                    return false;
+                }
+                match *dist {
+                    1 | 2 => true,
+                    3 => game.is_near_water(**pos),
+                    _ => false,
+                }
+            })
             .map(|(&pos, &(dist, _))| {
                 let water_bonus = if game.is_near_water(pos) { 3 } else { 0 };
                 (pos, water_bonus - dist)
@@ -119,85 +173,42 @@ impl Player {
         spots
     }
 
-    /// Rank tree types by scarcity near the shack (least abundant first).
-    fn rank_tree_types_by_scarcity(
+    /// Pick the fruit type (Plum, Apple, Lemon) with the fewest trees near the shack.
+    fn least_abundant_fruit(
         &self,
         game: &Game,
         shack_dist_map: &HashMap<Position, (i32, Position)>,
-    ) -> Vec<(TreeType, i32)> {
-        let mut abundance: HashMap<TreeType, i32> = HashMap::from([
-            (TreeType::Apple, 0),
-            (TreeType::Plum, 0),
-            (TreeType::Lemon, 0),
-            (TreeType::Banana, 0),
-        ]);
+    ) -> Option<TreeType> {
+        let mut counts: HashMap<TreeType, i32> = FRUIT_TYPES
+            .iter()
+            .map(|&t| (t, 0))
+            .collect();
 
         for tree in &game.trees {
+            if !FRUIT_TYPES.contains(&tree.typ) {
+                continue;
+            }
             let dist = shack_dist_map
                 .get(&tree.position)
                 .map(|(d, _)| *d)
                 .unwrap_or(9999);
-            if dist <= TREE_SCAN_RADIUS {
-                let weight = if game.is_near_water(tree.position) { 3 } else { 2 };
-                *abundance.entry(tree.typ).or_default() += weight;
+            if dist <= 4 {
+                *counts.entry(tree.typ).or_default() += 1;
             }
         }
 
-        let mut ranked: Vec<(TreeType, i32)> = abundance.into_iter().collect();
-        ranked.sort_by_key(|(_, score)| *score);
-        ranked
+        counts
+            .into_iter()
+            .min_by_key(|(_, count)| *count)
+            .map(|(typ, _)| typ)
     }
 
-    /// Returns true if existing trees already produce more fruit than trolls can harvest.
-    fn harvest_saturated(
-        &self,
-        game: &Game,
-        trolls: &[&crate::entities::Troll],
-        shack_dist_map: &HashMap<Position, (i32, Position)>,
-    ) -> bool {
-        // Fruit production rate from mature nearby trees
-        let fruit_rate: f32 = game.trees.iter()
-            .filter(|t| t.size >= 4)
-            .filter_map(|t| {
-                let dist = shack_dist_map.get(&t.position).map(|(d, _)| *d)?;
-                (dist <= TREE_SCAN_RADIUS).then(|| {
-                    let cd = if game.is_near_water(t.position) {
-                        t.cooldown_time_water()
-                    } else {
-                        t.cooldown_time()
-                    };
-                    1.0 / cd as f32
-                })
-            })
-            .sum();
-
-        // Closest mature tree distance (used as optimistic travel estimate)
-        let min_tree_dist = game.trees.iter()
-            .filter(|t| t.size >= 4)
-            .filter_map(|t| shack_dist_map.get(&t.position).map(|(d, _)| *d))
-            .filter(|&d| d <= TREE_SCAN_RADIUS)
-            .min()
-            .unwrap_or(4);
-
-        // Harvesting bandwidth from available trolls
-        let harvest_rate: f32 = trolls.iter()
-            .filter(|t| !self.trolls_busy.contains(&t.id))
-            .map(|t| {
-                let round_trip = (min_tree_dist * 2) as f32 / t.movement_speed as f32 + 1.0;
-                let fruits_per_trip = t.harvest_power.min(t.carry_capacity) as f32;
-                fruits_per_trip / round_trip
-            })
-            .sum();
-
-        if harvest_rate > 0.0 && fruit_rate / harvest_rate > HARVEST_SATURATION_THRESHOLD {
-            eprintln!(
-                "[PLANTING] Skipping: fruit {:.2}/t, harvest {:.2}/t ({:.0}% saturated)",
-                fruit_rate, harvest_rate,
-                (fruit_rate / harvest_rate) * 100.0
-            );
-            return true;
-        }
-
-        false
+    /// Pick the best spot considering troll distance and spot score.
+    fn best_spot_for_troll(&self, troll_pos: Position, spots: &[(Position, i32)]) -> Position {
+        spots
+            .iter()
+            .min_by_key(|(pos, score)| (troll_pos.manhattan(pos) as i32 - score))
+            .map(|(pos, _)| *pos)
+            .unwrap()
     }
 }

@@ -301,6 +301,15 @@ impl Tree {
             _ => 10,
         }
     }
+
+    pub fn get_resource_type(&self) -> ResourceType {
+        match self.typ {
+            TreeType::Apple => ResourceType::Apple,
+            TreeType::Banana => ResourceType::Banana,
+            TreeType::Lemon => ResourceType::Lemon,
+            TreeType::Plum => ResourceType::Plum,
+        }
+    }
 }
 
 // ------------------------------------------------------------------------
