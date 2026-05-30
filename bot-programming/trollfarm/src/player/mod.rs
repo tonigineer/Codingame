@@ -8,7 +8,6 @@ use crate::game::{Action, Game, Side};
 use crate::player::priority::Priority;
 use crate::position::Position;
 use crate::prediction::Snapshot;
-use crate::utils::*;
 
 use std::collections::{HashMap, HashSet};
 
@@ -64,7 +63,7 @@ impl Player {
     /// # Example
     ///
     /// ```
-    /// ai.get_ready_for_next_turn();
+    /// // ai.get_ready_for_next_turn();
     /// // ai.actions, ai.trolls_busy, ai.positions_claimed,
     /// // and ai.claimed_entities are now empty.
     /// ```
@@ -91,11 +90,16 @@ impl Player {
     /// // Suppose self.plans contains a Harvest plan targeting a tree
     /// // that has been fully picked (fruits == 0) and a Chop plan
     /// // targeting a tree with health == 3.
-    /// ai.validate_existing_plans(&game);
+    /// // ai.validate_existing_plans(&game);
     /// // The stale Harvest plan is removed; the Chop plan remains.
     /// ```
     fn prune_stale_plans(&mut self, game: &Game) {
-        eprint!("[PRUNE-STALE-PLANS] Before: #{:?}", self.plans.len());
+        if self.plans.len() == 0 {
+            return;
+        }
+
+        eprint!("[PRUNE-STALE-PLANS] From #{:?} to ", self.plans.len());
+
         self.plans.retain(|p| match &p.action {
             Action::Harvest(_) => {
                 b"ABPL".contains(&game.grid[p.to])
@@ -104,7 +108,8 @@ impl Player {
             Action::Chop(_) => game.tree_at(p.to).map_or(false, |t| t.health > 0),
             _ => true,
         });
-        eprintln!("After: #{:?}", self.plans.len());
+
+        eprintln!("#{:?}", self.plans.len());
     }
 
     fn act_on_plans(&mut self, game: &Game) {
@@ -159,33 +164,33 @@ impl Player {
         // }
 
         // --- 6. Move trolls toward their plan targets
-        let no_blocked = HashSet::new();
-        for troll in trolls.iter() {
-            if self.trolls_busy.contains(&troll.id) {
-                continue;
-            }
+        // let no_blocked = HashSet::new();
+        // for troll in trolls.iter() {
+        //     if self.trolls_busy.contains(&troll.id) {
+        //         continue;
+        //     }
 
-            if let Some(plan) = latest_plans.iter().find(|p| p.troll_id == troll.id) {
-                // if plan.to == troll.position {
-                //     eprintln!("SHOULD NOT HAPPEN");
-                //     continue; // already there, action was emitted above
-                // }
+        //     if let Some(plan) = latest_plans.iter().find(|p| p.troll_id == troll.id) {
+        //         // if plan.to == troll.position {
+        //         //     eprintln!("SHOULD NOT HAPPEN");
+        //         //     continue; // already there, action was emitted above
+        //         // }
 
-                let dist_map = bfs_distance_map(troll.position, &game.grid, &no_blocked);
-                if let Some(path) = reconstruct_path(troll.position, plan.to, &dist_map) {
-                    if !path.is_empty() {
-                        let steps = path.len().min(troll.movement_speed as usize);
-                        let target = path[steps - 1];
-                        self.actions.push(Action::Move(troll.id, target));
-                        self.trolls_busy.insert(troll.id);
-                    }
-                }
+        //         let dist_map = bfs_distance_map(troll.position, &game.grid, &no_blocked);
+        //         if let Some(path) = reconstruct_path(troll.position, plan.to, &dist_map) {
+        //             if !path.is_empty() {
+        //                 let steps = path.len().min(troll.movement_speed as usize);
+        //                 let target = path[steps - 1];
+        //                 self.actions.push(Action::Move(troll.id, target));
+        //                 self.trolls_busy.insert(troll.id);
+        //             }
+        //         }
 
-                // Keep the plan alive for next turn
-                self.plans.push(*plan);
-            }
-        }
+        //         // Keep the plan alive for next turn
+        //         self.plans.push(*plan);
+        //     }
+        // }
 
-        self.prev_positions = trolls.iter().map(|t| (t.id, t.position)).collect();
+        // self.prev_positions = trolls.iter().map(|t| (t.id, t.position)).collect();
     }
 }
