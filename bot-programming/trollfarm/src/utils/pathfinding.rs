@@ -1,5 +1,5 @@
-use crate::grid::Grid;
-use crate::position::{CARDINALS, Position};
+use crate::utils::grid::Grid;
+use crate::utils::position::{CARDINALS, Position};
 
 use std::collections::{HashSet, HashMap, VecDeque};
 
@@ -17,7 +17,7 @@ use std::collections::{HashSet, HashMap, VecDeque};
 ///
 /// ```
 /// use std::collections::HashSet;
-/// use trollfarm::{grid::*,position::*,utils::*};
+/// use trollfarm::utils::*;
 ///
 /// let grid = Grid::from("ABPL.\n0.+.1");
 /// let mut blocked = HashSet::new();
@@ -29,6 +29,7 @@ use std::collections::{HashSet, HashMap, VecDeque};
 /// assert!(!dist_map.contains_key(&obstructed_position));
 /// assert!(dist_map.values().len() == 8);
 /// ```
+#[must_use]
 pub fn bfs_distance_map(
     from: Position,
     grid: &Grid<u8>,
@@ -42,7 +43,7 @@ pub fn bfs_distance_map(
     while let Some(cur) = queue.pop_front() {
         let cur_dist = map[&cur].0;
 
-        for &c in CARDINALS.iter() {
+        for c in CARDINALS {
             let next = cur + c;
             if map.contains_key(&next) || !grid.contains(next) {
                 continue;
@@ -75,7 +76,7 @@ pub fn bfs_distance_map(
 ///
 /// ```
 /// use std::collections::HashSet;
-/// use trollfarm::{grid::*,position::*,utils::*};
+/// use trollfarm::utils::*;
 ///
 /// let grid = Grid::from("ABPL.\n0.+.1");
 /// let mut blocked = HashSet::new();
@@ -91,6 +92,7 @@ pub fn bfs_distance_map(
 /// let path = reconstruct_path(start, end, &dist_map);
 /// assert!(path.unwrap().len() == 4);
 /// ```
+#[must_use]
 pub fn reconstruct_path(
     from: Position,
     to: Position,

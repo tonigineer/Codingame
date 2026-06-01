@@ -1,6 +1,8 @@
 use crate::game::Side;
-use crate::position::Position;
+use crate::utils::Position;
 use std::ops::AddAssign;
+
+use std::collections::HashMap;
 
 // ------------------------------------------------------------------------
 // Resource / Inventory
@@ -16,6 +18,7 @@ pub enum ResourceType {
     Wood,
 }
 
+#[allow(dead_code)]
 impl ResourceType {
     pub fn from_tree(typ: &TreeType) -> Self {
         match typ {
@@ -33,6 +36,7 @@ pub struct Resource {
     pub amount: i32,
 }
 
+#[allow(dead_code)]
 impl Resource {
     #[must_use]
     pub fn new(typ: ResourceType, amount: i32) -> Self {
@@ -63,6 +67,7 @@ impl AddAssign for Resource {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Inventory {
     pub plum: Resource,
     pub lemon: Resource,
@@ -72,6 +77,7 @@ pub struct Inventory {
     pub wood: Resource,
 }
 
+#[allow(dead_code)]
 impl Inventory {
     #[rustfmt::skip]
     #[must_use]
@@ -142,7 +148,10 @@ impl Inventory {
     /// Score: each fruit = 1 point, wood = 4 points, iron = 0
     #[must_use]
     pub fn score(&self) -> i32 {
-        self.plum.amount + self.lemon.amount + self.apple.amount + self.banana.amount
+        self.plum.amount
+            + self.lemon.amount
+            + self.apple.amount
+            + self.banana.amount
             + self.wood.amount * 4
     }
 }
@@ -165,6 +174,7 @@ pub enum TreeType {
     Banana,
 }
 
+#[allow(dead_code)]
 impl TreeType {
     #[must_use]
     pub fn to_byte(&self) -> u8 {
@@ -215,6 +225,7 @@ impl std::fmt::Display for TreeType {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Tree {
     pub typ: TreeType,
     pub position: Position,
@@ -224,6 +235,7 @@ pub struct Tree {
     pub cooldown: i32,
 }
 
+#[allow(dead_code)]
 impl Tree {
     #[rustfmt::skip]
     #[must_use]
@@ -317,6 +329,7 @@ impl Tree {
 // ------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Troll {
     pub id: i32,
     pub side: Side,
@@ -331,8 +344,10 @@ pub struct Troll {
     pub carry_banana: i32,
     pub carry_iron: i32,
     pub carry_wood: i32,
+    pub dist_map: HashMap<Position, (i32, Position)>,
 }
 
+#[allow(dead_code)]
 impl Troll {
     #[rustfmt::skip]
     #[must_use]
@@ -355,13 +370,18 @@ impl Troll {
             carry_banana:   d[11],
             carry_iron:     d[12],
             carry_wood:     d[13],
+            dist_map:       HashMap::new()
         }
     }
 
     #[must_use]
     pub fn total_carried(&self) -> i32 {
-        self.carry_plum + self.carry_lemon + self.carry_apple + self.carry_banana
-            + self.carry_iron + self.carry_wood
+        self.carry_plum
+            + self.carry_lemon
+            + self.carry_apple
+            + self.carry_banana
+            + self.carry_iron
+            + self.carry_wood
     }
 
     #[must_use]

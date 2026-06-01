@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# Project-wide tasks
+#
+# These take an optional package name. With no argument they run across the
+# whole workspace; with one they scope to a single crate:
+#   just test            # whole workspace, incl. doc tests
+#   just test trollfarm  # only the `trollfarm` crate, incl. doc tests
+# ---------------------------------------------------------------------------
+
+bot_games_dir := ".."
+repo_dir := "../.."
+target_dir := repo_dir / "target"
+game_dir := "assets/Troll-Farm"
+
+# List available recipes
+default:
+    @just --list
+
+# Format the whole workspace
+fmt:
+    cargo fmt --all
+
+# Verify formatting without modifying files
+fmt-check:
+    cargo fmt --all --check
+
+# Clippy with warnings as errors; scope to one package or the whole workspace
+lint pkg='trollfarm':
+    cargo clippy {{ if pkg == '' { '--workspace' } else { '-p ' + pkg } }} --all-targets --all-features -- --deny warnings
+
+# Release build; scope to one package or the whole workspace
+build pkg='trollfarm':
+    cargo build --release {{ if pkg == '' { '--workspace' } else { '-p ' + pkg } }}
+
+# Run ALL tests including doc tests; scope to one package or the whole workspace.
+# NOTE: no `--all-targets` here on purpose — it silently skips doc tests.
+test pkg='trollfarm':
+    cargo test --release {{ if pkg == '' { '--workspace' } else { '-p ' + pkg } }}
+
+# Full pipeline: format check, lint, build, test
+ci: fmt-check lint build test
+
+# ---------------------------------------------------------------------------
+# CodinGame bots
+#
+# `submit`  builds + flattens a bot crate into a single-file CG submission
+# `play`    play one game against the reference bot (given or default seed)
+# `eval`    evaluate N games against the reference bot
+# ---------------------------------------------------------------------------
+
+# Inline a modular bot crate into one submittable file
+_flatten pkg="trollfarm":
+    python "{{ bot_games_dir }}/flatten.py" "{{ pkg }}"
+
+# Copy the freshly built bot binary into the game dir
+_deploy pkg="trollfarm": (build pkg)
+    cp "{{ target_dir }}/release/{{ pkg }}" "{{ game_dir }}/"
+
+# Build and flatten a bot for submission
+submit pkg="trollfarm": (_deploy pkg) (_flatten pkg)
+
+# Play a single game against the reference bot (default seed 1)
+play seed="1": (_deploy "trollfarm")
+    python eval.py --seed "{{ seed }}"
+
+# Evaluate N games against the reference bot (default 100)
+eval games="100": (_deploy "trollfarm")
+    python eval.py "{{ games }}"

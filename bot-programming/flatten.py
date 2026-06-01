@@ -35,7 +35,11 @@ def inline(file_path: Path) -> str:
             return m.group(0)
         body = inline(child)
 
-        indented = "\n".join("    " + line for line in body.splitlines())
+        indented = "\n".join(
+            "    " + line
+            for line in body.splitlines()
+            if not line.strip().startswith("/") and len(line.strip()) > 0
+        )
         return f"mod {name} {{\n{indented}\n}}\n"
 
     return mod_decl.sub(repl, src)
@@ -43,7 +47,7 @@ def inline(file_path: Path) -> str:
 
 if __name__ == "__main__":
     flat = inline(project_dir / "main.rs")
-    flat = "\n".join([line.replace("    ", " ") for line in flat.splitlines() if not line.strip().startswith("/")])
+    flat = "\n".join([line.replace("    ", " ") for line in flat.splitlines()])
     flat += "\n"
     out = project_dir / "main.rs.flattened"
     out.write_text(flat)

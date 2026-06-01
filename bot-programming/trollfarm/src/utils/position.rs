@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
+#[allow(dead_code)]
 pub const ORIGIN: Position = Position { x: 0, y: 0 };
 pub const RIGHT: Position = Position { x: 1, y: 0 };
 pub const DOWN: Position = Position { x: 0, y: 1 };
@@ -8,6 +9,7 @@ pub const LEFT: Position = Position { x: -1, y: 0 };
 pub const UP: Position = Position { x: 0, y: -1 };
 
 pub const CARDINALS: [Position; 4] = [RIGHT, DOWN, LEFT, UP];
+#[allow(dead_code)]
 pub const DIAGONALS: [Position; 4] = [
     Position { x: 1, y: 1 },
     Position { x: -1, y: 1 },
@@ -28,7 +30,7 @@ impl Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let p = Position::new(3, 4);
     /// assert_eq!(p.x, 3);
@@ -49,7 +51,7 @@ impl Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let a = Position::new(1, 2);
     /// let b = Position::new(4, 6);
@@ -72,7 +74,7 @@ impl Hash for Position {
     ///
     /// ```
     /// use std::collections::HashSet;
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let mut set = HashSet::new();
     /// set.insert(Position::new(1, 2));
@@ -93,7 +95,7 @@ impl Add for Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let a = Position::new(1, 2);
     /// let b = Position::new(3, 4);
@@ -111,7 +113,7 @@ impl AddAssign for Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let mut p = Position::new(1, 2);
     /// p += Position::new(3, 4);
@@ -132,7 +134,7 @@ impl Sub for Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let a = Position::new(5, 7);
     /// let b = Position::new(2, 3);
@@ -150,7 +152,7 @@ impl SubAssign for Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let mut p = Position::new(5, 7);
     /// p -= Position::new(2, 3);
@@ -171,7 +173,7 @@ impl Mul<i32> for Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let p = Position::new(2, 3);
     /// assert_eq!(p * 4, Position::new(8, 12));
@@ -190,7 +192,7 @@ impl Div<i32> for Position {
     /// # Examples
     ///
     /// ```
-    /// use trollfarm::position::*;
+    /// use trollfarm::utils::*;
     ///
     /// let p = Position::new(8, 12);
     /// assert_eq!(p / 4, Position::new(2, 3));
