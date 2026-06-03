@@ -89,6 +89,8 @@ impl Bot {
     }
 
     fn build_candidates(game: &Game) -> Vec<GatherCandidate> {
+        const COST_PICK_DROP: i32 = 2;
+
         let dist = |p: &Position| game.shack_dist_map.get(p).map_or(i32::MAX, |(d, _)| *d);
 
         let troll = game.trolls(Side::Me)[0];
@@ -112,8 +114,6 @@ impl Bot {
             .filter(|pos| game.grid.contains(*pos) && b".ABPL".contains(&game.grid[*pos]))
             .collect();
 
-        const COST_PICK_DROP: i32 = 2;
-
         if let Some((pos, d)) = all_adj_mine
             .iter()
             .map(|p| (*p, dist(p)))
@@ -123,7 +123,7 @@ impl Bot {
             candidates.push(GatherCandidate {
                 resource: ResourceType::Iron,
                 target: pos,
-                cost_now: cost_travel + (d * 1 - 1) + COST_PICK_DROP,
+                cost_now: cost_travel + d + COST_PICK_DROP,
                 cost_next: (d * 2 - 2) + COST_PICK_DROP,
                 amount: inv.iron.amount,
             });
@@ -137,7 +137,7 @@ impl Bot {
                 candidates.push(GatherCandidate {
                     resource: ResourceType::Lemon,
                     target: pos,
-                    cost_now: cost_travel + (dist(&pos) * 1 - 1) + COST_PICK_DROP,
+                    cost_now: cost_travel + dist(&pos) + COST_PICK_DROP,
                     cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
                     amount: inv.lemon.amount,
                 });
@@ -152,7 +152,7 @@ impl Bot {
                 candidates.push(GatherCandidate {
                     resource: ResourceType::Plum,
                     target: pos,
-                    cost_now: cost_travel + (dist(&pos) * 1 - 1) + COST_PICK_DROP,
+                    cost_now: cost_travel + dist(&pos) + COST_PICK_DROP,
                     cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
                     amount: inv.plum.amount,
                 });
