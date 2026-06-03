@@ -64,9 +64,14 @@ impl Bot {
 
             // Score each unclaimed tree as a target.
             for tree in &game.trees {
-                if Bot::tree_occupied_by_other(tree, troll, game) {
+                if Bot::tree_occupied_by_others(tree, troll, game) {
                     continue;
                 }
+
+                if Bot::tree_would_be_gone_on_arrival(tree, troll, game) {
+                    continue;
+                }
+
                 actions.push(Bot::score_tree(troll, tree, game));
             }
         }
@@ -75,10 +80,33 @@ impl Bot {
     }
 
     /// Whether another of my trolls is already standing on this tree.
-    fn tree_occupied_by_other(tree: &Tree, troll: &Troll, game: &Game) -> bool {
+    fn tree_occupied_by_others(tree: &Tree, troll: &Troll, game: &Game) -> bool {
         game.trolls
             .iter()
             .any(|t| t.side == Side::Me && t.id != troll.id && t.position == tree.position)
+    }
+    /// Whether an opponent troll would chop this tree before my troll arrives.
+    fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> bool {
+        if let Some(opp_troll) = game
+            .trolls
+            .iter()
+            .find(|t| t.side == Side::Opp && t.position == tree.position)
+        {
+            let dist = troll
+                .dist_map
+                .get(&tree.position)
+                .map_or(i32::MAX, |(d, _)| *d);
+
+            // Stats and distances are non-negative in practice.
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+            let travel_turns = (dist as u32).div_ceil(troll.movement_speed as u32) as i32;
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+            let opp_chop_turns = (tree.health as u32).div_ceil(opp_troll.chop_power as u32) as i32;
+
+            return opp_chop_turns <= travel_turns;
+        }
+
+        false
     }
 
     /// Score a tree as wood-per-turn for the given troll.

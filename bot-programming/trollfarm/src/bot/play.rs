@@ -16,11 +16,26 @@ impl Bot {
         // Mid game
         self.mid_game(game);
 
-        // Solve movement — resolve each Move into a single step, avoiding collisions.
+        self.resolve_movement(game);
+    }
+
+    /// Resolve each `Move` action into a single step, avoiding collisions.
+    fn resolve_movement(&mut self, game: &Game) {
         let mut blocked: HashSet<Position> = HashSet::new();
 
-        // add stationary trolls
-        for action in self.actions.iter() {
+        // Trolls without actions will be stationary and block positions
+        if i32::try_from(self.actions.len()).unwrap() < game.troll_count(Side::Me) {
+            for troll in &game.trolls(Side::Me) {
+                let has_action = self.actions.iter().any(|a| a.troll_id() == Some(troll.id));
+                if !has_action {
+                    eprintln!("Troll: {} has not action", troll.id);
+                    blocked.insert(troll.position);
+                }
+            }
+        }
+
+        // Add stationary trolls with actions
+        for action in &self.actions {
             match action {
                 Action::Chop(id)
                 | Action::Harvest(id)
@@ -29,7 +44,7 @@ impl Bot {
                 | Action::Plant(id, _) => {
                     if let Some(troll) = game.trolls.iter().find(|&t| t.id == *id) {
                         blocked.insert(troll.position);
-                    };
+                    }
                 }
                 _ => {}
             }
@@ -56,7 +71,6 @@ impl Bot {
                 {
                     *target = adj;
                 }
-
             }
 
             if let Some(path) = reconstruct_path(troll.position, *target, &dist_map) {

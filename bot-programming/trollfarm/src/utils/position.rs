@@ -55,7 +55,7 @@ impl Position {
     ///
     /// let a = Position::new(1, 2);
     /// let b = Position::new(4, 6);
-    /// assert_eq!(a.manhattan(&b), 7);
+    /// assert_eq!(a.manhattan(b), 7);
     /// ```
     #[inline]
     #[must_use]
