@@ -90,7 +90,7 @@ impl Bot {
         if let Some(opp_troll) = game
             .trolls
             .iter()
-            .find(|t| t.side == Side::Opp && t.position == tree.position)
+            .find(|t| t.side == Side::Opp && t.position == tree.position && t.chop_power > 0)
         {
             let dist = troll
                 .dist_map
@@ -99,9 +99,10 @@ impl Bot {
 
             // Stats and distances are non-negative in practice.
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
-            let travel_turns = (dist as u32).div_ceil(troll.movement_speed as u32) as i32;
+            let travel_turns = (dist as u32).div_ceil(troll.movement_speed.max(1) as u32) as i32;
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
-            let opp_chop_turns = (tree.health as u32).div_ceil(opp_troll.chop_power as u32) as i32;
+            let opp_chop_turns =
+                (tree.health as u32).div_ceil(opp_troll.chop_power.max(1) as u32) as i32;
 
             return opp_chop_turns <= travel_turns;
         }

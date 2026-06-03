@@ -16,6 +16,8 @@ impl Bot {
         // Mid game
         self.mid_game(game);
 
+        // Late game
+
         self.resolve_movement(game);
     }
 
@@ -66,7 +68,7 @@ impl Bot {
                 if let Some(adj) = CARDINALS
                     .iter()
                     .map(|c| shack + *c)
-                    .filter(|p| b"~.ABLP".contains(&game.grid[*p]))
+                    .filter(|p| game.grid.contains(*p) && b"~.ABLP".contains(&game.grid[*p]))
                     .min_by_key(|p| dist(p))
                 {
                     *target = adj;
