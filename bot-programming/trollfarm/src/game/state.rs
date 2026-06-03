@@ -27,7 +27,7 @@ impl Side {
 
     #[must_use]
     #[allow(dead_code)]
-    pub fn other(&self) -> Self {
+    pub fn other(self) -> Self {
         match self {
             Side::Me => Side::Opp,
             Side::Opp => Side::Me,
@@ -128,7 +128,7 @@ impl Game {
     // ====================================================================
 
     /// Builds the initial game by reading the one-time startup block from
-    /// **stdin**. Entry point for live play on CodinGame.
+    /// **stdin**. Entry point for live play on `CodinGame`.
     ///
     /// For tests, prefer [`Game::create_mock`], which reads an in-memory string
     /// instead of blocking on stdin.
@@ -227,6 +227,7 @@ impl Game {
         let mines = (0..height)
             .cartesian_product(0..width)
             .filter_map(|(y, x)| {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 let pos = Position::new(x as i32, y as i32);
                 (grid.contains(pos) && grid[pos] == b'+').then_some(pos)
             })
@@ -290,8 +291,9 @@ impl Game {
     // Accessors
     // --------------------------------------------------------------------
     #[allow(dead_code)]
+    #[must_use]
     pub fn turns_remaining(&self) -> i32 {
-        Game::MAX_TURNS - self.turn as i32
+        Game::MAX_TURNS - i32::from(self.turn)
     }
 
     #[must_use]
@@ -323,6 +325,7 @@ impl Game {
         self.trolls.iter().filter(|t| t.side == side).collect()
     }
     #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn troll_count(&self, side: Side) -> i32 {
         i32::try_from(self.trolls.iter().filter(|t| t.side == side).count()).unwrap()
     }
@@ -363,7 +366,7 @@ impl Game {
     #[must_use]
     pub fn is_adjacent_to_shack(&self, troll: &Troll) -> bool {
         let shack = self.shack(troll.side);
-        troll.position.manhattan(&shack) == 1
+        troll.position.manhattan(shack) == 1
     }
 
     // --------------------------------------------------------------------

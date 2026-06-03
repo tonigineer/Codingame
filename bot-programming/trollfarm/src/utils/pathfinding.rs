@@ -30,10 +30,10 @@ use std::collections::{HashSet, HashMap, VecDeque};
 /// assert!(dist_map.values().len() == 8);
 /// ```
 #[must_use]
-pub fn bfs_distance_map(
+pub fn bfs_distance_map<S: std::hash::BuildHasher>(
     from: Position,
     grid: &Grid<u8>,
-    blocked: &HashSet<Position>,
+    blocked: &HashSet<Position, S>,
 ) -> HashMap<Position, (i32, Position)> {
     let mut map: HashMap<Position, (i32, Position)> = HashMap::new();
     let mut queue: VecDeque<Position> = VecDeque::new();
@@ -93,10 +93,10 @@ pub fn bfs_distance_map(
 /// assert!(path.unwrap().len() == 4);
 /// ```
 #[must_use]
-pub fn reconstruct_path(
+pub fn reconstruct_path<S: std::hash::BuildHasher>(
     from: Position,
     to: Position,
-    dist_map: &HashMap<Position, (i32, Position)>,
+    dist_map: &HashMap<Position, (i32, Position), S>,
 ) -> Option<Vec<Position>> {
     if from == to {
         return Some(Vec::new());

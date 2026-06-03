@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 /// Bonus added to a tree's wood-per-turn score based on its fruit type.
 /// Encourages picking lemon and banana trees when scores are otherwise close.
-const LEMON_BONUS: f32 = 0.1;
-const BANANA_BONUS: f32 = 0.05;
+const LEMON_BONUS: f32 = 0.01;
+const BANANA_BONUS: f32 = 0.005;
 
 /// Scale factor to convert the floating-point score into a sortable integer.
 const SCORE_SCALE: f32 = 1000.0;
@@ -46,30 +46,28 @@ impl Bot {
             return;
         }
 
-        let mut actions = self.collect_actions(&trolls, game);
+        let mut actions = Bot::collect_actions(&trolls, game);
         actions.sort_by_key(|a| -a.score);
 
         self.assign_actions(actions, &trolls);
     }
 
     /// Build the full list of scored candidate actions for all trolls.
-    fn collect_actions(&self, trolls: &[&Troll], game: &Game) -> Vec<Candidate> {
+    fn collect_actions(trolls: &[&Troll], game: &Game) -> Vec<Candidate> {
         let mut actions = Vec::new();
 
         for troll in trolls {
             // Full troll: head back to drop off wood.
             if troll.free_capacity() == 0 {
-                if let Some(act) = self.return_action(troll, game) {
-                    actions.push(act);
-                }
+                actions.push(Bot::return_action(troll, game));
             }
 
             // Score each unclaimed tree as a target.
             for tree in &game.trees {
-                if self.tree_occupied_by_other(tree, troll, game) {
+                if Bot::tree_occupied_by_other(tree, troll, game) {
                     continue;
                 }
-                actions.push(self.score_tree(troll, tree, game));
+                actions.push(Bot::score_tree(troll, tree, game));
             }
         }
 
@@ -77,7 +75,7 @@ impl Bot {
     }
 
     /// Whether another of my trolls is already standing on this tree.
-    fn tree_occupied_by_other(&self, tree: &Tree, troll: &Troll, game: &Game) -> bool {
+    fn tree_occupied_by_other(tree: &Tree, troll: &Troll, game: &Game) -> bool {
         game.trolls
             .iter()
             .any(|t| t.side == Side::Me && t.id != troll.id && t.position == tree.position)
@@ -92,16 +90,18 @@ impl Bot {
     /// where travel/return are measured via the troll's distance maps divided
     /// by its movement speed, and chop reflects its chop power. Fruit trees
     /// receive a small bonus so they win ties.
-    fn score_tree(&self, troll: &Troll, tree: &Tree, game: &Game) -> Candidate {
+    fn score_tree(troll: &Troll, tree: &Tree, game: &Game) -> Candidate {
         let dist = |p: &Position, map: &HashMap<Position, (i32, Position)>| {
-            map.get(p).map(|(d, _)| *d).unwrap_or(i32::MAX)
+            map.get(p).map_or(i32::MAX, |(d, _)| *d)
         };
 
         let travel = dist(&tree.position, &troll.dist_map) / troll.movement_speed;
         let chop = tree.health / troll.chop_power;
         let ret = dist(&tree.position, &game.shack_dist_map) / troll.movement_speed;
 
+        #[allow(clippy::cast_precision_loss)]
         let collectible = tree.size.min(troll.free_capacity()) as f32;
+        #[allow(clippy::cast_precision_loss)]
         let mut score = collectible / (travel + chop + ret) as f32;
 
         score += match tree.typ {
@@ -113,25 +113,26 @@ impl Bot {
         Candidate {
             troll_id: troll.id,
             action: Action::Move(troll.id, tree.position),
+            #[allow(clippy::cast_possible_truncation)]
             score: (score * SCORE_SCALE) as i32,
             tree: Some(tree.position),
         }
     }
 
     /// High-priority action to bring a full troll back to the shack and drop.
-    fn return_action(&self, troll: &Troll, game: &Game) -> Option<Candidate> {
+    fn return_action(troll: &Troll, game: &Game) -> Candidate {
         let (action, score) = if game.is_adjacent_to_shack(troll) {
             (Action::Drop(troll.id), 1000)
         } else {
             (Action::Move(troll.id, game.shack(Side::Me)), 900)
         };
 
-        Some(Candidate {
+        Candidate {
             troll_id: troll.id,
             action,
             score,
             tree: None,
-        })
+        }
     }
 
     /// Greedily assign the highest-scoring actions: each troll acts once,

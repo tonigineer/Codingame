@@ -38,8 +38,10 @@ def run_game(index: int, seed: int) -> GameResult:
             "java", "-jar", f"./{JAR}",
             "-p1", f"./{PKG}",
             "-p2", f"./{PKG}-ref",
-            "-s", "-seed", str(seed),
+            "-s", "-seed", str(seed)
         ]
+
+        print(" ".join(cmd))
 
         proc = subprocess.run(
             cmd, cwd=GAME_DIR,

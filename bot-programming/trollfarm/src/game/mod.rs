@@ -1,5 +1,5 @@
 mod entities;
-mod game;
+mod state;
 
-pub use game::{Side, Game, Action};
+pub use state::{Side, Game, Action};
 pub use entities::{ResourceType, TreeType, Tree, Troll};

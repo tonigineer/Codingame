@@ -52,18 +52,18 @@ impl Bot {
             .expect("Where is my first troll?");
 
         let shack = game.shack(Side::Me);
-        let remaining = MAX_TURNS - game.turn as i32;
+        let remaining = MAX_TURNS - i32::from(game.turn);
 
         if troll.free_capacity() == 0 {
-            self.actions.push(self.return_to_shack(troll, game, &shack));
+            self.actions.push(Bot::return_to_shack(troll, game, shack));
             return;
         }
 
-        let candidates = self.build_candidates(game);
+        let candidates = Bot::build_candidates(game);
 
         if let Some(candidate) = Self::pick_best_candidate(&candidates, remaining) {
             self.actions
-                .push(self.gather_action(troll, game, candidate));
+                .push(Bot::gather_action(troll, game, candidate));
             return;
         }
 
@@ -72,21 +72,16 @@ impl Bot {
         }
     }
 
-    fn return_to_shack(&self, troll: &crate::game::Troll, game: &Game, shack: &Position) -> Action {
+    fn return_to_shack(troll: &crate::game::Troll, game: &Game, shack: Position) -> Action {
         if game.is_adjacent_to_shack(troll) {
             Action::Drop(troll.id)
         } else {
-            Action::Move(troll.id, *shack)
+            Action::Move(troll.id, shack)
         }
     }
 
-    fn build_candidates(&self, game: &Game) -> Vec<GatherCandidate> {
-        let dist = |p: &Position| {
-            game.shack_dist_map
-                .get(p)
-                .map(|(d, _)| *d)
-                .unwrap_or(i32::MAX)
-        };
+    fn build_candidates(game: &Game) -> Vec<GatherCandidate> {
+        let dist = |p: &Position| game.shack_dist_map.get(p).map_or(i32::MAX, |(d, _)| *d);
 
         let inv = game.inventory(Side::Me);
 
@@ -106,7 +101,7 @@ impl Bot {
             .filter(|pos| game.grid.contains(*pos) && b".ABPL".contains(&game.grid[*pos]))
             .collect();
 
-        eprintln!("{:?}", all_adj_mine);
+        eprintln!("{all_adj_mine:?}");
 
         if let Some((pos, d)) = all_adj_mine
             .iter()
@@ -139,14 +134,14 @@ impl Bot {
             });
         }
 
-        eprintln!("{:?}", candidates);
+        eprintln!("{candidates:?}");
         candidates
     }
 
-    fn pick_best_candidate<'a>(
-        candidates: &'a [GatherCandidate],
+    fn pick_best_candidate(
+        candidates: &[GatherCandidate],
         remaining: i32,
-    ) -> Option<&'a GatherCandidate> {
+    ) -> Option<&GatherCandidate> {
         for tier in GatherTier::PRIORITY {
             for candidate in candidates {
                 if candidate.achievable(tier as i32, remaining) {
@@ -158,7 +153,6 @@ impl Bot {
     }
 
     fn gather_action(
-        &self,
         troll: &crate::game::Troll,
         game: &Game,
         candidate: &GatherCandidate,

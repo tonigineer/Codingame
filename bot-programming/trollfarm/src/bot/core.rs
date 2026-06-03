@@ -15,3 +15,9 @@ impl Bot {
         }
     }
 }
+
+impl Default for Bot {
+    fn default() -> Self {
+        Self::new()
+    }
+}

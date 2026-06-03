@@ -59,7 +59,7 @@ impl Position {
     /// ```
     #[inline]
     #[must_use]
-    pub fn manhattan(&self, other: &Self) -> usize {
+    pub fn manhattan(self, other: Self) -> usize {
         self.x.abs_diff(other.x) as usize + self.y.abs_diff(other.y) as usize
     }
 }

@@ -20,7 +20,8 @@ pub enum ResourceType {
 
 #[allow(dead_code)]
 impl ResourceType {
-    pub fn from_tree(typ: &TreeType) -> Self {
+    #[must_use]
+    pub fn from_tree(typ: TreeType) -> Self {
         match typ {
             TreeType::Plum => ResourceType::Plum,
             TreeType::Lemon => ResourceType::Lemon,
@@ -44,12 +45,12 @@ impl Resource {
     }
 
     #[must_use]
-    pub fn from_tree(typ: &TreeType, amount: i32) -> Self {
+    pub fn from_tree(typ: TreeType, amount: i32) -> Self {
         Self::new(ResourceType::from_tree(typ), amount)
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         self.amount == 0
     }
 }
@@ -94,6 +95,7 @@ impl Inventory {
 
     #[rustfmt::skip]
     #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn parse(line: &str) -> Self {
         let r: Vec<i32> = line
             .split_whitespace()
@@ -109,11 +111,11 @@ impl Inventory {
         }
     }
 
-    pub fn add(&mut self, resource: &Resource) {
+    pub fn add(&mut self, resource: Resource) {
         self.get_mut(resource.typ).amount += resource.amount;
     }
 
-    pub fn remove(&mut self, resource: &Resource) {
+    pub fn remove(&mut self, resource: Resource) {
         self.get_mut(resource.typ).amount -= resource.amount;
     }
 
@@ -141,7 +143,7 @@ impl Inventory {
     }
 
     #[must_use]
-    pub fn get_by_tree(&self, typ: &TreeType) -> i32 {
+    pub fn get_by_tree(&self, typ: TreeType) -> i32 {
         self.get(ResourceType::from_tree(typ))
     }
 
@@ -177,7 +179,7 @@ pub enum TreeType {
 #[allow(dead_code)]
 impl TreeType {
     #[must_use]
-    pub fn to_byte(&self) -> u8 {
+    pub fn to_byte(self) -> u8 {
         match self {
             TreeType::Apple => b'A',
             TreeType::Banana => b'B',
@@ -185,20 +187,12 @@ impl TreeType {
             TreeType::Plum => b'P',
         }
     }
+}
 
+#[allow(dead_code)]
+impl TreeType {
     #[must_use]
-    pub fn from_str(s: &str) -> Self {
-        match s {
-            "PLUM" => TreeType::Plum,
-            "LEMON" => TreeType::Lemon,
-            "APPLE" => TreeType::Apple,
-            "BANANA" => TreeType::Banana,
-            _ => unimplemented!("Unknown tree type: {s}"),
-        }
-    }
-
-    #[must_use]
-    pub fn to_str(&self) -> &'static str {
+    pub fn to_str(self) -> &'static str {
         match self {
             TreeType::Plum => "PLUM",
             TreeType::Lemon => "LEMON",
@@ -208,7 +202,7 @@ impl TreeType {
     }
 
     #[must_use]
-    pub fn as_resource_type(&self) -> ResourceType {
+    pub fn as_resource_type(self) -> ResourceType {
         match self {
             TreeType::Apple => ResourceType::Apple,
             TreeType::Banana => ResourceType::Banana,
@@ -218,9 +212,23 @@ impl TreeType {
     }
 }
 
+impl std::str::FromStr for TreeType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "PLUM" => Ok(TreeType::Plum),
+            "LEMON" => Ok(TreeType::Lemon),
+            "APPLE" => Ok(TreeType::Apple),
+            "BANANA" => Ok(TreeType::Banana),
+            _ => Err(format!("Unknown tree type: {s}")),
+        }
+    }
+}
+
 impl std::fmt::Display for TreeType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_str())
+        write!(f, "{}", (*self).to_str())
     }
 }
 
@@ -239,10 +247,11 @@ pub struct Tree {
 impl Tree {
     #[rustfmt::skip]
     #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn parse(line: &str) -> Self {
         let d: Vec<&str> = line.split_whitespace().collect();
         Self {
-            typ:        TreeType::from_str(d[0]),
+            typ:        d[0].parse().unwrap(),
             position:   Position::new(d[1].parse().unwrap(), d[2].parse().unwrap()),
             size:       d[3].parse().unwrap(),
             health:     d[4].parse().unwrap(),
@@ -255,8 +264,7 @@ impl Tree {
     #[must_use]
     pub fn cooldown_time(&self) -> i32 {
         match self.typ {
-            TreeType::Plum => 8,
-            TreeType::Lemon => 8,
+            TreeType::Plum | TreeType::Lemon => 8,
             TreeType::Apple => 9,
             TreeType::Banana => 6,
         }
@@ -266,8 +274,7 @@ impl Tree {
     #[must_use]
     pub fn cooldown_time_water(&self) -> i32 {
         match self.typ {
-            TreeType::Plum => 3,
-            TreeType::Lemon => 3,
+            TreeType::Plum | TreeType::Lemon => 3,
             TreeType::Apple => 2,
             TreeType::Banana => 4,
         }
@@ -276,8 +283,7 @@ impl Tree {
     #[must_use]
     pub fn initial_cooldown(typ: TreeType) -> i32 {
         match typ {
-            TreeType::Plum => 8,
-            TreeType::Lemon => 8,
+            TreeType::Plum | TreeType::Lemon => 8,
             TreeType::Apple => 9,
             TreeType::Banana => 6,
         }
@@ -286,8 +292,7 @@ impl Tree {
     #[must_use]
     pub fn initial_cooldown_water(typ: TreeType) -> i32 {
         match typ {
-            TreeType::Plum => 3,
-            TreeType::Lemon => 3,
+            TreeType::Plum | TreeType::Lemon => 3,
             TreeType::Apple => 2,
             TreeType::Banana => 4,
         }
@@ -297,23 +302,22 @@ impl Tree {
     #[rustfmt::skip]
     #[must_use]
     pub fn max_health(typ: TreeType, size: i32) -> i32 {
-        match (typ, size) {
-            (TreeType::Plum,   1) | (TreeType::Lemon, 1) => 6,
-            (TreeType::Plum,   2) | (TreeType::Lemon, 2) => 8,
-            (TreeType::Plum,   3) | (TreeType::Lemon, 3) => 10,
-            (TreeType::Plum,   4) | (TreeType::Lemon, 4) => 12,
-            (TreeType::Apple,  1) => 11,
-            (TreeType::Apple,  2) => 14,
-            (TreeType::Apple,  3) => 17,
-            (TreeType::Apple,  4) => 20,
-            (TreeType::Banana, 1) => 3,
-            (TreeType::Banana, 2) => 4,
-            (TreeType::Banana, 3) => 5,
-            (TreeType::Banana, 4) => 6,
-            _ => 10,
-        }
+          match (typ, size) {
+              (TreeType::Plum | TreeType::Lemon, 1) | (TreeType::Banana, 4) => 6,
+              (TreeType::Plum | TreeType::Lemon, 2) => 8,
+              (TreeType::Plum | TreeType::Lemon, 4) => 12,
+             (TreeType::Apple,  1) => 11,
+             (TreeType::Apple,  2) => 14,
+             (TreeType::Apple,  3) => 17,
+             (TreeType::Apple,  4) => 20,
+             (TreeType::Banana, 1) => 3,
+             (TreeType::Banana, 2) => 4,
+             (TreeType::Banana, 3) => 5,
+             _ => 10,
+         }
     }
 
+    #[must_use]
     pub fn get_resource_type(&self) -> ResourceType {
         match self.typ {
             TreeType::Apple => ResourceType::Apple,
@@ -351,6 +355,7 @@ pub struct Troll {
 impl Troll {
     #[rustfmt::skip]
     #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn parse(line: &str) -> Self {
         let d: Vec<i32> = line
             .split_whitespace()
@@ -405,7 +410,7 @@ impl Troll {
     }
 
     #[must_use]
-    pub fn carries(&self, typ: &TreeType) -> i32 {
+    pub fn carries(&self, typ: TreeType) -> i32 {
         self.carries_resource(ResourceType::from_tree(typ))
     }
 
