@@ -2,7 +2,7 @@ use crate::bot::Bot;
 use crate::game::{Action, Game, ResourceType, Side};
 use crate::utils::{CARDINALS, Position};
 
-const MAX_TURNS: i32 = 15;
+const MAX_TURNS: i32 = 20;
 
 #[derive(Debug, Clone, Copy)]
 enum GatherTier {
@@ -19,24 +19,32 @@ impl GatherTier {
 struct GatherCandidate {
     resource: ResourceType,
     target: Position,
-    cost: i32,
+    // Due to starting on the shack or coming from another drop
+    // the current tour could be different than another one.
+    cost_now: i32,  // cost for current trip
+    cost_next: i32, // cost for another trip
     amount: i32,
 }
 
 impl GatherCandidate {
     fn turns_to(&self, goal: i32) -> Option<i32> {
         let need = goal - self.amount;
-        (need > 0).then(|| need * self.cost + 1)
+        (need > 0).then(|| self.cost_now + (need - 1) * self.cost_next)
     }
 
     fn achievable(&self, goal: i32, remaining: i32) -> bool {
         let Some(turns) = self.turns_to(goal) else {
             return false;
         };
+
         let possible = turns <= remaining;
         if possible {
-            eprintln!("Going for: {goal} {:?} [Remaining {turns}]", self.resource);
+            eprintln!(
+                "Going for: {goal} {:?} [Remaining turns {turns}]",
+                self.resource
+            );
         }
+
         possible
     }
 }
@@ -83,6 +91,9 @@ impl Bot {
     fn build_candidates(game: &Game) -> Vec<GatherCandidate> {
         let dist = |p: &Position| game.shack_dist_map.get(p).map_or(i32::MAX, |(d, _)| *d);
 
+        let troll = game.trolls(Side::Me)[0];
+        let dist_troll = |p: &Position| troll.dist_map.get(p).map_or(i32::MAX, |(d, _)| *d);
+
         let inv = game.inventory(Side::Me);
 
         let closest_tree = |rt: ResourceType| {
@@ -101,40 +112,53 @@ impl Bot {
             .filter(|pos| game.grid.contains(*pos) && b".ABPL".contains(&game.grid[*pos]))
             .collect();
 
-        eprintln!("{all_adj_mine:?}");
+        const COST_PICK_DROP: i32 = 2;
 
         if let Some((pos, d)) = all_adj_mine
             .iter()
             .map(|p| (*p, dist(p)))
             .min_by_key(|(_, d)| *d)
         {
+            let cost_travel = dist_troll(&pos);
             candidates.push(GatherCandidate {
                 resource: ResourceType::Iron,
                 target: pos,
-                cost: (d - 1) * 2 + 2,
+                cost_now: cost_travel + (d * 1 - 1) + COST_PICK_DROP,
+                cost_next: (d * 2 - 2) + COST_PICK_DROP,
                 amount: inv.iron.amount,
             });
         }
 
         if let Some(pos) = closest_tree(ResourceType::Lemon) {
-            candidates.push(GatherCandidate {
-                resource: ResourceType::Lemon,
-                target: pos,
-                cost: dist(&pos) * 2 + 2,
-                amount: inv.lemon.amount,
-            });
+            let cost_travel = dist_troll(&pos);
+            if let Some(tree) = game.tree_at(pos)
+                && (tree.fruits > 0 || tree.cooldown <= cost_travel)
+            {
+                candidates.push(GatherCandidate {
+                    resource: ResourceType::Lemon,
+                    target: pos,
+                    cost_now: cost_travel + (dist(&pos) * 1 - 1) + COST_PICK_DROP,
+                    cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
+                    amount: inv.lemon.amount,
+                });
+            }
         }
 
         if let Some(pos) = closest_tree(ResourceType::Plum) {
-            candidates.push(GatherCandidate {
-                resource: ResourceType::Plum,
-                target: pos,
-                cost: dist(&pos) * 2 + 2,
-                amount: inv.plum.amount,
-            });
+            let cost_travel = dist_troll(&pos);
+            if let Some(tree) = game.tree_at(pos)
+                && (tree.fruits > 0 || tree.cooldown <= cost_travel)
+            {
+                candidates.push(GatherCandidate {
+                    resource: ResourceType::Plum,
+                    target: pos,
+                    cost_now: cost_travel + (dist(&pos) * 1 - 1) + COST_PICK_DROP,
+                    cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
+                    amount: inv.plum.amount,
+                });
+            }
         }
 
-        eprintln!("{candidates:?}");
         candidates
     }
 
