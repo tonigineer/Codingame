@@ -1,5 +1,5 @@
 use crate::bot::Bot;
-use crate::game::{Action, Game, ResourceType, Side, TrainCost};
+use crate::game::{Action, Game, ResourceType, Side, TrainCost, Tree, TreeType};
 use crate::utils::{CARDINALS, Position};
 
 const MAX_TURNS: i32 = 20;
@@ -19,6 +19,11 @@ impl GatherTier {
 struct GatherCandidate {
     resource: ResourceType,
     target: Position,
+    /// Distance from the troll's *current* position to the gather spot — the
+    /// travel cost to begin this trip. Selecting the nearest target gives
+    /// stateless "commitment": the troll keeps heading where it already is,
+    /// because its own position is the only memory we need.
+    travel: i32,
     // Due to starting on the shack or coming from another drop
     // the current tour could be different than another one.
     cost_now: i32,  // cost for current trip
@@ -77,6 +82,15 @@ impl Bot {
 
         let candidates = Bot::build_candidates(game);
 
+        // Don't abandon a resource we're already standing next to: if the troll
+        // can gather a still-wanted candidate this turn without moving (adjacent
+        // to iron / on a fruited tree), bank that zero-travel gain instead of
+        // walking off to a "better" but distant target.
+        if let Some(action) = Self::gather_in_reach(troll, game, &candidates) {
+            self.actions.push(action);
+            return;
+        }
+
         // While any floor resource is still short, pursue the deficit
         // unconditionally (the minimum takes precedence over feasibility within
         // the turn window). Once all floors are met, fall back to the normal
@@ -94,7 +108,20 @@ impl Bot {
             return;
         }
 
+        // Train the best troll meeting the full stat floors, if affordable.
         if let Some(action) = Self::best_trainable(game) {
+            self.actions.push(action);
+            return;
+        }
+
+        // Deadlock breaker: the floor is unaffordable and the missing floor
+        // resource won't be harvestable within the early-game window (e.g. the
+        // only plum trees are size 1, ~30 turns from fruiting). Train the best
+        // troll we can afford now — a slightly weaker troll out immediately beats
+        // a perfect one dozens of turns late.
+        if Self::floor_deficit_stuck(game)
+            && let Some(action) = Self::best_affordable(game)
+        {
             self.actions.push(action);
         }
     }
@@ -145,6 +172,7 @@ impl Bot {
                 candidates.push(GatherCandidate {
                     resource: ResourceType::Lemon,
                     target: pos,
+                    travel: cost_travel,
                     cost_now: cost_travel + dist(&pos) + COST_PICK_DROP,
                     cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
                     amount: inv.lemon.amount,
@@ -160,6 +188,7 @@ impl Bot {
                 candidates.push(GatherCandidate {
                     resource: ResourceType::Plum,
                     target: pos,
+                    travel: cost_travel,
                     cost_now: cost_travel + dist(&pos) + COST_PICK_DROP,
                     cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
                     amount: inv.plum.amount,
@@ -176,6 +205,7 @@ impl Bot {
             candidates.push(GatherCandidate {
                 resource: ResourceType::Iron,
                 target: pos,
+                travel: cost_travel,
                 cost_now: cost_travel + d + COST_PICK_DROP,
                 cost_next: (d * 2 - 2) + COST_PICK_DROP,
                 amount: inv.iron.amount,
@@ -240,15 +270,40 @@ impl Bot {
             .min_by_key(|c| c.cost_now)
     }
 
+    /// MINE/HARVEST for the first still-wanted candidate the troll can act on
+    /// *in place* (adjacent to iron, or standing on a fruited tree). Bounded by
+    /// the Best goal so it doesn't keep gathering a resource we already have
+    /// enough of. `None` when nothing is in reach. Independent of the tier
+    /// achievability gate on purpose: grabbing a unit we're already next to is
+    /// worth it even when finishing the full goal wouldn't fit the turn window.
+    fn gather_in_reach(
+        troll: &crate::game::Troll,
+        game: &Game,
+        candidates: &[GatherCandidate],
+    ) -> Option<Action> {
+        candidates
+            .iter()
+            .filter(|c| c.amount < GatherTier::Best as i32)
+            .map(|c| Bot::gather_action(troll, game, c))
+            .find(|a| !matches!(a, Action::Move(_, _)))
+    }
+
+    /// Pick the next gather target: among the candidates achievable at the best
+    /// reachable tier, the one nearest the troll. Selecting by distance-to-troll
+    /// (rather than insertion order) gives stateless commitment — once the troll
+    /// is en route, the target it is closest to stays the pick, so a freshly
+    /// fruited far tree can't preempt a trip already underway.
     fn pick_best_candidate(
         candidates: &[GatherCandidate],
         remaining: i32,
     ) -> Option<&GatherCandidate> {
         for tier in GatherTier::PRIORITY {
-            for candidate in candidates {
-                if candidate.achievable(tier as i32, remaining) {
-                    return Some(candidate);
-                }
+            if let Some(best) = candidates
+                .iter()
+                .filter(|c| c.achievable(tier as i32, remaining))
+                .min_by_key(|c| c.travel)
+            {
+                return Some(best);
             }
         }
         None
@@ -280,13 +335,45 @@ impl Bot {
     const MIN_CARRY_CAPACITY: i32 = 2;
     const MIN_CHOP_POWER: i32 = 1;
 
+    /// Relaxed floors used only to break a deadlock (see [`Bot::floor_deficit_stuck`]):
+    /// a still-functional troll that can move, carry, and chop.
+    const RELAX_MOVEMENT_SPEED: i32 = 1;
+    const RELAX_CARRY_CAPACITY: i32 = 1;
+    const RELAX_CHOP_POWER: i32 = 1;
+
+    /// How many turns we'll wait for a deficit fruit to appear before giving up
+    /// the stat floor and training a weaker troll now.
+    const STUCK_HORIZON: i32 = 20;
+
+    /// Best troll meeting the full stat floors that we can afford right now.
     fn best_trainable(game: &Game) -> Option<Action> {
+        Self::best_trainable_with(
+            game,
+            Self::MIN_MOVEMENT_SPEED,
+            Self::MIN_CARRY_CAPACITY,
+            Self::MIN_CHOP_POWER,
+        )
+    }
+
+    /// Best troll we can afford right now under the relaxed (deadlock) floors.
+    fn best_affordable(game: &Game) -> Option<Action> {
+        Self::best_trainable_with(
+            game,
+            Self::RELAX_MOVEMENT_SPEED,
+            Self::RELAX_CARRY_CAPACITY,
+            Self::RELAX_CHOP_POWER,
+        )
+    }
+
+    /// Highest-stat-total troll affordable now, with each attribute at or above
+    /// the given lower bounds (harvest power is always 0 — we don't gather apple).
+    fn best_trainable_with(game: &Game, min_speed: i32, min_carry: i32, min_chop: i32) -> Option<Action> {
         let mut best: Option<(Action, i32)> = None;
 
-        for ms in Self::MIN_MOVEMENT_SPEED..=4 {
-            for cc in Self::MIN_CARRY_CAPACITY..=4 {
+        for ms in min_speed..=4 {
+            for cc in min_carry..=4 {
                 for hp in 0..=0 {
-                    for cp in Self::MIN_CHOP_POWER..=4 {
+                    for cp in min_chop..=4 {
                         if !game.can_train(Side::Me, ms, cc, hp, cp) {
                             continue;
                         }
@@ -300,5 +387,48 @@ impl Bot {
         }
 
         best.map(|(action, _)| action)
+    }
+
+    /// Whether a stat-floor *fruit* resource (plum→speed, lemon→carry) is short
+    /// **and** can't be harvested within [`Bot::STUCK_HORIZON`] turns — i.e. no
+    /// tree of that type will bear fruit in time. Iron is excluded: it's mined,
+    /// so it's never stuck. When true we should stop waiting and train a weaker
+    /// troll now rather than strand ourselves at one troll for ~30+ turns.
+    fn floor_deficit_stuck(game: &Game) -> bool {
+        let cost = Self::floor_cost(game);
+        let inv = game.inventory(Side::Me);
+
+        [
+            (inv.plum.amount < cost.plum, TreeType::Plum),
+            (inv.lemon.amount < cost.lemon, TreeType::Lemon),
+        ]
+        .iter()
+        .any(|&(short, typ)| short && Self::soonest_fruit(game, typ) > Self::STUCK_HORIZON)
+    }
+
+    /// Fewest turns until some tree of `typ` bears a harvestable fruit, or
+    /// `i32::MAX` if there is none.
+    fn soonest_fruit(game: &Game, typ: TreeType) -> i32 {
+        game.trees
+            .iter()
+            .filter(|t| t.typ == typ)
+            .map(|t| Self::time_to_fruit(t, game))
+            .min()
+            .unwrap_or(i32::MAX)
+    }
+
+    /// Turns until `tree` next bears fruit. A tree only fruits at size 4; below
+    /// that, each cooldown cycle just grows it one size (faster next to water).
+    fn time_to_fruit(tree: &Tree, game: &Game) -> i32 {
+        if tree.fruits > 0 {
+            return 0;
+        }
+        let period = if game.is_near_water(tree.position) {
+            tree.cooldown_time_water()
+        } else {
+            tree.cooldown_time()
+        };
+        let grows_needed = (4 - tree.size).max(0);
+        tree.cooldown + grows_needed * period
     }
 }
