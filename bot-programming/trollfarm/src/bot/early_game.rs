@@ -82,7 +82,7 @@ impl Bot {
         let remaining = if can_afford_min {
             MAX_TURNS - i32::from(game.turn)
         } else {
-            i32::MAX
+            MAX_TURNS
         };
 
         let candidates = Bot::build_candidates(game);

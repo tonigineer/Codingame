@@ -115,6 +115,14 @@ pub struct Game {
     pub trees: Vec<Tree>,
     pub trolls: Vec<Troll>,
     pub shack_dist_map: HashMap<Position, (i32, Position)>,
+    pub opp_shack_dist_map: HashMap<Position, (i32, Position)>,
+    /// Average walking distance from each shack to the remaining trees,
+    /// recomputed every turn (see [`Game::update_tree_proximity`]). Lower means
+    /// the trees cluster closer to that shack; comparing the two reveals when the
+    /// remaining trees sit mostly on the opponent's side of the map. Both are
+    /// `0.0` once no trees remain.
+    pub trees_avg_dist_mine: f32,
+    pub trees_avg_dist_opp: f32,
     next_troll_id: i32,
 }
 
@@ -243,6 +251,9 @@ impl Game {
             trees: Vec::new(),
             trolls: Vec::new(),
             shack_dist_map: HashMap::new(),
+            opp_shack_dist_map: HashMap::new(),
+            trees_avg_dist_mine: 0.0,
+            trees_avg_dist_opp: 0.0,
             next_troll_id: 100,
         }
     }
@@ -294,6 +305,35 @@ impl Game {
     #[must_use]
     pub fn turns_remaining(&self) -> i32 {
         Game::MAX_TURNS - i32::from(self.turn)
+    }
+
+    /// Recompute [`Game::trees_avg_dist_mine`] and [`Game::trees_avg_dist_opp`]
+    /// from the current trees and the two shack distance maps.
+    ///
+    /// Call once per turn *after* `shack_dist_map` and `opp_shack_dist_map` have
+    /// been refreshed for this turn. Unreachable trees (none, in practice) are
+    /// ignored; with no remaining trees both averages are `0.0`.
+    pub fn update_tree_proximity(&mut self) {
+        self.trees_avg_dist_mine = Self::avg_tree_dist(&self.trees, &self.shack_dist_map);
+        self.trees_avg_dist_opp = Self::avg_tree_dist(&self.trees, &self.opp_shack_dist_map);
+        eprintln!("Entropy: {} vs {}", self.trees_avg_dist_mine, self.trees_avg_dist_opp);
+    }
+
+    /// Mean BFS distance from a shack (encoded in `dist_map`) to every reachable
+    /// tree. Returns `0.0` when there are no reachable trees.
+    fn avg_tree_dist(trees: &[Tree], dist_map: &HashMap<Position, (i32, Position)>) -> f32 {
+        let dists = trees
+            .iter()
+            .filter_map(|t| dist_map.get(&t.position).map(|(d, _)| *d));
+
+        let (sum, count) = dists.fold((0i32, 0i32), |(s, c), d| (s + d, c + 1));
+        if count == 0 {
+            return 0.0;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        {
+            sum as f32 / count as f32
+        }
     }
 
     #[must_use]

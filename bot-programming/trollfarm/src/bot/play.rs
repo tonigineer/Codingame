@@ -92,9 +92,15 @@ impl Bot {
         let blocked = HashSet::new();
         game.shack_dist_map =
             crate::utils::bfs_distance_map(game.shack(Side::Me), &game.grid, &blocked);
+        game.opp_shack_dist_map =
+            crate::utils::bfs_distance_map(game.shack(Side::Opp), &game.grid, &blocked);
 
         for troll in &mut game.trolls {
             troll.dist_map = crate::utils::bfs_distance_map(troll.position, &game.grid, &blocked);
         }
+
+        // Refresh the per-turn tree-proximity comparison now that both shack
+        // distance maps are current.
+        game.update_tree_proximity();
     }
 }
