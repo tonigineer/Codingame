@@ -1,18 +1,26 @@
 use crate::bot::Bot;
+use crate::bot::params;
 use crate::game::{Action, Game, ResourceType, Side, TrainCost, Tree, TreeType};
 use crate::utils::{CARDINALS, Position};
 
-const MAX_TURNS: i32 = 20;
-
 #[derive(Debug, Clone, Copy)]
 enum GatherTier {
-    Best = 10,
-    Good = 5,
-    Least = 2,
+    Best,
+    Good,
+    Least,
 }
 
 impl GatherTier {
     const PRIORITY: [GatherTier; 3] = [GatherTier::Best, GatherTier::Good, GatherTier::Least];
+
+    /// Target stock for this tier, from the active [`params`].
+    fn threshold(self, p: &params::Params) -> i32 {
+        match self {
+            GatherTier::Best => p.gather_best,
+            GatherTier::Good => p.gather_good,
+            GatherTier::Least => p.gather_least,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -65,6 +73,7 @@ impl Bot {
             .expect("Where is my first troll?");
 
         let shack = game.shack(Side::Me);
+        let p = params::get();
 
         if troll.free_capacity() == 0 {
             self.actions.push(Bot::return_to_shack(troll, game, shack));
@@ -74,10 +83,10 @@ impl Bot {
         // The minimum-stat troll takes precedence over the fixed early-game window.
         let can_afford_min = game.can_train(
             Side::Me,
-            Self::MIN_MOVEMENT_SPEED,
-            Self::MIN_CARRY_CAPACITY,
+            p.min_movement_speed,
+            p.min_carry_capacity,
             0,
-            Self::MIN_CHOP_POWER,
+            p.min_chop_power,
         );
 
         let candidates = Bot::build_candidates(game);
@@ -96,7 +105,7 @@ impl Bot {
         // the turn window). Once all floors are met, fall back to the normal
         // tier-based gathering bounded by the remaining early-game turns.
         let chosen = if can_afford_min {
-            let remaining = MAX_TURNS - i32::from(game.turn);
+            let remaining = p.early_max_turns - i32::from(game.turn);
             Self::pick_best_candidate(&candidates, remaining)
         } else {
             Self::pick_deficit_candidate(&candidates, game)
@@ -135,7 +144,7 @@ impl Bot {
     }
 
     fn build_candidates(game: &Game) -> Vec<GatherCandidate> {
-        const COST_PICK_DROP: i32 = 2;
+        let cost_pick_drop = params::get().cost_pick_drop;
 
         let dist = |p: &Position| game.shack_dist_map.get(p).map_or(i32::MAX, |(d, _)| *d);
 
@@ -173,8 +182,8 @@ impl Bot {
                     resource: ResourceType::Lemon,
                     target: pos,
                     travel: cost_travel,
-                    cost_now: cost_travel + dist(&pos) + COST_PICK_DROP,
-                    cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
+                    cost_now: cost_travel + dist(&pos) + cost_pick_drop,
+                    cost_next: (dist(&pos) * 2 - 2) + cost_pick_drop,
                     amount: inv.lemon.amount,
                 });
             }
@@ -189,8 +198,8 @@ impl Bot {
                     resource: ResourceType::Plum,
                     target: pos,
                     travel: cost_travel,
-                    cost_now: cost_travel + dist(&pos) + COST_PICK_DROP,
-                    cost_next: (dist(&pos) * 2 - 2) + COST_PICK_DROP,
+                    cost_now: cost_travel + dist(&pos) + cost_pick_drop,
+                    cost_next: (dist(&pos) * 2 - 2) + cost_pick_drop,
                     amount: inv.plum.amount,
                 });
             }
@@ -206,8 +215,8 @@ impl Bot {
                 resource: ResourceType::Iron,
                 target: pos,
                 travel: cost_travel,
-                cost_now: cost_travel + d + COST_PICK_DROP,
-                cost_next: (d * 2 - 2) + COST_PICK_DROP,
+                cost_now: cost_travel + d + cost_pick_drop,
+                cost_next: (d * 2 - 2) + cost_pick_drop,
                 amount: inv.iron.amount,
             });
         }
@@ -230,12 +239,13 @@ impl Bot {
     /// Per-resource amounts the minimum-stat second troll costs (its training
     /// floor): `plum` for speed, `lemon` for carry, `iron` for chop.
     fn floor_cost(game: &Game) -> TrainCost {
+        let p = params::get();
         game.train_cost(
             Side::Me,
-            Self::MIN_MOVEMENT_SPEED,
-            Self::MIN_CARRY_CAPACITY,
+            p.min_movement_speed,
+            p.min_carry_capacity,
             0,
-            Self::MIN_CHOP_POWER,
+            p.min_chop_power,
         )
     }
 
@@ -281,9 +291,10 @@ impl Bot {
         game: &Game,
         candidates: &[GatherCandidate],
     ) -> Option<Action> {
+        let p = params::get();
         candidates
             .iter()
-            .filter(|c| c.amount < GatherTier::Best as i32)
+            .filter(|c| c.amount < GatherTier::Best.threshold(p))
             .map(|c| Bot::gather_action(troll, game, c))
             .find(|a| !matches!(a, Action::Move(_, _)))
     }
@@ -297,10 +308,11 @@ impl Bot {
         candidates: &[GatherCandidate],
         remaining: i32,
     ) -> Option<&GatherCandidate> {
+        let p = params::get();
         for tier in GatherTier::PRIORITY {
             if let Some(best) = candidates
                 .iter()
-                .filter(|c| c.achievable(tier as i32, remaining))
+                .filter(|c| c.achievable(tier.threshold(p), remaining))
                 .min_by_key(|c| c.travel)
             {
                 return Some(best);
@@ -328,40 +340,29 @@ impl Bot {
         }
     }
 
-    /// Minimum stats for a useful second troll: it must be able to carry a real
-    /// load (>= 2), move at a decent pace (>= 2), and actually chop wood (>= 1).
-    /// We only train once we can afford a troll meeting all three floors.
-    const MIN_MOVEMENT_SPEED: i32 = 2;
-    const MIN_CARRY_CAPACITY: i32 = 2;
-    const MIN_CHOP_POWER: i32 = 1;
-
-    /// Relaxed floors used only to break a deadlock (see [`Bot::floor_deficit_stuck`]):
-    /// a still-functional troll that can move, carry, and chop.
-    const RELAX_MOVEMENT_SPEED: i32 = 1;
-    const RELAX_CARRY_CAPACITY: i32 = 1;
-    const RELAX_CHOP_POWER: i32 = 1;
-
-    /// How many turns we'll wait for a deficit fruit to appear before giving up
-    /// the stat floor and training a weaker troll now.
-    const STUCK_HORIZON: i32 = 20;
-
     /// Best troll meeting the full stat floors that we can afford right now.
+    /// Floors (`min_*`) live in [`params`]; the shipped defaults require a troll
+    /// that can carry a real load, move at a decent pace, and chop wood.
     fn best_trainable(game: &Game) -> Option<Action> {
+        let p = params::get();
         Self::best_trainable_with(
             game,
-            Self::MIN_MOVEMENT_SPEED,
-            Self::MIN_CARRY_CAPACITY,
-            Self::MIN_CHOP_POWER,
+            p.min_movement_speed,
+            p.min_carry_capacity,
+            p.min_chop_power,
         )
     }
 
-    /// Best troll we can afford right now under the relaxed (deadlock) floors.
+    /// Best troll we can afford right now under the relaxed (deadlock) floors
+    /// (`relax_*` in [`params`]): a still-functional troll that can move, carry,
+    /// and chop.
     fn best_affordable(game: &Game) -> Option<Action> {
+        let p = params::get();
         Self::best_trainable_with(
             game,
-            Self::RELAX_MOVEMENT_SPEED,
-            Self::RELAX_CARRY_CAPACITY,
-            Self::RELAX_CHOP_POWER,
+            p.relax_movement_speed,
+            p.relax_carry_capacity,
+            p.relax_chop_power,
         )
     }
 
@@ -390,7 +391,7 @@ impl Bot {
     }
 
     /// Whether a stat-floor *fruit* resource (plum→speed, lemon→carry) is short
-    /// **and** can't be harvested within [`Bot::STUCK_HORIZON`] turns — i.e. no
+    /// **and** can't be harvested within `params.stuck_horizon` turns — i.e. no
     /// tree of that type will bear fruit in time. Iron is excluded: it's mined,
     /// so it's never stuck. When true we should stop waiting and train a weaker
     /// troll now rather than strand ourselves at one troll for ~30+ turns.
@@ -403,7 +404,7 @@ impl Bot {
             (inv.lemon.amount < cost.lemon, TreeType::Lemon),
         ]
         .iter()
-        .any(|&(short, typ)| short && Self::soonest_fruit(game, typ) > Self::STUCK_HORIZON)
+        .any(|&(short, typ)| short && Self::soonest_fruit(game, typ) > params::get().stuck_horizon)
     }
 
     /// Fewest turns until some tree of `typ` bears a harvestable fruit, or

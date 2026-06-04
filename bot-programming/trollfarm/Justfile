@@ -11,6 +11,8 @@ bot_games_dir := ".."
 repo_dir := "../.."
 target_dir := repo_dir / "target"
 game_dir := "assets/Troll-Farm"
+jar := "troll-farm-1.0-SNAPSHOT.jar"
+opponent := "trollfarm-ref-gold-X"
 
 # List available recipes
 default:
@@ -44,8 +46,8 @@ ci: fmt-check lint build test
 # CodinGame bots
 #
 # `submit`  builds + flattens a bot crate into a single-file CG submission
-# `play`    play one game against the reference bot (given or default seed)
-# `eval`    evaluate N games against the reference bot
+# `play`    play & WATCH one game in the browser (referee server)
+# `eval`    benchmark N games vs the reference bot (eval.py: stats + plots)
 # ---------------------------------------------------------------------------
 
 # Inline a modular bot crate into one submittable file
@@ -59,10 +61,18 @@ _deploy pkg="trollfarm": (build pkg)
 # Build and flatten a bot for submission
 submit pkg="trollfarm": (_deploy pkg) (_flatten pkg)
 
-# Play a single game against the reference bot (default seed 1)
-play seed="1": (_deploy "trollfarm")
-    python eval.py --seed "{{ seed }}"
+# Args: seed, opponent binary in the game dir (e.g. `just play 7 trollfarm-ref-gold-3`).
+# Play one game detached; watch at http://localhost:8888 (`just stop` to end)
+play seed="1" opp=opponent: (_deploy "trollfarm")
+    -pkill -f "{{ jar }}"
+    cd "{{ game_dir }}" && nohup java -jar ./{{ jar }} -p1 ./trollfarm -p2 ./{{ opp }} -s -seed "{{ seed }}" >/tmp/trollfarm-play.log 2>&1 &
+    @sleep 1 && echo "▶ seed {{ seed }} vs {{ opp }} — watch at http://localhost:8888/test.html  (logs: /tmp/trollfarm-play.log, stop: just stop)"
 
-# Evaluate N games against the reference bot (default 100)
-eval games="100": (_deploy "trollfarm")
-    python eval.py "{{ games }}"
+# Stop a detached `just play` game server
+stop:
+    -pkill -f "{{ jar }}"
+
+# Args: games, base seed, label (e.g. `just eval 1000 1 candidate`).
+# Benchmark N games vs the reference bot -> eval_out/<label>/ (stats + plots)
+eval games="1000" seed="1" label="current": (_deploy "trollfarm")
+    python eval.py "{{ games }}" --seed "{{ seed }}" --jobs 16 --label "{{ label }}"

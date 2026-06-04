@@ -1,22 +1,8 @@
 use crate::bot::Bot;
+use crate::bot::params;
 use crate::game::{Action, Game, Side, Tree, TreeType, Troll};
 use crate::utils::Position;
 use std::collections::HashMap;
-
-/// Bonus added to a tree's wood-per-turn score based on its fruit type.
-/// Encourages picking lemon and banana trees when scores are otherwise close.
-const LEMON_BONUS: f32 = 0.01;
-const BANANA_BONUS: f32 = 0.005;
-
-/// Economy-sabotage bonus: when we out-number the opponent, chopping the lemon
-/// and plum trees by their shack denies the fruit their second troll needs.
-/// Large enough to clearly out-rank ordinary wood-per-turn picks.
-const DENIAL_BONUS: f32 = 2.0;
-/// A tree counts as "near the opponent's shack" within this BFS distance.
-const OPP_DENIAL_RADIUS: i32 = 6;
-
-/// Scale factor to convert the floating-point score into a sortable integer.
-const SCORE_SCALE: f32 = 1000.0;
 
 /// A candidate move for a single troll, ranked by `score`.
 ///
@@ -127,8 +113,9 @@ impl Bot {
     /// by its movement speed, and chop reflects its chop power. Fruit trees
     /// receive a small bonus so they win ties.
     fn score_tree(troll: &Troll, tree: &Tree, game: &Game) -> Candidate {
-        let dist = |p: &Position, map: &HashMap<Position, (i32, Position)>| {
-            map.get(p).map_or(i32::MAX, |(d, _)| *d)
+        let p = params::get();
+        let dist = |pos: &Position, map: &HashMap<Position, (i32, Position)>| {
+            map.get(pos).map_or(i32::MAX, |(d, _)| *d)
         };
 
         let travel = dist(&tree.position, &troll.dist_map) / troll.movement_speed;
@@ -141,8 +128,8 @@ impl Bot {
         let mut score = collectible / (travel + chop + ret) as f32;
 
         score += match tree.typ {
-            TreeType::Lemon => LEMON_BONUS,
-            TreeType::Banana => BANANA_BONUS,
+            TreeType::Lemon => p.lemon_bonus,
+            TreeType::Banana => p.banana_bonus,
             _ => 0.0,
         };
 
@@ -155,8 +142,8 @@ impl Bot {
                 .opp_shack_dist_map
                 .get(&tree.position)
                 .map_or(i32::MAX, |(d, _)| *d);
-            if opp_dist <= OPP_DENIAL_RADIUS {
-                score += DENIAL_BONUS;
+            if opp_dist <= p.opp_denial_radius {
+                score += p.denial_bonus;
             }
         }
 
@@ -164,7 +151,7 @@ impl Bot {
             troll_id: troll.id,
             action: Action::Move(troll.id, tree.position),
             #[allow(clippy::cast_possible_truncation)]
-            score: (score * SCORE_SCALE) as i32,
+            score: (score * p.score_scale) as i32,
             tree: Some(tree.position),
         }
     }

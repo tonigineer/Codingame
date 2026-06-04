@@ -8,6 +8,35 @@ impl Bot {
     pub fn play(&mut self, game: &mut Game) {
         self.reset_turn(game);
 
+        // DEBUG: dump both shack inventories each turn (+ our per-troll carry).
+        // eval.py parses these `[INV]` lines from the replay log for trajectory,
+        // composition, wasted-fruit and game-length plots.
+        {
+            let me = game.inventory(Side::Me);
+            let opp = game.inventory(Side::Opp);
+            let carried: Vec<String> = game
+                .trolls(Side::Me)
+                .iter()
+                .map(|t| {
+                    format!(
+                        "t{}[P{} L{} A{} B{} I{} W{}]",
+                        t.id, t.carry_plum, t.carry_lemon, t.carry_apple,
+                        t.carry_banana, t.carry_iron, t.carry_wood
+                    )
+                })
+                .collect();
+            eprintln!(
+                "[INV] turn={} me_shack[P{} L{} A{} B{} I{} W{}] \
+                 opp_shack[P{} L{} A{} B{} I{} W{}] {}",
+                game.turn,
+                me.plum.amount, me.lemon.amount, me.apple.amount,
+                me.banana.amount, me.iron.amount, me.wood.amount,
+                opp.plum.amount, opp.lemon.amount, opp.apple.amount,
+                opp.banana.amount, opp.iron.amount, opp.wood.amount,
+                carried.join(" ")
+            );
+        }
+
         // Early game
         if game.troll_count(Side::Me) == 1 {
             self.second_troll(game);
