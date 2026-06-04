@@ -17,7 +17,6 @@ impl Bot {
         self.mid_game(game);
 
         // Late game
-
         self.resolve_movement(game);
     }
 

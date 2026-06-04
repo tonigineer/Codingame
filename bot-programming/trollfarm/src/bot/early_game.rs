@@ -60,12 +60,30 @@ impl Bot {
             .expect("Where is my first troll?");
 
         let shack = game.shack(Side::Me);
-        let remaining = MAX_TURNS - i32::from(game.turn);
 
         if troll.free_capacity() == 0 {
             self.actions.push(Bot::return_to_shack(troll, game, shack));
             return;
         }
+
+        // The minimum-stat troll takes precedence over the fixed early-game window.
+        // Until we can afford a troll meeting all three floors, the gather phase is
+        // extended (effectively uncapped) so we keep collecting the resources it
+        // needs — we never stall at turn `MAX_TURNS` with no affordable troll.
+        // Once it's affordable, the normal `MAX_TURNS` budget decides whether to
+        // gather a little more or train the best troll we can.
+        let can_afford_min = game.can_train(
+            Side::Me,
+            Self::MIN_MOVEMENT_SPEED,
+            Self::MIN_CARRY_CAPACITY,
+            0,
+            Self::MIN_CHOP_POWER,
+        );
+        let remaining = if can_afford_min {
+            MAX_TURNS - i32::from(game.turn)
+        } else {
+            i32::MAX
+        };
 
         let candidates = Bot::build_candidates(game);
 
@@ -195,13 +213,20 @@ impl Bot {
         }
     }
 
+    /// Minimum stats for a useful second troll: it must be able to carry a real
+    /// load (>= 2), move at a decent pace (>= 2), and actually chop wood (>= 1).
+    /// We only train once we can afford a troll meeting all three floors.
+    const MIN_MOVEMENT_SPEED: i32 = 2;
+    const MIN_CARRY_CAPACITY: i32 = 2;
+    const MIN_CHOP_POWER: i32 = 1;
+
     fn best_trainable(game: &Game) -> Option<Action> {
         let mut best: Option<(Action, i32)> = None;
 
-        for ms in 0..=4 {
-            for cc in 0..=4 {
+        for ms in Self::MIN_MOVEMENT_SPEED..=4 {
+            for cc in Self::MIN_CARRY_CAPACITY..=4 {
                 for hp in 0..=0 {
-                    for cp in 0..=4 {
+                    for cp in Self::MIN_CHOP_POWER..=4 {
                         if !game.can_train(Side::Me, ms, cc, hp, cp) {
                             continue;
                         }
