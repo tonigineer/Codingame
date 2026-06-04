@@ -8,6 +8,13 @@ use std::collections::HashMap;
 const LEMON_BONUS: f32 = 0.01;
 const BANANA_BONUS: f32 = 0.005;
 
+/// Economy-sabotage bonus: when we out-number the opponent, chopping the lemon
+/// and plum trees by their shack denies the fruit their second troll needs.
+/// Large enough to clearly out-rank ordinary wood-per-turn picks.
+const DENIAL_BONUS: f32 = 2.0;
+/// A tree counts as "near the opponent's shack" within this BFS distance.
+const OPP_DENIAL_RADIUS: i32 = 6;
+
 /// Scale factor to convert the floating-point score into a sortable integer.
 const SCORE_SCALE: f32 = 1000.0;
 
@@ -138,6 +145,20 @@ impl Bot {
             TreeType::Banana => BANANA_BONUS,
             _ => 0.0,
         };
+
+        // While we out-number the opponent, prioritise the lemon/plum trees by
+        // their shack to starve their second troll of fruit.
+        if game.troll_count(Side::Me) > game.troll_count(Side::Opp)
+            && matches!(tree.typ, TreeType::Lemon | TreeType::Plum)
+        {
+            let opp_dist = game
+                .opp_shack_dist_map
+                .get(&tree.position)
+                .map_or(i32::MAX, |(d, _)| *d);
+            if opp_dist <= OPP_DENIAL_RADIUS {
+                score += DENIAL_BONUS;
+            }
+        }
 
         Candidate {
             troll_id: troll.id,
