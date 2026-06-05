@@ -36,7 +36,7 @@ from pathlib import Path
 import numpy as np
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-GAME_DIR = SCRIPT_DIR / "assets/Troll-Farm"
+GAME_DIR = SCRIPT_DIR.parent / "codingame"
 JAR = "troll-farm-1.0-SNAPSHOT.jar"
 DEFAULT_P1 = "./trollfarm"
 DEFAULT_P2 = "./trollfarm-ref-gold-X"
@@ -492,7 +492,7 @@ def main() -> int:
     parser.add_argument("--p2", default=DEFAULT_P2, help="player 2 command (reference)")
     parser.add_argument("--jobs", type=int, default=8, help="parallel games (default 8)")
     parser.add_argument("--label", default="current", help="label for output files")
-    parser.add_argument("--out", default=str(SCRIPT_DIR / "eval_out"),
+    parser.add_argument("--out", default=str(SCRIPT_DIR.parent / "eval"),
                         help="output directory for plots and results JSON")
     parser.add_argument("--no-plot", action="store_true")
     args = parser.parse_args()

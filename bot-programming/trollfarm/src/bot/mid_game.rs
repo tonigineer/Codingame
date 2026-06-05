@@ -4,6 +4,17 @@ use crate::game::{Action, Game, Side, Tree, TreeType, Troll};
 use crate::utils::Position;
 use std::collections::HashMap;
 
+/// What a troll is here to do, which weights how strongly it values banking
+/// cargo at the shack versus staying out chopping.
+///
+/// Mirrors the planter pick in [`Bot::late_game`]: our slow/weak starter is the
+/// home economy farmer; every trained troll ranges out to chop and deny.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    Economy,
+    Harasser,
+}
+
 /// A candidate move for a single troll, ranked by `score`.
 ///
 /// If `tree` is set, the action targets that tree (and the tree gets claimed
@@ -50,8 +61,10 @@ impl Bot {
         let mut actions = Vec::new();
 
         for troll in trolls {
-            // Full troll: head back to drop off wood.
-            if troll.free_capacity() == 0 {
+            // Carrying cargo: banking it home is one scored option among the
+            // tree targets, so a troll that can still chop profitably is not
+            // dragged home early.
+            if troll.has_cargo() {
                 actions.push(Bot::return_action(troll, game));
             }
 
@@ -133,17 +146,29 @@ impl Bot {
             _ => 0.0,
         };
 
-        // While we out-number the opponent, prioritise the lemon/plum trees by
-        // their shack to starve their second troll of fruit.
-        if game.troll_count(Side::Me) > game.troll_count(Side::Opp)
-            && matches!(tree.typ, TreeType::Lemon | TreeType::Plum)
-        {
+        // Denial: felling a tree near the enemy shack stumps their short-travel
+        // economy. This value does *not* depend on our carry capacity — we fell
+        // the tree whether or not we can keep the wood — so a full harasser
+        // still chops it (wood wasted on purpose, exactly like the strong troll
+        // in the reference replay). Only roaming harassers chase denial; the
+        // home economy troll weights it at zero. Scored per turn over the
+        // reach+chop cost (no return leg) so closer, cheaper kills rank higher.
+        let denial_weight = match Bot::role(troll, game) {
+            Role::Harasser => p.denial_bonus,
+            Role::Economy => p.denial_weight_economy,
+        };
+        if denial_weight > 0.0 {
             let opp_dist = game
                 .opp_shack_dist_map
                 .get(&tree.position)
                 .map_or(i32::MAX, |(d, _)| *d);
             if opp_dist <= p.opp_denial_radius {
-                score += p.denial_bonus;
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    let proximity = (p.opp_denial_radius - opp_dist + 1) as f32
+                        / (p.opp_denial_radius + 1) as f32;
+                    score += denial_weight * proximity / (travel + chop).max(1) as f32;
+                }
             }
         }
 
@@ -156,18 +181,61 @@ impl Bot {
         }
     }
 
-    /// High-priority action to bring a full troll back to the shack and drop.
-    fn return_action(troll: &Troll, game: &Game) -> Candidate {
-        let (action, score) = if game.is_adjacent_to_shack(troll) {
-            (Action::Drop(troll.id), 1000)
+    /// Role of a troll: the lowest-id troll (our slow/weak starter) farms at
+    /// home; every trained troll is a roaming harasser. Mirrors the planter
+    /// pick in [`Bot::late_game`].
+    fn role(troll: &Troll, game: &Game) -> Role {
+        let first = game.trolls(Side::Me).into_iter().map(|t| t.id).min();
+        if Some(troll.id) == first {
+            Role::Economy
         } else {
-            (Action::Move(troll.id, game.shack(Side::Me)), 900)
+            Role::Harasser
+        }
+    }
+
+    /// Scored action to bank a cargo-carrying troll's load at the shack.
+    ///
+    /// Measured as banked-items-per-turn so it ranks on the same scale as a
+    /// tree's wood-per-turn, letting a still-profitable chop outscore it. The
+    /// pull is weighted by role — the home economy troll values banking far
+    /// more than a denial harasser, whose wood is incidental — and boosted when
+    /// the troll is full, since it can collect nothing more.
+    fn return_action(troll: &Troll, game: &Game) -> Candidate {
+        let p = params::get();
+
+        let weight = match Bot::role(troll, game) {
+            Role::Economy => p.return_weight_economy,
+            Role::Harasser => p.return_weight_harasser,
+        };
+
+        let ret_turns = (game
+            .shack_dist_map
+            .get(&troll.position)
+            .map_or(i32::MAX, |(d, _)| *d)
+            / troll.movement_speed.max(1))
+        .max(1);
+
+        let full_boost = if troll.free_capacity() == 0 {
+            p.return_full_boost
+        } else {
+            1.0
+        };
+
+        #[allow(clippy::cast_precision_loss)]
+        let per_turn = troll.total_carried() as f32 / ret_turns as f32;
+        let score = per_turn * weight * full_boost;
+
+        let action = if game.is_adjacent_to_shack(troll) {
+            Action::Drop(troll.id)
+        } else {
+            Action::Move(troll.id, game.shack(Side::Me))
         };
 
         Candidate {
             troll_id: troll.id,
             action,
-            score,
+            #[allow(clippy::cast_possible_truncation)]
+            score: (score * p.score_scale) as i32,
             tree: None,
         }
     }

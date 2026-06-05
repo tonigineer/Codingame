@@ -10,7 +10,7 @@
 bot_games_dir := ".."
 repo_dir := "../.."
 target_dir := repo_dir / "target"
-game_dir := "assets/Troll-Farm"
+game_dir := "codingame"
 jar := "troll-farm-1.0-SNAPSHOT.jar"
 opponent := "trollfarm-ref-gold-X"
 
@@ -75,4 +75,4 @@ stop:
 # Args: games, base seed, label (e.g. `just eval 1000 1 candidate`).
 # Benchmark N games vs the reference bot -> eval_out/<label>/ (stats + plots)
 eval games="1000" seed="1" label="current": (_deploy "trollfarm")
-    python eval.py "{{ games }}" --seed "{{ seed }}" --jobs 16 --label "{{ label }}"
+    python scripts/eval.py "{{ games }}" --seed "{{ seed }}" --jobs 16 --label "{{ label }}"
