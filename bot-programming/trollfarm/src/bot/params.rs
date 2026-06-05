@@ -59,6 +59,12 @@ pub struct Params {
     /// Extra multiplier on the return pull when the troll is full — it can
     /// collect nothing more, so loitering is pure waste.
     pub return_full_boost: f32,
+
+    // ---- economy grove (src/bot/mid_game.rs) ----
+    /// Value (points) of adding one more tree to the home banana grove. Scored
+    /// per turn over the pick→walk→plant cost, so as near-shack cells fill and
+    /// the walk grows, expansion naturally yields to chopping the grown grove.
+    pub grove_value: f32,
 }
 
 /// The shipped defaults — the values used when the `tuning` feature is off.
@@ -84,6 +90,7 @@ pub const DEFAULT: Params = Params {
     return_weight_economy: 1.0,
     return_weight_harasser: 0.3,
     return_full_boost: 4.0,
+    grove_value: 2.0,
 };
 
 /// The active parameters. Without the `tuning` feature this is just a
@@ -129,6 +136,7 @@ fn load_from_env() -> Params {
         return_weight_economy: env_f32("TF_RETURN_WEIGHT_ECONOMY", DEFAULT.return_weight_economy),
         return_weight_harasser: env_f32("TF_RETURN_WEIGHT_HARASSER", DEFAULT.return_weight_harasser),
         return_full_boost: env_f32("TF_RETURN_FULL_BOOST", DEFAULT.return_full_boost),
+        grove_value: env_f32("TF_GROVE_VALUE", DEFAULT.grove_value),
     };
     eprintln!("[PARAMS] {p:?}");
     p
