@@ -64,6 +64,23 @@ fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> boo
 }
 
 
+/// Harassment intensity in `[0,1]`: how much the harasser should still chase
+/// denial rather than farm at home.
+///
+/// Full early, fading with the turn count and with the opponent's banked score
+/// — if they are outscoring us our denial plainly isn't working, so the troll
+/// is better off coming home to farm. Reaches `0` at `harass_turn_decay` turns
+/// or once the opponent's score hits `harass_opp_cap`, whichever comes first;
+/// at `0` the harasser flips to the home economy playbook.
+fn harass_factor(game: &Game) -> f32 {
+    let p = params::get();
+    let turn_w = (1.0 - f32::from(game.turn) / p.harass_turn_decay.max(1.0)).clamp(0.0, 1.0);
+    #[allow(clippy::cast_precision_loss)]
+    let opp = game.inventory(Side::Opp).score() as f32;
+    let opp_w = (1.0 - opp / p.harass_opp_cap.max(1.0)).clamp(0.0, 1.0);
+    turn_w * opp_w
+}
+
 impl Bot {
     /// Push every scored option for one harasser troll onto `out`.
     ///
@@ -106,9 +123,19 @@ impl Bot {
     /// assert!(matches!(out[0].action, Action::Move(100, _)));
     /// ```
     pub fn harasser_candidates(troll: &Troll, game: &Game, out: &mut Vec<Candidate>) {
+        let hf = harass_factor(game);
+
+        // Harassment exhausted (late game, or the opponent is outscoring us):
+        // the troll stops wasting tempo on the far side and farms at home like
+        // the economy troll — banking, chopping the home grove, picking/planting.
+        if hf <= 0.0 {
+            Bot::economy_candidates(troll, game, out);
+            return;
+        }
+
         // If there are no trees left, go harass the enemy near its shack; once
         // the enemy is tapped out, switch to planting our own fruit.
-        if let Some(candidate) = Bot::last_resort(troll, game) {
+        if let Some(candidate) = Bot::last_resort(troll, game, hf) {
             out.push(candidate);
         };
 
@@ -121,7 +148,7 @@ impl Bot {
         for tree in game.trees.iter().filter(|t| {
             !tree_occupied_by_others(t, troll, game) && !tree_would_be_gone_on_arrival(t, troll, game)
         }) {
-            out.push(Bot::score_chop(troll, tree, game));
+            out.push(Bot::score_chop(troll, tree, game, hf));
         }
     }
 
@@ -133,7 +160,7 @@ impl Bot {
     /// out of resources there is nothing left to deny, so the harasser switches
     /// to the self-sufficient [`Bot::seed_workflow`] instead. Returns `None`
     /// when neither applies (e.g. no opponent visible, or already on target).
-    fn last_resort(troll: &Troll, game: &Game) -> Option<Candidate> {
+    fn last_resort(troll: &Troll, game: &Game, hf: f32) -> Option<Candidate> {
         // Once the opponent has no resources left there is nothing to deny:
         // they cannot train and have nothing to rebuild, so camping their
         // planting spot is wasted tempo. Switch to a pick → plant → chop loop.
@@ -156,7 +183,7 @@ impl Bot {
                 troll_id: troll.id,
                 action: Action::Move(troll.id, pos),
                 #[allow(clippy::cast_possible_truncation)]
-                score: p.harass_camp_score as i32,
+                score: (p.harass_camp_score * hf) as i32,
                 tree: None,
             }),
             _ => None,
@@ -249,7 +276,7 @@ impl Bot {
     /// result is scaled by [`crate::bot::params::Params::score_scale`] and a
     /// per-fruit `harass_chop_scale_*` multiplier before truncating to the
     /// integer ranking key.
-    fn score_chop(troll: &Troll, tree: &Tree, game: &Game) -> Candidate {
+    fn score_chop(troll: &Troll, tree: &Tree, game: &Game, hf: f32) -> Candidate {
         let p = params::get();
 
         // Score for gathering.
@@ -264,8 +291,9 @@ impl Bot {
 
         // Denial: felling a tree near the enemy shack stumps their short-travel
         // economy, independent of our carry capacity, so a full harasser still
-        // chops it. Only harassers chase denial; the economy troll weights it 0.
-        let denial_weight = p.harass_denial_weight * tree.size as f32 / 4.0;
+        // chops it. Faded by `hf` so it tapers off with the turn count / when the
+        // opponent is ahead. Only harassers chase denial; the economy troll = 0.
+        let denial_weight = p.harass_denial_weight * tree.size as f32 / 4.0 * hf;
         let opp_dist = game
             .opp_shack_dist_map
             .get(&tree.position)

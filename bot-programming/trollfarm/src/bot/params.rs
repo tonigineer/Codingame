@@ -60,11 +60,26 @@ pub struct Params {
     /// collect nothing more, so loitering is pure waste.
     pub return_full_boost: f32,
 
-    // ---- economy grove (src/bot/mid_game.rs) ----
+    // ---- economy grove (src/bot/strat_economy.rs) ----
     /// Value (points) of adding one more tree to the home banana grove. Scored
     /// per turn over the pick→walk→plant cost, so as near-shack cells fill and
     /// the walk grows, expansion naturally yields to chopping the grown grove.
     pub grove_value: f32,
+    /// Per-turn value coefficients for the home economy troll's three actions,
+    /// each its own knob so picking, harvesting and chopping rebalance
+    /// independently. The candidate score is `weight * gain / trip_turns`
+    /// (before `score_scale`): `econ_pick_weight` per seed-fetch trip,
+    /// `econ_harvest_weight` per fruit harvested, `econ_chop_weight` per wood
+    /// unit felled.
+    pub econ_pick_weight: f32,
+    pub econ_harvest_weight: f32,
+    pub econ_chop_weight: f32,
+    /// Early-game urgency boost for picking (fetching a seed to expand the
+    /// grove): pick weight is multiplied by `1 + econ_pick_early_boost` at
+    /// turn 0, fading linearly to `1.0` by `econ_pick_boost_turns`. Builds the
+    /// grove early, when a planted tree has time to compound.
+    pub econ_pick_early_boost: f32,
+    pub econ_pick_boost_turns: f32,
 
     // ---- harassment (src/bot/strat_harassment.rs) ----
     /// Flat ranking score for a free harasser planting a held seed on a home
@@ -90,6 +105,13 @@ pub struct Params {
     /// Weight on a harasser's return-home score. A harasser's wood is
     /// incidental, so the pull back to bank is deliberately weak.
     pub harass_return_weight: f32,
+    /// Harassment fade. The harasser's denial/camp intensity is
+    /// `clamp(1 - turn/harass_turn_decay) * clamp(1 - opp_score/harass_opp_cap)`,
+    /// in `[0,1]`. Once it reaches 0 — late game, or the opponent is outscoring
+    /// us, so denial isn't working — the harasser flips to home economy
+    /// instead of wasting tempo on the far side.
+    pub harass_turn_decay: f32,
+    pub harass_opp_cap: f32,
 }
 
 /// The shipped defaults — the values used when the `tuning` feature is off.
@@ -115,7 +137,12 @@ pub const DEFAULT: Params = Params {
     return_weight_economy: 1.0,
     return_weight_harasser: 0.3,
     return_full_boost: 4.0,
-    grove_value: 2.0,
+    grove_value: 4.0,
+    econ_pick_weight: 2.0,
+    econ_harvest_weight: 8.0,
+    econ_chop_weight: 5.0,
+    econ_pick_early_boost: 4.0,
+    econ_pick_boost_turns: 120.0,
     harass_seed_plant_score: 1000.0,
     harass_seed_fetch_score: 0.0,
     harass_camp_score: 0.0,
@@ -124,6 +151,8 @@ pub const DEFAULT: Params = Params {
     harass_chop_scale_banana: 1.50,
     harass_chop_scale_plum: 1.25,
     harass_return_weight: 1.0,
+    harass_turn_decay: 120.0,
+    harass_opp_cap: 150.0,
 };
 
 /// The active parameters. Without the `tuning` feature this is just a
@@ -170,6 +199,11 @@ fn load_from_env() -> Params {
         return_weight_harasser: env_f32("TF_RETURN_WEIGHT_HARASSER", DEFAULT.return_weight_harasser),
         return_full_boost: env_f32("TF_RETURN_FULL_BOOST", DEFAULT.return_full_boost),
         grove_value: env_f32("TF_GROVE_VALUE", DEFAULT.grove_value),
+        econ_pick_weight: env_f32("TF_ECON_PICK_WEIGHT", DEFAULT.econ_pick_weight),
+        econ_harvest_weight: env_f32("TF_ECON_HARVEST_WEIGHT", DEFAULT.econ_harvest_weight),
+        econ_chop_weight: env_f32("TF_ECON_CHOP_WEIGHT", DEFAULT.econ_chop_weight),
+        econ_pick_early_boost: env_f32("TF_ECON_PICK_EARLY_BOOST", DEFAULT.econ_pick_early_boost),
+        econ_pick_boost_turns: env_f32("TF_ECON_PICK_BOOST_TURNS", DEFAULT.econ_pick_boost_turns),
         harass_seed_plant_score: env_f32(
             "TF_HARASS_SEED_PLANT_SCORE",
             DEFAULT.harass_seed_plant_score,
@@ -190,6 +224,8 @@ fn load_from_env() -> Params {
         ),
         harass_chop_scale_plum: env_f32("TF_HARASS_CHOP_SCALE_PLUM", DEFAULT.harass_chop_scale_plum),
         harass_return_weight: env_f32("TF_HARASS_RETURN_WEIGHT", DEFAULT.harass_return_weight),
+        harass_turn_decay: env_f32("TF_HARASS_TURN_DECAY", DEFAULT.harass_turn_decay),
+        harass_opp_cap: env_f32("TF_HARASS_OPP_CAP", DEFAULT.harass_opp_cap),
     };
     eprintln!("[PARAMS] {p:?}");
     p
