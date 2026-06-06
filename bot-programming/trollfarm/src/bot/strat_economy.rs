@@ -1,8 +1,10 @@
 use crate::bot::{Bot, Candidate};
 use crate::bot::params;
+use crate::bot::strat_harassment::tree_occupied_by_others;
 use crate::game::{Troll, Action, Game, ResourceType, Side, TrainCost, Tree, TreeType};
-use crate::utils::{CARDINALS, Position};
-use std::collections::HashMap;
+use crate::utils::{CARDINALS, Position, bfs_distance_map};
+use std::cmp::Reverse;
+use std::collections::HashSet;
 
 const WOOD_PTS: i32 = 4;
 const FRUIT_PTS: i32 = 1;
@@ -15,7 +17,7 @@ impl Bot {
         }
 
         for tree in &game.trees {
-            if Bot::tree_occupied_by_others(tree, troll, game) {
+            if tree_occupied_by_others(tree, troll, game) {
                 continue;
             }
             Bot::economy_tree(troll, tree, game, out);
@@ -105,7 +107,7 @@ impl Bot {
             if tree.fruits > 0 && troll.harvest_power > 0 {
                 let gain = tree.fruits.min(free).min(troll.harvest_power);
                 let cell = (tree.typ == TreeType::Banana)
-                    .then(|| Bot::nearest_free_cell(game, &troll.dist_map))
+                    .then(|| Bot::nearest_free_cell(game, troll))
                     .flatten();
                 #[allow(clippy::cast_precision_loss)]
                 let (value, cost) = match cell {
@@ -142,7 +144,7 @@ impl Bot {
     fn pick_candidate(troll: &Troll, game: &Game) -> Option<Candidate> {
         let p = params::get();
         let speed = troll.movement_speed.max(1);
-        let (_, cell_dist) = Bot::nearest_free_cell(game, &game.shack_dist_map)?;
+        let (_, cell_dist) = Bot::nearest_free_cell(game, troll)?;
         let to_shack = Bot::dist(game, &game.shack_dist_map, troll.position) / speed;
 
         // pick + walk-to-shack + walk-to-cell + plant
@@ -173,7 +175,7 @@ impl Bot {
     fn plant_candidate(troll: &Troll, game: &Game) -> Option<Candidate> {
         let p = params::get();
         let speed = troll.movement_speed.max(1);
-        let (cell, cell_dist) = Bot::nearest_free_cell(game, &troll.dist_map)?;
+        let (cell, cell_dist) = Bot::nearest_free_cell(game, troll)?;
 
         let cost = cell_dist / speed + 1;
         #[allow(clippy::cast_precision_loss)]
@@ -194,25 +196,154 @@ impl Bot {
         })
     }
 
-    /// Nearest empty grass cell on our side of the map (closer to our shack than
-    /// the opponent's), excluding the shack ring, by the given distance map.
-    /// Ties prefer a spot next to water (faster regrowth). Returns `(cell, dist)`
-    /// where `dist` is read from `map`.
-    fn nearest_free_cell(
-        game: &Game,
-        map: &HashMap<Position, (i32, Position)>,
-    ) -> Option<(Position, i32)> {
+    /// Nearest empty grass cell to our shack, found by a fresh BFS over the
+    /// *current* grid. The map is recomputed here (rather than reusing the
+    /// per-turn cache) so trees grown or planted this turn are accounted for,
+    /// and every other troll's tile is blocked so the path routes around them.
+    /// Shack-*adjacent* cells are eligible — except when the shack has only a
+    /// single passable neighbour, in which case that lone cell is its only
+    /// access route and is kept clear so a planted tree never obstructs the
+    /// shack. Ties on distance are broken by the cell *farthest* from the
+    /// opponent shack, then by proximity to water (faster regrowth). Returns
+    /// `(cell, dist)`.
+    ///
+    /// # Examples
+    ///
+    /// The helper plants on each returned cell (marking it `B`) and re-queries,
+    /// so successive cells surface. Walking the shack from 4 down to 1 passable
+    /// neighbour shows the near ring filling and, once only the lone gateway is
+    /// left, the nearest spots stepping out to distance 2.
+    ///
+    /// ```
+    /// use trollfarm::bot::Bot;
+    /// use trollfarm::game::{Game, Side};
+    /// use trollfarm::utils::Position;
+    ///
+    /// // `nearest_free_cell` builds its own shack BFS, so the mock just needs
+    /// // one of our trolls to pass in (its tile is never blocked). We plant on
+    /// // each returned cell so the next-nearest surfaces.
+    /// let three_nearest = |input: &str| -> Vec<(Position, i32)> {
+    ///     let mut game = Game::create_mock(input);
+    ///     let troll = game.trolls(Side::Me)[0].clone();
+    ///     let mut out = Vec::new();
+    ///     for _ in 0..3 {
+    ///         let Some((cell, dist)) = Bot::nearest_free_cell(&game, &troll) else { break };
+    ///         out.push((cell, dist));
+    ///         game.grid[cell] = b'B';
+    ///     }
+    ///     out
+    /// };
+    ///
+    /// // 4 passable neighbours: shack (2,2) in open ground — the three nearest
+    /// // spots are all on the ring (distance 1). Troll parked at (0,4).
+    /// let case4 = "\
+    /// 8 5
+    /// ........
+    /// ........
+    /// ..0....1
+    /// ........
+    /// ........
+    /// 0 0 0 0 0 0
+    /// 0 0 0 0 0 0
+    /// 0
+    /// 1
+    /// 100 0 0 4 1 2 1 1 0 0 0 0 0 0";
+    /// let n = three_nearest(case4);
+    /// assert!(n.iter().all(|&(c, d)| d == 1 && c.manhattan(Position::new(2, 2)) == 1));
+    ///
+    /// // 3 passable neighbours: shack (3,0) on the top edge — three ring cells.
+    /// let case3 = "\
+    /// 8 3
+    /// ...0...1
+    /// ........
+    /// ........
+    /// 0 0 0 0 0 0
+    /// 0 0 0 0 0 0
+    /// 0
+    /// 1
+    /// 100 0 7 2 1 2 1 1 0 0 0 0 0 0";
+    /// let n = three_nearest(case3);
+    /// assert!(n.iter().all(|&(c, d)| d == 1 && c.manhattan(Position::new(3, 0)) == 1));
+    ///
+    /// // 2 passable neighbours: shack (0,0) in a corner — two ring cells, then
+    /// // the third-nearest steps out to distance 2.
+    /// let case2 = "\
+    /// 8 3
+    /// 0......1
+    /// ........
+    /// ........
+    /// 0 0 0 0 0 0
+    /// 0 0 0 0 0 0
+    /// 0
+    /// 1
+    /// 100 0 7 2 1 2 1 1 0 0 0 0 0 0";
+    /// let n = three_nearest(case2);
+    /// assert_eq!((n[0].1, n[1].1, n[2].1), (1, 1, 2));
+    /// assert_eq!(n[0].0.manhattan(Position::new(0, 0)), 1);
+    /// assert_eq!(n[1].0.manhattan(Position::new(0, 0)), 1);
+    /// assert_eq!(n[2].0.manhattan(Position::new(0, 0)), 2);
+    ///
+    /// // 1 passable neighbour: shack (1,0) is walled in by water, so only (1,1)
+    /// // is adjacent. It is the gateway and kept clear, so every nearby spot is
+    /// // pushed out to distance 2.
+    /// let case1 = "\
+    /// 8 3
+    /// ~0~....1
+    /// ........
+    /// ........
+    /// 0 0 0 0 0 0
+    /// 0 0 0 0 0 0
+    /// 0
+    /// 1
+    /// 100 0 7 2 1 2 1 1 0 0 0 0 0 0";
+    /// let n = three_nearest(case1);
+    /// assert!(n.iter().all(|&(_, d)| d == 2));
+    /// assert!(!n.iter().any(|&(c, _)| c == Position::new(1, 1)));
+    /// ```
+    pub fn nearest_free_cell(game: &Game, troll: &Troll) -> Option<(Position, i32)> {
         let shack = game.shack(Side::Me);
+
+        // Recompute the shack distance map here, over the *current* grid, so
+        // trees grown or planted this turn are reflected (the per-turn cache
+        // misses them). Every other troll's tile is blocked so the path routes
+        // around them; our own troll is the one about to move, so it never
+        // blocks itself.
+        let blocked: HashSet<Position> = game
+            .trolls
+            .iter()
+            .filter(|t| t.id != troll.id)
+            .map(|t| t.position)
+            .collect();
+        let map = bfs_distance_map(shack, &game.grid, &blocked);
+
+        // Passable cardinal neighbours of the shack (ground or a standing tree;
+        // water/iron/edge/other shack are not). With just one, that cell is the
+        // shack's sole gateway and must stay free of new plantings.
+        let passable_neighbours = CARDINALS
+            .iter()
+            .filter(|&&c| {
+                let n = shack + c;
+                game.grid.contains(n) && matches!(game.grid[n], b'.' | b'A' | b'B' | b'P' | b'L')
+            })
+            .count();
+
         map.iter()
             .filter_map(|(&pos, &(d, _))| {
-                if game.grid[pos] != b'.' || pos.manhattan(shack) <= 1 {
+                if game.grid[pos] != b'.' {
+                    return None; // not empty ground (shack tile, tree, water, iron)
+                }
+                // Reserve the lone access cell when the shack is hemmed in.
+                if passable_neighbours <= 1 && pos.manhattan(shack) == 1 {
                     return None;
                 }
-                let opp = Bot::dist(game, &game.opp_shack_dist_map, pos);
-                let ours = Bot::dist(game, &game.shack_dist_map, pos);
-                (ours < opp).then_some((pos, d))
+                Some((pos, d))
             })
-            .min_by_key(|&(pos, d)| (d, i32::from(!game.is_near_water(pos))))
+            // Nearest cell first; break ties by the cell farthest from the
+            // opponent shack, then prefer one beside water (faster regrowth).
+            .min_by_key(|&(pos, d)| {
+                let opp = Bot::dist(game, &game.opp_shack_dist_map, pos);
+                (d, Reverse(opp), i32::from(!game.is_near_water(pos)))
+            })
     }
 
     /// A chop-targeted candidate: emit `Chop` when already on the tree, else

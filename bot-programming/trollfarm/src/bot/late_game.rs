@@ -156,12 +156,6 @@ impl Bot {
                 claimed_trees.push(pos);
             }
 
-            if let Action::Plant(id, _) = candidate.action
-                && let Some(t) = game.trolls.iter().find(|t| t.id == id)
-            {
-                self.planted_cells.insert(t.position);
-            }
-
             self.actions.push(candidate.action);
             busy_trolls.push(candidate.troll_id);
         }
