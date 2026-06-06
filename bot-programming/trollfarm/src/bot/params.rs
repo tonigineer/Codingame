@@ -120,10 +120,10 @@ pub const DEFAULT: Params = Params {
     harass_seed_fetch_score: 0.0,
     harass_camp_score: 0.0,
     harass_denial_weight: 2.0,
-    harass_chop_scale_lemon: 1.25,
-    harass_chop_scale_banana: 1.10,
-    harass_chop_scale_plum: 1.05,
-    harass_return_weight: 0.05,
+    harass_chop_scale_lemon: 1.75,
+    harass_chop_scale_banana: 1.50,
+    harass_chop_scale_plum: 1.25,
+    harass_return_weight: 1.0,
 };
 
 /// The active parameters. Without the `tuning` feature this is just a

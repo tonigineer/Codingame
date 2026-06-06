@@ -15,6 +15,7 @@
 //! All magic numbers live in [`crate::bot::params`] (`TF_HARASS_*` env vars) so
 //! they can be swept by the tuning harness without recompiling.
 
+use crate::bot::core::tree_occupied_by_others;
 use crate::bot::params;
 use crate::bot::{Bot, Candidate};
 use crate::game::{Action, Game, Side, Tree, TreeType, Troll};
@@ -28,17 +29,6 @@ fn opp_resources_empty(game: &Game) -> bool {
         && inv.lemon.amount == 0
         && inv.apple.amount == 0
         && inv.banana.amount == 0
-}
-
-/// Whether another of my trolls is already standing on this tree.
-///
-/// Used to spread harassers out: a tree one of my trolls already occupies is
-/// excluded from another troll's chop candidates, so two harassers don't
-/// converge on the same trunk.
-pub fn tree_occupied_by_others(tree: &Tree, troll: &Troll, game: &Game) -> bool {
-    game.trolls
-        .iter()
-        .any(|t| t.side == Side::Me && t.id != troll.id && t.position == tree.position)
 }
 
 /// Whether an opponent troll would chop this tree before my troll arrives.
@@ -72,6 +62,7 @@ fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> boo
 
     false
 }
+
 
 impl Bot {
     /// Push every scored option for one harasser troll onto `out`.
@@ -317,9 +308,7 @@ impl Bot {
         let ret_turns =
             Bot::dist(&game, &game.shack_dist_map, troll.position) / troll.movement_speed.max(1);
 
-        let shacks_dist = game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32;
-
-        let score = troll.total_carried() as f32 * (shacks_dist as f32 / ret_turns.max(1) as f32);
+       let score = troll.carry_wood as f32 / ret_turns.max(1) as f32;
 
         let action = if game.is_adjacent_to_shack(troll) {
             Action::Drop(troll.id)

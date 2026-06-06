@@ -63,7 +63,7 @@ submit pkg="trollfarm": (_deploy pkg) (_flatten pkg)
 
 # Args: seed, opponent binary in the game dir (e.g. `just play 7 trollfarm-ref-gold-3`).
 # Play one game detached; watch at http://localhost:8888 (`just stop` to end)
-play seed="1" opp=opponent: (_deploy "trollfarm")
+play seed="$RANDOM" opp=opponent: (_deploy "trollfarm")
     -pkill -f "{{ jar }}"
     cd "{{ game_dir }}" && nohup java -jar ./{{ jar }} -p1 ./trollfarm -p2 ./{{ opp }} -s -seed "{{ seed }}" >/tmp/trollfarm-play.log 2>&1 &
     @sleep 1 && echo "▶ seed {{ seed }} vs {{ opp }} — watch at http://localhost:8888/test.html  (logs: /tmp/trollfarm-play.log, stop: just stop)"

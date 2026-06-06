@@ -8,8 +8,7 @@
 
 use crate::bot::Bot;
 use crate::game::{Action, Game, Side, Troll};
-use crate::utils::{CARDINALS, Position};
-use std::collections::HashMap;
+use crate::utils::Position;
 
 /// What a troll is for, which decides how its candidates are generated.
 ///
@@ -68,7 +67,7 @@ impl Bot {
         let mut actions = self.collect_actions(&trolls, game);
         actions.sort_by_key(|a| -a.score);
 
-        self.assign_actions(actions, &trolls, game);
+        self.assign_actions(actions, &trolls);
     }
 
     /// Build the scored candidate list, by role, for all trolls.
@@ -128,7 +127,7 @@ impl Bot {
     /// ];
     ///
     /// let mut bot = Bot::new();
-    /// bot.assign_actions(candidates, &trolls, &game);
+    /// bot.assign_actions(candidates, &trolls);
     ///
     /// assert_eq!(bot.actions.len(), 1);
     /// assert!(matches!(bot.actions[0], Action::Chop(100)));
@@ -137,7 +136,10 @@ impl Bot {
         let mut busy_trolls: Vec<i32> = Vec::with_capacity(trolls.len());
         let mut claimed_trees: Vec<Position> = Vec::with_capacity(trolls.len());
 
-        for c in candidates.iter() {
+        for c in candidates.iter().filter(|c| c.troll_id == 0).take(3) {
+            eprintln!("{:?}", c);
+        }
+        for c in candidates.iter().filter(|c| c.troll_id == 2).take(3) {
             eprintln!("{:?}", c);
         }
         for mut candidate in candidates {
@@ -159,74 +161,5 @@ impl Bot {
             self.actions.push(candidate.action);
             busy_trolls.push(candidate.troll_id);
         }
-    }
-
-    /// Distance to `pos` in a BFS map.
-    ///
-    /// For a passable tile this is just its stored distance, or [`i32::MAX`] if
-    /// the BFS never reached it. Mines (`+`) and our shack (`0`) are **not**
-    /// passable, so the BFS never enters them and they are absent from `map` —
-    /// yet a troll works them from an adjacent tile (mining there, dropping at
-    /// the shack). For those two cell kinds this returns the distance to the
-    /// closest *reachable* cardinal neighbour, i.e. how far the troll must
-    /// travel to stand beside the mine/shack, rather than [`i32::MAX`]. Returns
-    /// [`i32::MAX`] when `pos` is off the grid or no neighbour was reached.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use trollfarm::bot::Bot;
-    /// use trollfarm::game::Game;
-    /// use trollfarm::utils::{Position, bfs_distance_map};
-    /// use std::collections::HashSet;
-    ///
-    /// // 0 = our shack, 1 = opp shack, + = mine — all impassable, so the BFS
-    /// // distance map never contains them.
-    /// let input = "\
-    /// 7 3
-    /// 0.....1
-    /// ...+...
-    /// .......
-    /// 0 0 0 0 0 0
-    /// 0 0 0 0 0 0
-    /// 0
-    /// 0";
-    /// let game = Game::create_mock(input);
-    ///
-    /// // BFS from the bottom-left passable cell (0,2).
-    /// let map = bfs_distance_map(Position::new(0, 2), &game.grid, &HashSet::new());
-    ///
-    /// // The origin tile of the BFS map is distance 0 from itself.
-    /// assert_eq!(Bot::dist(&game, &map, Position::new(0, 2)), 0);
-    ///
-    /// // A normal passable tile reports its own stored distance.
-    /// assert_eq!(Bot::dist(&game, &map, Position::new(6, 1)), 7);
-    ///
-    /// // Mine '+' at (3,1): nearest reachable neighbour is (2,1) or (3,2) at 3.
-    /// assert_eq!(Bot::dist(&game, &map, Position::new(3, 1)), 3);
-    ///
-    /// // Our shack '0' at (0,0): nearest reachable neighbour is (0,1) at 1.
-    /// assert_eq!(Bot::dist(&game, &map, Position::new(0, 0)), 1);
-    ///
-    /// // Opponent shack '1' is out of scope (only '+' and '0' are handled).
-    /// assert_eq!(Bot::dist(&game, &map, Position::new(6, 0)), i32::MAX);
-    ///
-    /// // Off the grid (or genuinely unreachable) stays MAX.
-    /// assert_eq!(Bot::dist(&game, &map, Position::new(99, 99)), i32::MAX);
-    /// ```
-    pub fn dist(game: &Game, map: &HashMap<Position, (i32, Position)>, pos: Position) -> i32 {
-        if let Some((d, _)) = map.get(&pos) {
-            return *d;
-        }
-
-        // Impassable work tile (mine / our shack): approach it from a neighbour.
-        if game.grid.contains(pos) && matches!(game.grid[pos], b'+' | b'0') {
-            return CARDINALS
-                .iter()
-                .filter_map(|&c| map.get(&(pos + c)).map(|(d, _)| *d))
-                .min()
-                .unwrap_or(i32::MAX);
-        }
-        i32::MAX
     }
 }
