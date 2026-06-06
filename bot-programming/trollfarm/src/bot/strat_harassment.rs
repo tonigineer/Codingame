@@ -1,6 +1,23 @@
-use crate::bot::{Bot, Candidate};
+//! Harasser strategy: a roaming, chop-only troll that pressures the opponent.
+//!
+//! Every troll trained after the starter takes the harasser role (see
+//! [`crate::bot::Candidate`] and the role split in `late_game.rs`). Its job, in
+//! priority order, is:
+//!
+//! 1. **Deny** — while the opponent still has resources, camp the tile their
+//!    troll wants to plant on ([`Bot::last_resort`]);
+//! 2. **Self-sustain** — once the opponent is tapped out, fall back to a
+//!    pick → plant → chop loop at home ([`Bot::seed_workflow`]);
+//! 3. **Chop** — otherwise rank every reachable tree by wood-per-turn, with a
+//!    denial bonus for trees near the enemy shack ([`Bot::score_chop`]), and
+//!    bank cargo when carrying wood ([`Bot::score_return`]).
+//!
+//! All magic numbers live in [`crate::bot::params`] (`TF_HARASS_*` env vars) so
+//! they can be swept by the tuning harness without recompiling.
+
 use crate::bot::params;
-use crate::game::{Troll, Action, Game, Side, Tree, TreeType};
+use crate::bot::{Bot, Candidate};
+use crate::game::{Action, Game, Side, Tree, TreeType, Troll};
 
 /// Whether the opponent has no usable resources left: nothing to train a
 /// new troll with and nothing to grow an economy from. Banked wood is
@@ -14,6 +31,10 @@ fn opp_resources_empty(game: &Game) -> bool {
 }
 
 /// Whether another of my trolls is already standing on this tree.
+///
+/// Used to spread harassers out: a tree one of my trolls already occupies is
+/// excluded from another troll's chop candidates, so two harassers don't
+/// converge on the same trunk.
 pub fn tree_occupied_by_others(tree: &Tree, troll: &Troll, game: &Game) -> bool {
     game.trolls
         .iter()
@@ -21,6 +42,13 @@ pub fn tree_occupied_by_others(tree: &Tree, troll: &Troll, game: &Game) -> bool 
 }
 
 /// Whether an opponent troll would chop this tree before my troll arrives.
+///
+/// Compares two whole-turn estimates for the tree's current occupant on the
+/// opponent's side: the turns I need to *travel* there
+/// (`ceil(distance / movement_speed)`) against the turns they need to *fell* it
+/// (`ceil(health / chop_power)`). If they finish no later than I arrive the
+/// tree is a wasted target, so [`Bot::harasser_candidates`] filters it out.
+/// Returns `false` when no opponent with chop power stands on the tree.
 fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> bool {
     if let Some(opp_troll) = game
         .trolls
@@ -45,40 +73,84 @@ fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> boo
     false
 }
 
-
-
 impl Bot {
-    // Only chops trees, at the beginning tries to harrass the opponent
-    // near its shack.
+    /// Push every scored option for one harasser troll onto `out`.
+    ///
+    /// In order: the [`Bot::last_resort`] action (deny the opponent, or fall
+    /// back to the home seed loop when they are tapped out); a
+    /// [`Bot::score_return`] candidate when the troll is carrying wood; and a
+    /// [`Bot::score_chop`] candidate for every reachable tree that is neither
+    /// already worked by another of my trolls nor about to be felled by the
+    /// opponent first. The caller ([`Bot::assign_actions`]) picks the
+    /// highest-scoring one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use trollfarm::bot::Bot;
+    /// use trollfarm::game::{Action, Game, Side};
+    ///
+    /// // Opponent inventory is all zero and no trees remain on the map. A
+    /// // harasser (id 100) carrying a banana seed therefore falls through to
+    /// // the self-sufficient seed workflow: move toward a free home cell to
+    /// // plant it. With nothing else to do, that is its only candidate.
+    /// let input = "\
+    /// 3 3
+    /// 0..
+    /// ...
+    /// ..1
+    /// 0 0 0 0 0 0
+    /// 0 0 0 0 0 0
+    /// 0
+    /// 1
+    /// 100 0 1 1 1 2 1 1 0 0 0 1 0 0";
+    /// let game = Game::create_mock(input);
+    /// let troll = game.trolls(Side::Me)[0];
+    ///
+    /// let mut out = Vec::new();
+    /// Bot::harasser_candidates(troll, &game, &mut out);
+    ///
+    /// assert_eq!(out.len(), 1);
+    /// assert_eq!(out[0].score, 1000); // params::DEFAULT.harass_seed_plant_score
+    /// assert!(matches!(out[0].action, Action::Move(100, _)));
+    /// ```
     pub fn harasser_candidates(troll: &Troll, game: &Game, out: &mut Vec<Candidate>) {
-        // If there are not trees left anymore, go harrass the enemy near its shack, after that,
-        // plan all our fruits.
+        // If there are no trees left, go harass the enemy near its shack; once
+        // the enemy is tapped out, switch to planting our own fruit.
         if let Some(candidate) = Bot::last_resort(troll, game) {
             out.push(candidate);
         };
 
-        // Determine score for delivering current cargo
-        // Never drop only fruits, plant them
+        // Determine score for delivering current cargo.
+        // Never drop only fruits, plant them.
         if troll.has_cargo() && troll.carry_wood > 0 {
             out.push(Bot::score_return(troll, game));
         }
 
         for tree in game.trees.iter().filter(|t| {
-            !tree_occupied_by_others(t, troll, game)
-                && !tree_would_be_gone_on_arrival(t, troll, game)
+            !tree_occupied_by_others(t, troll, game) && !tree_would_be_gone_on_arrival(t, troll, game)
         }) {
             out.push(Bot::score_chop(troll, tree, game));
         }
     }
 
+    /// The fallback action when there is no worthwhile tree to chop.
+    ///
+    /// While the opponent still holds resources, deny them by moving onto the
+    /// nearest opponent troll's tile (its planting spot), scored
+    /// [`crate::bot::params::Params::harass_camp_score`]. Once the opponent is
+    /// out of resources there is nothing left to deny, so the harasser switches
+    /// to the self-sufficient [`Bot::seed_workflow`] instead. Returns `None`
+    /// when neither applies (e.g. no opponent visible, or already on target).
     fn last_resort(troll: &Troll, game: &Game) -> Option<Candidate> {
         // Once the opponent has no resources left there is nothing to deny:
         // they cannot train and have nothing to rebuild, so camping their
-        // planting spot is wasted tempo. Switch the harasser to a simple
-        // pick → plant → chop loop instead, to keep banking points.
+        // planting spot is wasted tempo. Switch to a pick → plant → chop loop.
         if opp_resources_empty(game) {
             return Bot::seed_workflow(troll, game);
         }
+
+        let p = params::get();
 
         // Otherwise move onto the nearest opponent's tile (their planting spot);
         // with no opponent visible, there is nothing to deny.
@@ -92,29 +164,29 @@ impl Bot {
             Some(pos) if pos != troll.position => Some(Candidate {
                 troll_id: troll.id,
                 action: Action::Move(troll.id, pos),
-                score: 0,
+                #[allow(clippy::cast_possible_truncation)]
+                score: p.harass_camp_score as i32,
                 tree: None,
             }),
             _ => None,
         }
     }
 
-
     /// A self-sufficient pick → plant → chop step for a harasser with no enemy
     /// economy left to disrupt. Returns the single most valuable next action:
     ///
-    /// 1. plant a held seed on the nearest free home cell;
+    /// 1. plant a held seed on the nearest free home cell, scored
+    ///    [`crate::bot::params::Params::harass_seed_plant_score`];
     /// 2. otherwise fetch a seed from our shack — the highest-priority fruit
-    ///    type stocked (banana → apple → lemon → plum) — when there is a free
-    ///    cell to plant it on;
-    /// 3. otherwise leave it to the chop candidates.
+    ///    type stocked (banana → apple → lemon → plum) — scored
+    ///    [`crate::bot::params::Params::harass_seed_fetch_score`];
+    /// 3. otherwise return `None` and leave it to the chop candidates.
     ///
-    /// Steps are scored on the same `*score_scale` footing as [`Bot::score_chop`]
-    /// so the chop candidates `harasser_candidates` also pushes rank fairly
-    /// against this fallback.
+    /// Steps are scored on the same scale as [`Bot::score_chop`] so the chop
+    /// candidates `harasser_candidates` also pushes rank fairly against this
+    /// fallback.
     fn seed_workflow(troll: &Troll, game: &Game) -> Option<Candidate> {
-        // let p = params::get();
-        // let speed = troll.movement_speed.max(1);
+        let p = params::get();
 
         // Seed priority: banana first (renewable, fast-regrowing), then apple,
         // lemon, plum — used both for what to plant and what to fetch.
@@ -124,17 +196,13 @@ impl Bot {
             TreeType::Lemon,
             TreeType::Plum,
         ];
-        let carried = SEED_PRIORITY
-            .iter()
-            .copied()
-            .find(|&t| troll.carries(t) > 0);
+        let carried = SEED_PRIORITY.iter().copied().find(|&t| troll.carries(t) > 0);
 
         // 1. Plant a carried seed on the nearest free home cell (the
         //    highest-priority type we hold).
         if let Some(seed) = carried
             && let Some((cell, _)) = Bot::nearest_free_cell(game, troll)
         {
-            eprintln!("{:?} {:?}", cell, troll.dist_map.len());
             let action = if troll.position == cell {
                 Action::Plant(troll.id, seed)
             } else {
@@ -145,7 +213,7 @@ impl Bot {
                 troll_id: troll.id,
                 action,
                 #[allow(clippy::cast_possible_truncation)]
-                score: 1000,
+                score: p.harass_seed_plant_score as i32,
                 tree: None,
             });
         }
@@ -160,10 +228,7 @@ impl Bot {
         if carried.is_none()
             && troll.free_capacity() > 0
             && let Some(seed) = stocked
-            // && let Some((_, cell_dist)) = Bot::nearest_free_cell(game, &game.shack_dist_map)
         {
-            // let to_shack = Bot::dist(game, &game.shack_dist_map, troll.position) / speed;
-            // pick + walk-to-shack + walk-to-cell + plant
             let action = if game.is_adjacent_to_shack(troll) {
                 Action::Pick(troll.id, seed)
             } else {
@@ -172,17 +237,31 @@ impl Bot {
             return Some(Candidate {
                 troll_id: troll.id,
                 action,
-                score: 0,
+                #[allow(clippy::cast_possible_truncation)]
+                score: p.harass_seed_fetch_score as i32,
                 tree: None,
             });
         }
 
-        // Regular chopping logic shoud kick in now.
+        // 3. Nothing to plant or fetch — let the regular chop logic take over.
         None
     }
 
+    /// Score moving to (and felling) `tree`, as wood-per-turn plus a denial
+    /// bonus for trees near the opponent shack.
+    ///
+    /// The base score is the collectible wood divided by the round-trip turn
+    /// cost (travel + chop + return). When the tree sits within the
+    /// shack-to-shack distance of the opponent, a
+    /// [`crate::bot::params::Params::harass_denial_weight`] term is added for
+    /// stumping their short-travel economy (wood we may waste on purpose). The
+    /// result is scaled by [`crate::bot::params::Params::score_scale`] and a
+    /// per-fruit `harass_chop_scale_*` multiplier before truncating to the
+    /// integer ranking key.
     fn score_chop(troll: &Troll, tree: &Tree, game: &Game) -> Candidate {
-        // Score for gathering
+        let p = params::get();
+
+        // Score for gathering.
         let travel = Bot::dist(&game, &troll.dist_map, tree.position) / troll.movement_speed;
         let chop = tree.health / troll.chop_power;
         let ret = Bot::dist(&game, &game.shack_dist_map, troll.position) / troll.movement_speed;
@@ -195,60 +274,52 @@ impl Bot {
         // Denial: felling a tree near the enemy shack stumps their short-travel
         // economy, independent of our carry capacity, so a full harasser still
         // chops it. Only harassers chase denial; the economy troll weights it 0.
-        // let denial_weight = p.denial_bonus;
-        // let de
-        // if denial_weight > 0.0 {
-        let denial_weight = 2.0;
+        let denial_weight = p.harass_denial_weight * tree.size as f32 / 4.0;
         let opp_dist = game
             .opp_shack_dist_map
             .get(&tree.position)
             .map_or(i32::MAX, |(d, _)| *d);
 
         if opp_dist <= game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32 {
-            let proximity = (game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32
-                - opp_dist
-                + 1) as f32
-                / (ret + 1) as f32;
+            #[rustfmt::skip]
+            let proximity = (game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32 - opp_dist + 1) as f32 / (ret + 1) as f32;
             score += denial_weight * proximity / (travel + chop).max(1) as f32;
         }
 
-        let score_scale = match tree.typ {
-            TreeType::Lemon => 1.25,
-            TreeType::Banana => 1.10,
-            TreeType::Plum => 1.05,
+        // Tie-break nudge toward the more valuable fruit types.
+        let type_scale = match tree.typ {
+            TreeType::Lemon => p.harass_chop_scale_lemon,
+            TreeType::Banana => p.harass_chop_scale_banana,
+            TreeType::Plum => p.harass_chop_scale_plum,
             _ => 1.0,
         };
-
-        let scale = 1000.0;
 
         Candidate {
             troll_id: troll.id,
             action: Action::Move(troll.id, tree.position),
             #[allow(clippy::cast_possible_truncation)]
-            score: (score * scale * score_scale) as i32,
+            score: (score * p.score_scale * type_scale) as i32,
             tree: Some(tree.position),
         }
     }
 
+    /// Score banking the troll's current cargo at our shack.
+    ///
+    /// Values carried units per return-turn, weighted up by the shack-to-shack
+    /// distance (cargo gathered far away is worth bringing home), then scaled by
+    /// [`crate::bot::params::Params::harass_return_weight`] (small — a
+    /// harasser's wood is incidental) and
+    /// [`crate::bot::params::Params::score_scale`]. Emits a `Drop` when already
+    /// beside the shack, otherwise a `Move` toward it.
     fn score_return(troll: &Troll, game: &Game) -> Candidate {
-        // let p = params::get();
-        // let weight = p.return_weight_harasser;
-        //
+        let p = params::get();
+
         let ret_turns =
             Bot::dist(&game, &game.shack_dist_map, troll.position) / troll.movement_speed.max(1);
-
-        // let full_boost = if troll.free_capacity() == 0 {
-        //     p.return_full_boost
-        // } else {
-        //     1.0
-        // };
-
-        let per_turn = troll.total_carried() as f32 / ret_turns.max(1) as f32;
 
         let shacks_dist = game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32;
 
         let score = troll.total_carried() as f32 * (shacks_dist as f32 / ret_turns.max(1) as f32);
-        let scale = 0.05;
 
         let action = if game.is_adjacent_to_shack(troll) {
             Action::Drop(troll.id)
@@ -260,7 +331,7 @@ impl Bot {
             troll_id: troll.id,
             action,
             #[allow(clippy::cast_possible_truncation)]
-            score: (score * scale * 1000.0) as i32,
+            score: (score * p.harass_return_weight * p.score_scale) as i32,
             tree: None,
         }
     }

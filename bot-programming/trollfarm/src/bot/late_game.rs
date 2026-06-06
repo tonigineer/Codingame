@@ -133,7 +133,7 @@ impl Bot {
     /// assert_eq!(bot.actions.len(), 1);
     /// assert!(matches!(bot.actions[0], Action::Chop(100)));
     /// ```
-    pub fn assign_actions(&mut self, candidates: Vec<Candidate>, trolls: &[&Troll], game: &Game) {
+    pub fn assign_actions(&mut self, candidates: Vec<Candidate>, trolls: &[&Troll]) {
         let mut busy_trolls: Vec<i32> = Vec::with_capacity(trolls.len());
         let mut claimed_trees: Vec<Position> = Vec::with_capacity(trolls.len());
 
@@ -160,8 +160,6 @@ impl Bot {
             busy_trolls.push(candidate.troll_id);
         }
     }
-
-    // --- helpers ----------------------------------------------------------
 
     /// Distance to `pos` in a BFS map.
     ///

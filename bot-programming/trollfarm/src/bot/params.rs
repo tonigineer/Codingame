@@ -65,6 +65,31 @@ pub struct Params {
     /// per turn over the pick→walk→plant cost, so as near-shack cells fill and
     /// the walk grows, expansion naturally yields to chopping the grown grove.
     pub grove_value: f32,
+
+    // ---- harassment (src/bot/strat_harassment.rs) ----
+    /// Flat ranking score for a free harasser planting a held seed on a home
+    /// cell. High, so once the opponent has nothing left to deny, growing the
+    /// home grove outranks roaming off to chop.
+    pub harass_seed_plant_score: f32,
+    /// Ranking score for a harasser fetching a seed from the shack to plant.
+    /// Low: a setup step, taken only when nothing better is on offer.
+    pub harass_seed_fetch_score: f32,
+    /// Ranking score for camping the nearest opponent troll's planting tile
+    /// while the opponent still has resources worth denying.
+    pub harass_camp_score: f32,
+    /// Per-turn value of felling a tree near the opponent shack (denial),
+    /// folded into a harasser's chop score. Local to the harasser and distinct
+    /// from the economy-side [`Params::denial_bonus`] /
+    /// [`Params::denial_weight_economy`].
+    pub harass_denial_weight: f32,
+    /// Per-fruit-type multipliers nudging a harasser's chop score toward the
+    /// more valuable fruit. Tree types not listed here use `1.0`.
+    pub harass_chop_scale_lemon: f32,
+    pub harass_chop_scale_banana: f32,
+    pub harass_chop_scale_plum: f32,
+    /// Weight on a harasser's return-home score. A harasser's wood is
+    /// incidental, so the pull back to bank is deliberately weak.
+    pub harass_return_weight: f32,
 }
 
 /// The shipped defaults — the values used when the `tuning` feature is off.
@@ -91,6 +116,14 @@ pub const DEFAULT: Params = Params {
     return_weight_harasser: 0.3,
     return_full_boost: 4.0,
     grove_value: 2.0,
+    harass_seed_plant_score: 1000.0,
+    harass_seed_fetch_score: 0.0,
+    harass_camp_score: 0.0,
+    harass_denial_weight: 2.0,
+    harass_chop_scale_lemon: 1.25,
+    harass_chop_scale_banana: 1.10,
+    harass_chop_scale_plum: 1.05,
+    harass_return_weight: 0.05,
 };
 
 /// The active parameters. Without the `tuning` feature this is just a
@@ -137,6 +170,26 @@ fn load_from_env() -> Params {
         return_weight_harasser: env_f32("TF_RETURN_WEIGHT_HARASSER", DEFAULT.return_weight_harasser),
         return_full_boost: env_f32("TF_RETURN_FULL_BOOST", DEFAULT.return_full_boost),
         grove_value: env_f32("TF_GROVE_VALUE", DEFAULT.grove_value),
+        harass_seed_plant_score: env_f32(
+            "TF_HARASS_SEED_PLANT_SCORE",
+            DEFAULT.harass_seed_plant_score,
+        ),
+        harass_seed_fetch_score: env_f32(
+            "TF_HARASS_SEED_FETCH_SCORE",
+            DEFAULT.harass_seed_fetch_score,
+        ),
+        harass_camp_score: env_f32("TF_HARASS_CAMP_SCORE", DEFAULT.harass_camp_score),
+        harass_denial_weight: env_f32("TF_HARASS_DENIAL_WEIGHT", DEFAULT.harass_denial_weight),
+        harass_chop_scale_lemon: env_f32(
+            "TF_HARASS_CHOP_SCALE_LEMON",
+            DEFAULT.harass_chop_scale_lemon,
+        ),
+        harass_chop_scale_banana: env_f32(
+            "TF_HARASS_CHOP_SCALE_BANANA",
+            DEFAULT.harass_chop_scale_banana,
+        ),
+        harass_chop_scale_plum: env_f32("TF_HARASS_CHOP_SCALE_PLUM", DEFAULT.harass_chop_scale_plum),
+        harass_return_weight: env_f32("TF_HARASS_RETURN_WEIGHT", DEFAULT.harass_return_weight),
     };
     eprintln!("[PARAMS] {p:?}");
     p
