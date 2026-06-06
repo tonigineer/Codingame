@@ -20,6 +20,9 @@ Examples:
   python3 eval.py                      # 100 games, base seed 1, vs gold-X
   python3 eval.py 1000 --seed 1 --jobs 24 --label baseline
   python3 eval.py --p2 ./trollfarm-ref-gold-3
+  python3 eval.py --replay-dir replays/tonigineer   # analyze downloaded replays
+                                                     # (no trajectory/fruit plots;
+                                                     #  scores + map stats available)
 """
 
 import argparse
@@ -88,12 +91,16 @@ class GameResult:
         return "DRAW"
 
 
-def parse_map(log: dict) -> tuple[int, int, int, int, int]:
-    """Extract (width, height, water, iron_mines, shack_dist) from the log."""
-    view0 = next((v for v in log["views"] if v and "{" in v), None)
-    if view0 is None:
-        raise ValueError("no usable view frame in replay log")
-    payload = json.loads(view0[view0.index("{"):])
+def _parse_view_grid(view_str: str) -> tuple[int, int, int, int, int]:
+    """Parse a view frame string in ``<nr>\\n<json>`` or bare JSON format.
+
+    Returns (width, height, water, iron_mines, shack_dist).
+    """
+    if "\n" in view_str:
+        _, json_str = view_str.split("\n", 1)
+    else:
+        json_str = view_str
+    payload = json.loads(json_str[json_str.index("{"):])
     im = payload["global"]["inputmodule"]
     lines = im.split("\n")
     width, height = (int(v) for v in lines[0].split())
@@ -111,6 +118,14 @@ def parse_map(log: dict) -> tuple[int, int, int, int, int]:
     else:
         shack_dist = -1
     return width, height, water, iron, shack_dist
+
+
+def parse_map(log: dict) -> tuple[int, int, int, int, int]:
+    """Extract (width, height, water, iron_mines, shack_dist) from the log."""
+    view0 = next((v for v in log["views"] if v and "{" in v), None)
+    if view0 is None:
+        raise ValueError("no usable view frame in replay log")
+    return _parse_view_grid(view0)
 
 
 def parse_inv(log: dict):
@@ -390,6 +405,11 @@ def _p_margin_vs_length(ax, D):
 
 def _p_wasted_fruit(ax, D):
     myf, opf = D["myf"], D["opf"]
+    if myf.max() == 0 and opf.max() == 0:
+        ax.text(0.5, 0.5, "N/A (no per-turn data\nfor downloaded replays)",
+                transform=ax.transAxes, ha="center", va="center", fontsize=12, color="gray")
+        ax.set_title("Wasted fruit at game end")
+        return
     bins = range(0, int(max(myf.max(), opf.max())) + 2)
     ax.hist(myf, bins=bins, alpha=0.6, label=f"us (mean {myf.mean():.1f})", color="tab:red")
     ax.hist(opf, bins=bins, alpha=0.6, label=f"opp (mean {opf.mean():.1f})", color="tab:green")
@@ -398,6 +418,11 @@ def _p_wasted_fruit(ax, D):
 
 
 def _p_composition(ax, D):
+    if D["myf"].max() == 0 and D["opf"].max() == 0 and D["myw"].max() == 0:
+        ax.text(0.5, 0.5, "N/A (no per-turn data\nfor downloaded replays)",
+                transform=ax.transAxes, ha="center", va="center", fontsize=12, color="gray")
+        ax.set_title("Score composition (points from fruit vs wood)")
+        return
     comp = [
         ("our fruit", D["myf"].mean(), "tab:orange"),
         ("our wood", D["myw"].mean() * WOOD_POINTS, "tab:red"),
@@ -481,6 +506,53 @@ def make_plots(results: list[GameResult], out_dir: Path, label: str) -> None:
     print(f"Plots written to {run_dir}/ ({len(PLOTS)} panels + overview)")
 
 
+def parse_downloaded_replay(path: Path, index: int) -> GameResult:
+    """Parse a replay downloaded via gameResult/findByGameId.
+
+    These have ``frames[i].view`` (``<nr>\\n<json>``), ``scores`` (array),
+    and ``agents`` (array with codingamer info).
+
+    Frame structure: init frame (agentId=-1), then alternating agent 0/1.
+    One game turn = 2 frames. Max 300 turns → 1 + 600 frames.
+    """
+    data = json.loads(path.read_text())
+
+    view_str = data["frames"][0].get("view", "")
+    if not view_str:
+        raise ValueError(f"{path.name}: first frame has no view")
+    width, height, water, iron_mines, shack_dist = _parse_view_grid(view_str)
+
+    scores = data["scores"]
+    n_frames = len(data["frames"])
+    game_length = max(0, n_frames - 1) // 2
+
+    return GameResult(
+        index=index, seed=0,
+        p1=int(scores[0]), p2=int(scores[1]),
+        width=width, height=height, water=water, iron_mines=iron_mines,
+        shack_dist=shack_dist, game_length=game_length,
+        my_fruit=0, my_wood=0, my_iron=0,
+        opp_fruit=0, opp_wood=0, opp_iron=0,
+        traj=[],
+    )
+
+
+def load_replay_dir(replay_dir: Path) -> list[GameResult]:
+    json_files = sorted(replay_dir.glob("*.json"))
+    if not json_files:
+        print(f"No .json files found in {replay_dir}")
+        return []
+    results: list[GameResult] = []
+    for i, path in enumerate(json_files):
+        try:
+            r = parse_downloaded_replay(path, i)
+            results.append(r)
+        except Exception as e:
+            print(f"  {path.name}: parse error: {e}", file=sys.stderr)
+    print(f"Loaded {len(results)} replays from {replay_dir}")
+    return results
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -495,7 +567,32 @@ def main() -> int:
     parser.add_argument("--out", default=str(SCRIPT_DIR.parent / "eval"),
                         help="output directory for plots and results JSON")
     parser.add_argument("--no-plot", action="store_true")
+    parser.add_argument("--replay-dir", type=str,
+                        help="path to a directory of pre-downloaded replay JSONs "
+                             "(skips running games)")
     args = parser.parse_args()
+
+    if args.replay_dir:
+        replay_path = Path(args.replay_dir)
+        if not replay_path.is_dir():
+            print(f"Replay dir not found: {replay_path}", file=sys.stderr)
+            return 1
+        results = load_replay_dir(replay_path)
+        if not results:
+            return 1
+        label = args.label or replay_path.name
+        elapsed = 0.0
+
+        summary = summarize(results, replay_path.name, "replay", elapsed)
+        run_dir = Path(args.out) / label
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "results.json").write_text(json.dumps(summary, indent=2))
+        (run_dir / "summary.md").write_text(stats_markdown(summary, label))
+        print(f"Results written to {run_dir}/results.json + summary.md")
+
+        if not args.no_plot:
+            make_plots(results, Path(args.out), label)
+        return 0
 
     if not GAME_DIR.exists():
         print(f"Game dir not found: {GAME_DIR}", file=sys.stderr)

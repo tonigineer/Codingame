@@ -72,7 +72,20 @@ play seed="1" opp=opponent: (_deploy "trollfarm")
 stop:
     -pkill -f "{{ jar }}"
 
+# Quick test: run 10 eval games (fast sanity check)
+eval-quick: (_deploy "trollfarm")
+    python scripts/eval.py 10 --jobs 8 --label quick
+
 # Args: games, base seed, label (e.g. `just eval 1000 1 candidate`).
 # Benchmark N games vs the reference bot -> eval_out/<label>/ (stats + plots)
 eval games="1000" seed="1" label="current": (_deploy "trollfarm")
     python scripts/eval.py "{{ games }}" --seed "{{ seed }}" --jobs 16 --label "{{ label }}"
+
+# Download all arena replays for a player (e.g. `just get-games tonigineer`).
+# Downloads to replays/<player>/
+get-games player:
+    python scripts/get_player_games.py "{{ player }}"
+
+# Analyze downloaded replays (e.g. `just eval-replay replays/tonigineer`).
+eval-replay dir:
+    python scripts/eval.py --replay-dir "replays/{{ dir }}" --label "{{ dir }}"

@@ -7,45 +7,17 @@ use std::collections::HashSet;
 impl Bot {
     pub fn play(&mut self, game: &mut Game) {
         self.reset_turn(game);
-
-        // DEBUG: dump both shack inventories each turn (+ our per-troll carry).
-        // eval.py parses these `[INV]` lines from the replay log for trajectory,
-        // composition, wasted-fruit and game-length plots.
-        {
-            let me = game.inventory(Side::Me);
-            let opp = game.inventory(Side::Opp);
-            let carried: Vec<String> = game
-                .trolls(Side::Me)
-                .iter()
-                .map(|t| {
-                    format!(
-                        "t{}[P{} L{} A{} B{} I{} W{}]",
-                        t.id, t.carry_plum, t.carry_lemon, t.carry_apple,
-                        t.carry_banana, t.carry_iron, t.carry_wood
-                    )
-                })
-                .collect();
-            eprintln!(
-                "[INV] turn={} me_shack[P{} L{} A{} B{} I{} W{}] \
-                 opp_shack[P{} L{} A{} B{} I{} W{}] {}",
-                game.turn,
-                me.plum.amount, me.lemon.amount, me.apple.amount,
-                me.banana.amount, me.iron.amount, me.wood.amount,
-                opp.plum.amount, opp.lemon.amount, opp.apple.amount,
-                opp.banana.amount, opp.iron.amount, opp.wood.amount,
-                carried.join(" ")
-            );
-        }
+        Self::debug(game);
 
         // Early game
         if game.troll_count(Side::Me) == 1 {
             self.second_troll(game);
         }
 
-        // Mid game
-        self.mid_game(game);
-
         // Late game
+        self.late_game(game);
+
+        // Finalize actions
         self.resolve_movement(game);
     }
 
@@ -107,7 +79,7 @@ impl Bot {
                 let steps = usize::try_from(troll.movement_speed.max(0))
                     .unwrap_or(0)
                     .min(path.len());
-                let next = path[steps - 1];
+                let next = path[steps.saturating_sub(1)];
 
                 *action = Action::Move(*id, next);
                 blocked.insert(next);
@@ -131,5 +103,47 @@ impl Bot {
         // Refresh the per-turn tree-proximity comparison now that both shack
         // distance maps are current.
         game.update_tree_proximity();
+    }
+
+    fn debug(game: &Game) {
+        // DEBUG: dump both shack inventories each turn (+ our per-troll carry).
+        // eval.py parses these `[INV]` lines from the replay log for trajectory,
+        // composition, wasted-fruit and game-length plots.
+        let me = game.inventory(Side::Me);
+        let opp = game.inventory(Side::Opp);
+        let carried: Vec<String> = game
+            .trolls(Side::Me)
+            .iter()
+            .map(|t| {
+                format!(
+                    "t{}[P{} L{} A{} B{} I{} W{}]",
+                    t.id,
+                    t.carry_plum,
+                    t.carry_lemon,
+                    t.carry_apple,
+                    t.carry_banana,
+                    t.carry_iron,
+                    t.carry_wood
+                )
+            })
+            .collect();
+        eprintln!(
+            "[INV] turn={} me_shack[P{} L{} A{} B{} I{} W{}] \
+                 opp_shack[P{} L{} A{} B{} I{} W{}] {}",
+            game.turn,
+            me.plum.amount,
+            me.lemon.amount,
+            me.apple.amount,
+            me.banana.amount,
+            me.iron.amount,
+            me.wood.amount,
+            opp.plum.amount,
+            opp.lemon.amount,
+            opp.apple.amount,
+            opp.banana.amount,
+            opp.iron.amount,
+            opp.wood.amount,
+            carried.join(" ")
+        );
     }
 }
