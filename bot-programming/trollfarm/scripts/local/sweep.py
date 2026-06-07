@@ -6,7 +6,7 @@ Runs the ``--features tuning`` bot on one or more chosen seeds under different
 the settings that flip a specific game (or a small seed set). Complements the
 other two tools:
 
-  * ``eval.py``  — aggregate benchmark over many random seeds.
+  * ``harness.py``  — aggregate benchmark over many random seeds.
   * ``tune.py``  — coordinate descent optimising avg margin over many games.
   * ``sweep.py`` — this: what-if probing on hand-picked seeds.
 
@@ -30,14 +30,12 @@ Usage:
 """
 import argparse
 import itertools
-import os
 import sys
 from pathlib import Path
 
-import eval as ev  # reuse run_game + scoring
-from tune import build_tuning_bot  # reuse the tuning-bot build/deploy
-
-SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # scripts/
+import _common as C
+import harness as ev  # reuse run_game + scoring
 
 
 def coerce(s: str):
@@ -57,11 +55,6 @@ def parse_kv(items: list[str]) -> dict:
         k, _, v = it.partition("=")
         out[k] = coerce(v)
     return out
-
-
-def set_env(config: dict) -> None:
-    for k, v in config.items():
-        os.environ[f"TF_{k.upper()}"] = str(v)
 
 
 def expand_configs(args) -> list[dict]:
@@ -85,7 +78,7 @@ def expand_configs(args) -> list[dict]:
 
 
 def run_config(config: dict, seeds: list[int], p1: str, p2: str) -> list[tuple[int, int]]:
-    set_env(config)
+    C.set_tf_env(config)
     return [(r.p1, r.p2) for r in (ev.run_game(i, s, p1, p2) for i, s in enumerate(seeds))]
 
 
@@ -118,7 +111,7 @@ def main() -> int:
         ap.error("provide --seed or --seeds")
 
     if not args.no_build:
-        build_tuning_bot()
+        C.build_tuning_bot()
 
     configs = expand_configs(args)
     print(f"\nSeeds: {seeds}   P1={args.p1}  P2={args.p2}")
@@ -141,7 +134,10 @@ def main() -> int:
             best = (avg, cfg)
 
     print("-" * 66)
-    print(f"BEST  avg margin {best[0]:+.1f}   {label_of(best[1])}")
+    if best is not None:
+        print(f"BEST  avg margin {best[0]:+.1f}   {label_of(best[1])}")
+    else:
+        print("BEST  could not be determined. This is not supposed to happen!")
     return 0
 
 

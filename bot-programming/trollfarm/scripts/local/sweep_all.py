@@ -35,18 +35,14 @@ Usage:
 
 import argparse
 import json
-import os
-import random
-import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import eval as ev  # reuse run_game + scoring
-from tune import build_tuning_bot  # reuse the tuning-bot build/deploy
-
-SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # scripts/
+import _common as C
+import harness as ev  # reuse run_game + scoring
 
 # Must mirror src/bot/params.rs::DEFAULT.
 DEFAULTS = {
@@ -138,12 +134,6 @@ SEARCH_SPACE = {
 }
 
 DEFAULT_OPPONENTS = ["./trollfarm-spar-eco", "./trollfarm-spar-v1"]
-INT64_MIN, INT64_MAX = -(2**63), 2**63 - 1
-
-
-def set_env(config: dict) -> None:
-    for name, value in config.items():
-        os.environ[f"TF_{name.upper()}"] = repr(value) if isinstance(value, float) else str(value)
 
 
 def run_vs(seeds, p1, p2, jobs) -> dict:
@@ -164,7 +154,7 @@ def run_vs(seeds, p1, p2, jobs) -> dict:
 
 def run_trial(config, seeds, p1, opponents, jobs, objective) -> dict:
     """Run a config vs every opponent; return per-opponent + combined score."""
-    set_env(config)
+    C.set_tf_env(config)
     per = {p2: run_vs(seeds, p1, p2, jobs) for p2 in opponents}
     margins = [per[p2]["margin"] for p2 in opponents]
     score = (sum(margins) / len(margins)) if objective == "mean" else min(margins)
@@ -259,7 +249,8 @@ def main() -> int:
     ap.add_argument("--objective", choices=["mean", "min"], default="mean",
                     help="combine per-opponent margins: mean (default) or min (maximin/robust)")
     ap.add_argument("--only", default="", help="comma list: sweep only these params")
-    ap.add_argument("--out", default="eval/sweep_all_best.json", help="where to write the running best config")
+    ap.add_argument("--out", default="sweep_all_best.json",
+                    help="running-best output (relative paths land in scripts/../eval/)")
     ap.add_argument("--dry-run", action="store_true", help="print plan + game estimate, don't run")
     args = ap.parse_args()
 
@@ -270,8 +261,7 @@ def main() -> int:
         print(f"unknown params: {bad}", file=sys.stderr)
         return 2
 
-    rng = random.Random(args.seed)
-    seeds = [rng.randint(INT64_MIN, INT64_MAX) for _ in range(args.games)]
+    seeds = C.make_seeds(args.games, args.seed)
     trials = 1 + args.passes * sum(len(SEARCH_SPACE[p]) - 1 for p in params)
     games_total = trials * args.games * len(opponents)
     print(f"Full sweep | {len(params)} params | {args.games} games × {len(opponents)} opp / trial "
@@ -282,9 +272,11 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    out_path = (SCRIPT_DIR.parent / args.out)
+    out_path = Path(args.out)
+    if not out_path.is_absolute():
+        out_path = C.EVAL_DIR / out_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    p1 = build_tuning_bot()
+    p1 = C.build_tuning_bot()
     t0 = time.time()
     best = coordinate_descent(seeds, p1, opponents, args.jobs, args.passes, args.objective, params, out_path)
     print("\n" + "═" * 56)

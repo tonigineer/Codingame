@@ -226,7 +226,10 @@ fn load_from_env() -> Params {
         opp_denial_radius: env_i32("TF_OPP_DENIAL_RADIUS", DEFAULT.opp_denial_radius),
         score_scale: env_f32("TF_SCORE_SCALE", DEFAULT.score_scale),
         return_weight_economy: env_f32("TF_RETURN_WEIGHT_ECONOMY", DEFAULT.return_weight_economy),
-        return_weight_harasser: env_f32("TF_RETURN_WEIGHT_HARASSER", DEFAULT.return_weight_harasser),
+        return_weight_harasser: env_f32(
+            "TF_RETURN_WEIGHT_HARASSER",
+            DEFAULT.return_weight_harasser,
+        ),
         return_full_boost: env_f32("TF_RETURN_FULL_BOOST", DEFAULT.return_full_boost),
         grove_value: env_f32("TF_GROVE_VALUE", DEFAULT.grove_value),
         econ_pick_weight: env_f32("TF_ECON_PICK_WEIGHT", DEFAULT.econ_pick_weight),
@@ -249,7 +252,10 @@ fn load_from_env() -> Params {
             "TF_HARASS_CHOP_SCALE_LEMON",
             DEFAULT.harass_chop_scale_lemon,
         ),
-        harass_chop_scale_plum: env_f32("TF_HARASS_CHOP_SCALE_PLUM", DEFAULT.harass_chop_scale_plum),
+        harass_chop_scale_plum: env_f32(
+            "TF_HARASS_CHOP_SCALE_PLUM",
+            DEFAULT.harass_chop_scale_plum,
+        ),
         harass_chop_scale_apple: env_f32(
             "TF_HARASS_CHOP_SCALE_APPLE",
             DEFAULT.harass_chop_scale_apple,

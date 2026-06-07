@@ -47,7 +47,7 @@ ci: fmt-check lint build test
 #
 # `submit`  builds + flattens a bot crate into a single-file CG submission
 # `play`    play & WATCH one game in the browser (referee server)
-# `eval`    benchmark N games vs the reference bot (eval.py: stats + plots)
+# `eval`    benchmark N games vs the reference bot (harness.py: stats + plots)
 # ---------------------------------------------------------------------------
 
 # Inline a modular bot crate into one submittable file
@@ -72,20 +72,27 @@ play seed="$RANDOM" opp=opponent: (_deploy "trollfarm")
 stop:
     -pkill -f "{{ jar }}"
 
+# Needs the selenium venv (.venv) + a logged-in Brave profile (scripts/README.md).
+#   just ide          # play my code on a fresh RANDOM map
+#   just ide 12345    # replay a fixed-seed map (for tuning)
+# Play the current bot in the browser IDE ("Play my code"): submit, paste, play, report.
+ide seed="":
+    .venv/bin/python scripts/ide/play_my_code.py {{ if seed == "" { "" } else { "--seed " + seed } }}
+
 # Quick test: run 10 eval games (fast sanity check)
 eval-quick: (_deploy "trollfarm")
-    python scripts/eval.py 10 --jobs 8 --label quick
+    python scripts/local/harness.py 10 --jobs 8 --label quick
 
 # Args: games, base seed, label (e.g. `just eval 1000 1 candidate`).
 # Benchmark N games vs the reference bot -> eval_out/<label>/ (stats + plots)
 eval games="1000" seed="1" label="current": (_deploy "trollfarm")
-    python scripts/eval.py "{{ games }}" --seed "{{ seed }}" --jobs 16 --label "{{ label }}"
+    python scripts/local/harness.py "{{ games }}" --seed "{{ seed }}" --jobs 16 --label "{{ label }}"
 
 # Download all arena replays for a player (e.g. `just get-games tonigineer`).
 # Downloads to replays/<player>/
 get-games player:
-    python scripts/get_player_games.py "{{ player }}"
+    python scripts/replays/get_player_games.py "{{ player }}"
 
 # Analyze downloaded replays (e.g. `just eval-replay replays/tonigineer`).
 eval-replay dir:
-    python scripts/eval.py --replay-dir "replays/{{ dir }}" --label "{{ dir }}"
+    python scripts/local/harness.py --replay-dir "replays/{{ dir }}" --label "{{ dir }}"

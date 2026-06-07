@@ -18,15 +18,14 @@ Usage:
 """
 import argparse
 import os
-import random
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
-import eval as ev
-from tune import build_tuning_bot
-
-INT64_MIN, INT64_MAX = -(2**63), 2**63 - 1
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # scripts/
+import _common as C
+import harness as ev
 
 # Parameter -> candidate values to sweep (defaults marked in comments).
 SWEEPS = {
@@ -77,11 +76,10 @@ def main() -> int:
     ap.add_argument("--no-build", action="store_true")
     args = ap.parse_args()
 
-    rng = random.Random(args.seed)
-    seeds = [rng.randint(INT64_MIN, INT64_MAX) for _ in range(args.games)]
+    seeds = C.make_seeds(args.games, args.seed)
 
     if not args.no_build:
-        build_tuning_bot()
+        C.build_tuning_bot()
 
     params = args.only if args.only else list(SWEEPS)
 

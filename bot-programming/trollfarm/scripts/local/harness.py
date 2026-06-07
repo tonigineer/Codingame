@@ -17,17 +17,16 @@ Key facts about the referee jar (verified):
     are drawn across the full int64 range. Same base -> same seed set.
 
 Examples:
-  python3 eval.py                      # 100 games, base seed 1, vs gold-X
-  python3 eval.py 1000 --seed 1 --jobs 24 --label baseline
-  python3 eval.py --p2 ./trollfarm-ref-gold-3
-  python3 eval.py --replay-dir replays/tonigineer   # analyze downloaded replays
+  python3 harness.py                      # 100 games, base seed 1, vs gold-X
+  python3 harness.py 1000 --seed 1 --jobs 24 --label baseline
+  python3 harness.py --p2 ./trollfarm-ref-gold-3
+  python3 harness.py --replay-dir replays/tonigineer   # analyze downloaded replays
                                                      # (no trajectory/fruit plots;
                                                      #  scores + map stats available)
 """
 
 import argparse
 import json
-import random
 import re
 import sys
 import tempfile
@@ -38,11 +37,13 @@ from pathlib import Path
 
 import numpy as np
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-GAME_DIR = SCRIPT_DIR.parent / "codingame"
-JAR = "troll-farm-1.0-SNAPSHOT.jar"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # scripts/
+import _common as C
+
+GAME_DIR = C.GAME_DIR
+JAR = C.JAR
 DEFAULT_P1 = "./trollfarm"
-DEFAULT_P2 = "./trollfarm-ref-gold-X"
+DEFAULT_P2 = C.DEFAULT_REF
 
 INV_RE = re.compile(
     r"turn=(\d+) "
@@ -62,8 +63,8 @@ class GameResult:
     height: int
     water: int
     iron_mines: int
-    shack_dist: int        # Manhattan distance between the two shacks
-    game_length: int       # last turn our bot saw
+    shack_dist: int  # Manhattan distance between the two shacks
+    game_length: int  # last turn our bot saw
     # Final shack composition (from our [INV] stderr).
     my_fruit: int
     my_wood: int
@@ -100,11 +101,11 @@ def _parse_view_grid(view_str: str) -> tuple[int, int, int, int, int]:
         _, json_str = view_str.split("\n", 1)
     else:
         json_str = view_str
-    payload = json.loads(json_str[json_str.index("{"):])
+    payload = json.loads(json_str[json_str.index("{") :])
     im = payload["global"]["inputmodule"]
     lines = im.split("\n")
     width, height = (int(v) for v in lines[0].split())
-    grid = lines[1:1 + height]
+    grid = lines[1 : 1 + height]
     water = sum(row.count("~") for row in grid)
     iron = sum(row.count("+") for row in grid)
     shacks: dict[str, tuple[int, int]] = {}
@@ -164,14 +165,24 @@ def run_game(index: int, seed: int, p1: str, p2: str) -> GameResult:
         prefix=f"troll_{index}_", suffix=".json", delete=True
     ) as tmp:
         cmd = [
-            "java", "-jar", f"./{JAR}",
-            "-p1", p1, "-p2", p2,
-            "-seed", str(seed),
-            "-l", tmp.name,
+            "java",
+            "-jar",
+            f"./{JAR}",
+            "-p1",
+            p1,
+            "-p2",
+            p2,
+            "-seed",
+            str(seed),
+            "-l",
+            tmp.name,
         ]
         proc = subprocess.run(
-            cmd, cwd=GAME_DIR,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            cmd,
+            cwd=GAME_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
             timeout=120,
         )
         if proc.returncode != 0:
@@ -188,12 +199,22 @@ def run_game(index: int, seed: int, p1: str, p2: str) -> GameResult:
         final = (0, 0, 0, 0, 0, 0, 0)
     glen, mf, mw, mi, of, ow, oi = final
     return GameResult(
-        index=index, seed=seed,
-        p1=int(scores["0"]), p2=int(scores["1"]),
-        width=width, height=height, water=water, iron_mines=iron_mines,
-        shack_dist=shack_dist, game_length=glen,
-        my_fruit=mf, my_wood=mw, my_iron=mi,
-        opp_fruit=of, opp_wood=ow, opp_iron=oi,
+        index=index,
+        seed=seed,
+        p1=int(scores["0"]),
+        p2=int(scores["1"]),
+        width=width,
+        height=height,
+        water=water,
+        iron_mines=iron_mines,
+        shack_dist=shack_dist,
+        game_length=glen,
+        my_fruit=mf,
+        my_wood=mw,
+        my_iron=mi,
+        opp_fruit=of,
+        opp_wood=ow,
+        opp_iron=oi,
         traj=traj,
     )
 
@@ -216,8 +237,10 @@ def summarize(results: list[GameResult], p1: str, p2: str, elapsed: float) -> di
     print(f"Losses: {losses:4d}  ({losses / n * 100:.1f}%)")
     print(f"Draws:  {draws:4d}  ({draws / n * 100:.1f}%)")
     print(f"Avg score:  {p1s.mean():.1f} vs {p2s.mean():.1f}")
-    print(f"Avg margin: {margins.mean():+.1f}  (std {margins.std():.1f}, "
-          f"min {margins.min():+d}, max {margins.max():+d})")
+    print(
+        f"Avg margin: {margins.mean():+.1f}  (std {margins.std():.1f}, "
+        f"min {margins.min():+d}, max {margins.max():+d})"
+    )
 
     # Score composition (means).
     mf = np.mean([r.my_fruit for r in results])
@@ -228,10 +251,11 @@ def summarize(results: list[GameResult], p1: str, p2: str, elapsed: float) -> di
     print("─" * 60)
     print("Avg final composition (us vs opp):")
     print(f"  leftover fruit (1pt): {mf:5.1f}  vs {of:5.1f}")
-    print(f"  wood          (4pt): {mw:5.1f}  vs {ow:5.1f}   "
-          f"-> wood pts {mw * 4:5.1f} vs {ow * 4:5.1f}")
-    print(f"  avg game length: {gl.mean():.0f} turns "
-          f"(min {gl.min()}, max {gl.max()})")
+    print(
+        f"  wood          (4pt): {mw:5.1f}  vs {ow:5.1f}   "
+        f"-> wood pts {mw * 4:5.1f} vs {ow * 4:5.1f}"
+    )
+    print(f"  avg game length: {gl.mean():.0f} turns (min {gl.min()}, max {gl.max()})")
 
     print("─" * 60)
     print("By map size:")
@@ -242,7 +266,9 @@ def summarize(results: list[GameResult], p1: str, p2: str, elapsed: float) -> di
     for (w, h), rs in sorted(sizes.items(), key=lambda kv: kv[0][0] * kv[0][1]):
         ws = sum(1 for r in rs if r.outcome == "WIN")
         am = sum(r.margin for r in rs) / len(rs)
-        print(f"  {w:>3}x{h:<3}  {len(rs):>5}  {ws / len(rs) * 100:>4.0f}%  {am:>+10.1f}")
+        print(
+            f"  {w:>3}x{h:<3}  {len(rs):>5}  {ws / len(rs) * 100:>4.0f}%  {am:>+10.1f}"
+        )
     print("─" * 60)
 
     serial = []
@@ -251,13 +277,21 @@ def summarize(results: list[GameResult], p1: str, p2: str, elapsed: float) -> di
         d.pop("traj", None)
         serial.append(d)
     return {
-        "p1": p1, "p2": p2, "games": n,
-        "wins": wins, "losses": losses, "draws": draws,
+        "p1": p1,
+        "p2": p2,
+        "games": n,
+        "wins": wins,
+        "losses": losses,
+        "draws": draws,
         "win_rate": wins / n,
-        "avg_p1": float(p1s.mean()), "avg_p2": float(p2s.mean()),
-        "avg_margin": float(margins.mean()), "margin_std": float(margins.std()),
-        "avg_my_fruit": float(mf), "avg_opp_fruit": float(of),
-        "avg_my_wood": float(mw), "avg_opp_wood": float(ow),
+        "avg_p1": float(p1s.mean()),
+        "avg_p2": float(p2s.mean()),
+        "avg_margin": float(margins.mean()),
+        "margin_std": float(margins.std()),
+        "avg_my_fruit": float(mf),
+        "avg_opp_fruit": float(of),
+        "avg_my_wood": float(mw),
+        "avg_opp_wood": float(ow),
         "avg_game_length": float(gl.mean()),
         "elapsed_s": elapsed,
         "results": serial,
@@ -307,8 +341,10 @@ def _plot_data(results: list["GameResult"]) -> dict:
     D["opf"] = np.array([r.opp_fruit for r in results])
     D["myw"] = np.array([r.my_wood for r in results])
     D["opw"] = np.array([r.opp_wood for r in results])
-    D["colors"] = ["tab:green" if m > 0 else "tab:red" if m < 0 else "tab:gray"
-                   for m in D["margin"]]
+    D["colors"] = [
+        "tab:green" if m > 0 else "tab:red" if m < 0 else "tab:gray"
+        for m in D["margin"]
+    ]
     grid = np.linspace(0, 1, 50)
     myc, opc = [], []
     for r in results:
@@ -328,9 +364,11 @@ def _p_score_scatter(ax, D):
     lim = max(D["p1"].max(), D["p2"].max()) + 5
     ax.plot([0, lim], [0, lim], "k--", alpha=0.4, lw=1)
     ax.scatter(D["p2"], D["p1"], c=D["colors"], alpha=0.5, edgecolors="none", s=18)
-    ax.set_xlabel("opponent (P2)"); ax.set_ylabel("our (P1)")
+    ax.set_xlabel("opponent (P2)")
+    ax.set_ylabel("our (P1)")
     ax.set_title("Per-game scores (above line = win)")
-    ax.set_xlim(0, lim); ax.set_ylim(0, lim)
+    ax.set_xlim(0, lim)
+    ax.set_ylim(0, lim)
 
 
 def _p_margin_hist(ax, D):
@@ -338,8 +376,10 @@ def _p_margin_hist(ax, D):
     ax.hist(m, bins=30, color="tab:blue", alpha=0.8)
     ax.axvline(0, color="k", lw=1)
     ax.axvline(m.mean(), color="tab:orange", lw=2, label=f"mean {m.mean():+.1f}")
-    ax.set_xlabel("margin (P1 - P2)"); ax.set_ylabel("games")
-    ax.set_title("Margin distribution"); ax.legend()
+    ax.set_xlabel("margin (P1 - P2)")
+    ax.set_ylabel("games")
+    ax.set_title("Margin distribution")
+    ax.legend()
 
 
 def _p_margin_cdf(ax, D):
@@ -347,8 +387,10 @@ def _p_margin_cdf(ax, D):
     ax.plot(sm, np.linspace(0, 100, len(sm)), color="tab:blue")
     ax.axvline(0, color="k", lw=1)
     loss = 100 * np.mean(D["margin"] < 0)
-    ax.set_xlabel("margin (P1 - P2)"); ax.set_ylabel("cumulative %")
-    ax.set_title(f"Margin CDF ({loss:.0f}% of games are losses)"); ax.grid(alpha=0.3)
+    ax.set_xlabel("margin (P1 - P2)")
+    ax.set_ylabel("cumulative %")
+    ax.set_title(f"Margin CDF ({loss:.0f}% of games are losses)")
+    ax.grid(alpha=0.3)
 
 
 def _p_winrate_by_size(ax, D):
@@ -356,14 +398,23 @@ def _p_winrate_by_size(ax, D):
     for r in D["results"]:
         groups.setdefault(r.area, []).append(r)
     xs = sorted(groups)
-    win_pct = [100 * sum(1 for r in groups[a] if r.margin > 0) / len(groups[a]) for a in xs]
-    labels = [f"{groups[a][0].width}x{groups[a][0].height}\n(n={len(groups[a])})" for a in xs]
+    win_pct = [
+        100 * sum(1 for r in groups[a] if r.margin > 0) / len(groups[a]) for a in xs
+    ]
+    labels = [
+        f"{groups[a][0].width}x{groups[a][0].height}\n(n={len(groups[a])})" for a in xs
+    ]
     bars = ax.bar(range(len(xs)), win_pct, color="tab:purple", alpha=0.8)
     ax.axhline(50, color="k", ls="--", alpha=0.5)
-    ax.set_xticks(range(len(xs))); ax.set_xticklabels(labels, fontsize=8)
-    ax.set_ylabel("win %"); ax.set_ylim(0, 100); ax.set_title("Win rate by map size")
+    ax.set_xticks(range(len(xs)))
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel("win %")
+    ax.set_ylim(0, 100)
+    ax.set_title("Win rate by map size")
     for b, p in zip(bars, win_pct):
-        ax.text(b.get_x() + b.get_width() / 2, p + 1, f"{p:.0f}", ha="center", fontsize=8)
+        ax.text(
+            b.get_x() + b.get_width() / 2, p + 1, f"{p:.0f}", ha="center", fontsize=8
+        )
 
 
 def _p_margin_vs_shackdist(ax, D):
@@ -372,7 +423,8 @@ def _p_margin_vs_shackdist(ax, D):
     ax.scatter(sd + jit, D["margin"], c=D["colors"], alpha=0.5, edgecolors="none", s=18)
     ax.axhline(0, color="k", lw=1)
     _trend(ax, sd, D["margin"], "slope {:+.2f}/cell")
-    ax.set_xlabel("shack Manhattan distance"); ax.set_ylabel("margin")
+    ax.set_xlabel("shack Manhattan distance")
+    ax.set_ylabel("margin")
     ax.set_title("Margin vs shack distance")
 
 
@@ -381,7 +433,8 @@ def _p_margin_vs_water(ax, D):
     ax.scatter(wt, D["margin"], c=D["colors"], alpha=0.5, edgecolors="none", s=18)
     ax.axhline(0, color="k", lw=1)
     _trend(ax, wt, D["margin"], "slope {:+.2f}")
-    ax.set_xlabel("water cells"); ax.set_ylabel("margin")
+    ax.set_xlabel("water cells")
+    ax.set_ylabel("margin")
     ax.set_title("Margin vs water count")
 
 
@@ -390,8 +443,10 @@ def _p_game_length(ax, D):
     ax.hist(gl, bins=30, color="teal", alpha=0.8)
     ax.axvline(gl.mean(), color="tab:orange", lw=2, label=f"mean {gl.mean():.0f}")
     ax.axvline(300, color="k", ls="--", alpha=0.5, label="max 300")
-    ax.set_xlabel("game length (turns)"); ax.set_ylabel("games")
-    ax.set_title("Game length"); ax.legend()
+    ax.set_xlabel("game length (turns)")
+    ax.set_ylabel("games")
+    ax.set_title("Game length")
+    ax.legend()
 
 
 def _p_margin_vs_length(ax, D):
@@ -399,28 +454,55 @@ def _p_margin_vs_length(ax, D):
     ax.scatter(gl, D["margin"], c=D["colors"], alpha=0.5, edgecolors="none", s=18)
     ax.axhline(0, color="k", lw=1)
     _trend(ax, gl, D["margin"], "slope {:+.3f}")
-    ax.set_xlabel("game length (turns)"); ax.set_ylabel("margin")
+    ax.set_xlabel("game length (turns)")
+    ax.set_ylabel("margin")
     ax.set_title("Margin vs game length")
 
 
 def _p_wasted_fruit(ax, D):
     myf, opf = D["myf"], D["opf"]
     if myf.max() == 0 and opf.max() == 0:
-        ax.text(0.5, 0.5, "N/A (no per-turn data\nfor downloaded replays)",
-                transform=ax.transAxes, ha="center", va="center", fontsize=12, color="gray")
+        ax.text(
+            0.5,
+            0.5,
+            "N/A (no per-turn data\nfor downloaded replays)",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=12,
+            color="gray",
+        )
         ax.set_title("Wasted fruit at game end")
         return
     bins = range(0, int(max(myf.max(), opf.max())) + 2)
-    ax.hist(myf, bins=bins, alpha=0.6, label=f"us (mean {myf.mean():.1f})", color="tab:red")
-    ax.hist(opf, bins=bins, alpha=0.6, label=f"opp (mean {opf.mean():.1f})", color="tab:green")
+    ax.hist(
+        myf, bins=bins, alpha=0.6, label=f"us (mean {myf.mean():.1f})", color="tab:red"
+    )
+    ax.hist(
+        opf,
+        bins=bins,
+        alpha=0.6,
+        label=f"opp (mean {opf.mean():.1f})",
+        color="tab:green",
+    )
     ax.set_xlabel("leftover fruit in shack (1pt each, unconverted)")
-    ax.set_ylabel("games"); ax.set_title("Wasted fruit at game end"); ax.legend()
+    ax.set_ylabel("games")
+    ax.set_title("Wasted fruit at game end")
+    ax.legend()
 
 
 def _p_composition(ax, D):
     if D["myf"].max() == 0 and D["opf"].max() == 0 and D["myw"].max() == 0:
-        ax.text(0.5, 0.5, "N/A (no per-turn data\nfor downloaded replays)",
-                transform=ax.transAxes, ha="center", va="center", fontsize=12, color="gray")
+        ax.text(
+            0.5,
+            0.5,
+            "N/A (no per-turn data\nfor downloaded replays)",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=12,
+            color="gray",
+        )
         ax.set_title("Score composition (points from fruit vs wood)")
         return
     comp = [
@@ -430,7 +512,8 @@ def _p_composition(ax, D):
         ("opp wood", D["opw"].mean() * WOOD_POINTS, "tab:green"),
     ]
     ax.bar([c[0] for c in comp], [c[1] for c in comp], color=[c[2] for c in comp])
-    ax.set_ylabel("avg points"); ax.set_title("Score composition (points from fruit vs wood)")
+    ax.set_ylabel("avg points")
+    ax.set_title("Score composition (points from fruit vs wood)")
     for i, c in enumerate(comp):
         ax.text(i, c[1] + 0.5, f"{c[1]:.1f}", ha="center", fontsize=9)
     ax.tick_params(axis="x", labelsize=8)
@@ -440,13 +523,24 @@ def _p_score_traj(ax, D):
     if D["myc"] is not None:
         g = D["grid"] * 100
         ax.plot(g, D["myc"].mean(0), color="tab:blue", lw=2, label="us")
-        ax.fill_between(g, np.percentile(D["myc"], 25, 0),
-                        np.percentile(D["myc"], 75, 0), color="tab:blue", alpha=0.2)
+        ax.fill_between(
+            g,
+            np.percentile(D["myc"], 25, 0),
+            np.percentile(D["myc"], 75, 0),
+            color="tab:blue",
+            alpha=0.2,
+        )
         ax.plot(g, D["opc"].mean(0), color="tab:red", lw=2, label="opp")
-        ax.fill_between(g, np.percentile(D["opc"], 25, 0),
-                        np.percentile(D["opc"], 75, 0), color="tab:red", alpha=0.2)
+        ax.fill_between(
+            g,
+            np.percentile(D["opc"], 25, 0),
+            np.percentile(D["opc"], 75, 0),
+            color="tab:red",
+            alpha=0.2,
+        )
         ax.legend()
-    ax.set_xlabel("game progress (%)"); ax.set_ylabel("score")
+    ax.set_xlabel("game progress (%)")
+    ax.set_ylabel("score")
     ax.set_title("Mean score trajectory (band = 25-75 pct)")
 
 
@@ -455,10 +549,16 @@ def _p_margin_traj(ax, D):
         g = D["grid"] * 100
         diff = D["myc"] - D["opc"]
         ax.plot(g, diff.mean(0), color="tab:purple", lw=2)
-        ax.fill_between(g, np.percentile(diff, 25, 0),
-                        np.percentile(diff, 75, 0), color="tab:purple", alpha=0.2)
+        ax.fill_between(
+            g,
+            np.percentile(diff, 25, 0),
+            np.percentile(diff, 75, 0),
+            color="tab:purple",
+            alpha=0.2,
+        )
         ax.axhline(0, color="k", lw=1)
-    ax.set_xlabel("game progress (%)"); ax.set_ylabel("margin (us - opp)")
+    ax.set_xlabel("game progress (%)")
+    ax.set_ylabel("margin (us - opp)")
     ax.set_title("Mean margin trajectory (when the gap opens)")
 
 
@@ -480,6 +580,7 @@ PLOTS = [
 
 def make_plots(results: list[GameResult], out_dir: Path, label: str) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -527,12 +628,22 @@ def parse_downloaded_replay(path: Path, index: int) -> GameResult:
     game_length = max(0, n_frames - 1) // 2
 
     return GameResult(
-        index=index, seed=0,
-        p1=int(scores[0]), p2=int(scores[1]),
-        width=width, height=height, water=water, iron_mines=iron_mines,
-        shack_dist=shack_dist, game_length=game_length,
-        my_fruit=0, my_wood=0, my_iron=0,
-        opp_fruit=0, opp_wood=0, opp_iron=0,
+        index=index,
+        seed=0,
+        p1=int(scores[0]),
+        p2=int(scores[1]),
+        width=width,
+        height=height,
+        water=water,
+        iron_mines=iron_mines,
+        shack_dist=shack_dist,
+        game_length=game_length,
+        my_fruit=0,
+        my_wood=0,
+        my_iron=0,
+        opp_fruit=0,
+        opp_wood=0,
+        opp_iron=0,
         traj=[],
     )
 
@@ -555,21 +666,35 @@ def load_replay_dir(replay_dir: Path) -> list[GameResult]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("num_games", type=int, nargs="?", default=100)
-    parser.add_argument("--seed", type=int, default=1,
-                        help="base seed for the RNG that draws game seeds (default 1). "
-                             "Same base -> same full-i64 game seeds (reproducible).")
-    parser.add_argument("--p1", default=DEFAULT_P1, help="player 1 command (bot under test)")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=1,
+        help="base seed for the RNG that draws game seeds (default 1). "
+        "Same base -> same full-i64 game seeds (reproducible).",
+    )
+    parser.add_argument(
+        "--p1", default=DEFAULT_P1, help="player 1 command (bot under test)"
+    )
     parser.add_argument("--p2", default=DEFAULT_P2, help="player 2 command (reference)")
-    parser.add_argument("--jobs", type=int, default=8, help="parallel games (default 8)")
+    parser.add_argument(
+        "--jobs", type=int, default=8, help="parallel games (default 8)"
+    )
     parser.add_argument("--label", default="current", help="label for output files")
-    parser.add_argument("--out", default=str(SCRIPT_DIR.parent / "eval"),
-                        help="output directory for plots and results JSON")
+    parser.add_argument(
+        "--out",
+        default=str(C.EVAL_DIR),
+        help="output directory for plots and results JSON",
+    )
     parser.add_argument("--no-plot", action="store_true")
-    parser.add_argument("--replay-dir", type=str,
-                        help="path to a directory of pre-downloaded replay JSONs "
-                             "(skips running games)")
+    parser.add_argument(
+        "--replay-dir",
+        type=str,
+        help="path to a directory of pre-downloaded replay JSONs (skips running games)",
+    )
     args = parser.parse_args()
 
     if args.replay_dir:
@@ -601,15 +726,15 @@ def main() -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    INT64_MIN, INT64_MAX = -(2 ** 63), 2 ** 63 - 1
-    rng = random.Random(args.seed)
-    seeds = [rng.randint(INT64_MIN, INT64_MAX) for _ in range(args.num_games)]
+    seeds = C.make_seeds(args.num_games, args.seed)
     results: list[GameResult] = []
     start = time.time()
 
-    print(f"Running {args.num_games} games | base seed {args.seed} "
-          f"(full-i64 game seeds) | {args.jobs} parallel\n"
-          f"  P1={args.p1}  P2={args.p2}")
+    print(
+        f"Running {args.num_games} games | base seed {args.seed} "
+        f"(full-i64 game seeds) | {args.jobs} parallel\n"
+        f"  P1={args.p1}  P2={args.p2}"
+    )
 
     failed: list[int] = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:

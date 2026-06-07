@@ -2,7 +2,7 @@
 """Coordinate-descent tuner for the Troll-Farm bot hyperparameters.
 
 Builds a `--features tuning` bot once, then probes parameter settings by
-running the *same* games as the benchmark (it imports ``eval.run_game``) with
+running the *same* games as the benchmark (it imports ``harness.run_game``) with
 ``TF_*`` environment overrides. Optimises **average margin** (P1 - P2), which
 is a far denser signal than the ~8% win rate at 100 games.
 
@@ -13,7 +13,7 @@ Search method — coordinate descent:
   by default; `--passes 2` re-sweeps to catch interactions.
 
 How overrides reach the bot:
-  `eval.run_game` spawns the referee, which passes its environment to the bot
+  `harness.run_game` spawns the referee, which passes its environment to the bot
   child. We set ``os.environ["TF_*"]`` before each trial, so every game in that
   trial uses those params. Each game is a fresh process, so there's no stale
   caching between trials.
@@ -25,20 +25,14 @@ Usage:
 """
 
 import argparse
-import os
-import random
-import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import eval as ev  # reuse run_game + seeding + scoring
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_DIR = SCRIPT_DIR.parent.parent.parent  # workspace root (has Cargo.toml)
-GAME_DIR = SCRIPT_DIR.parent / "codingame"
-TUNING_BIN = "trollfarm-tuning"  # deployed name for the tuning build
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # scripts/
+import _common as C
+import harness as ev  # reuse run_game + seeding + scoring
 
 # Defaults must mirror params.rs::DEFAULT for the params we tune.
 DEFAULTS = {
@@ -58,37 +52,11 @@ SEARCH_SPACE = {
     "grove_value": [1.0, 2.0, 3.0, 5.0],
 }
 
-INT64_MIN, INT64_MAX = -(2**63), 2**63 - 1
-
-
-def build_tuning_bot() -> str:
-    """Build the `tuning`-featured bot and deploy it under a distinct name.
-
-    Returns the P1 command (relative to GAME_DIR) eval.run_game should launch.
-    """
-    print("Building --features tuning bot ...")
-    subprocess.run(
-        ["cargo", "build", "--release", "-p", "trollfarm", "--features", "tuning"],
-        cwd=REPO_DIR,
-        check=True,
-    )
-    src = REPO_DIR / "target/release/trollfarm"
-    dst = GAME_DIR / TUNING_BIN
-    dst.write_bytes(src.read_bytes())
-    dst.chmod(0o755)
-    print(f"Deployed {dst}")
-    return f"./{TUNING_BIN}"
-
-
-def set_env(config: dict) -> None:
-    """Apply a parameter config as TF_* environment overrides."""
-    for name, value in config.items():
-        os.environ[f"TF_{name.upper()}"] = str(value)
 
 
 def run_trial(config: dict, seeds: list[int], p1: str, p2: str, jobs: int) -> dict:
     """Run one parameter config over all seeds; return aggregate metrics."""
-    set_env(config)
+    C.set_tf_env(config)
     margins, wins = [], 0
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         futures = [pool.submit(ev.run_game, i, s, p1, p2) for i, s in enumerate(seeds)]
@@ -176,8 +144,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    rng = random.Random(args.seed)
-    seeds = [rng.randint(INT64_MIN, INT64_MAX) for _ in range(args.games)]
+    seeds = C.make_seeds(args.games, args.seed)
 
     # Worst-case distinct trials = baseline + (len-1) per swept param, per pass.
     trials = 1 + args.passes * sum(len(v) - 1 for v in SEARCH_SPACE.values())
@@ -190,7 +157,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    p1 = build_tuning_bot()
+    p1 = C.build_tuning_bot()
     t0 = time.time()
     best = coordinate_descent(seeds, p1, args.p2, args.jobs, args.passes)
     print("\n" + "═" * 56)
