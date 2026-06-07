@@ -80,6 +80,12 @@ pub struct Params {
     /// grove early, when a planted tree has time to compound.
     pub econ_pick_early_boost: f32,
     pub econ_pick_boost_turns: f32,
+    /// End-game planting margin (turns). `plant_candidate` refuses to plant a
+    /// seed unless `turns_remaining >= 4*initial_cooldown(seed) + plant_decay_turns`
+    /// — i.e. the tree has time to grow to size 4 and first-fruit (≈4 cooldown
+    /// cycles), plus this margin to actually harvest/chop it. Otherwise the
+    /// planting scores nothing and the troll banks/chops the cargo instead.
+    pub plant_decay_turns: i32,
 
     // ---- harassment (src/bot/strat_harassment.rs) ----
     /// Flat ranking score for a free harasser planting a held seed on a home
@@ -97,11 +103,27 @@ pub struct Params {
     /// from the economy-side [`Params::denial_bonus`] /
     /// [`Params::denial_weight_economy`].
     pub harass_denial_weight: f32,
-    /// Per-fruit-type multipliers nudging a harasser's chop score toward the
-    /// more valuable fruit. Tree types not listed here use `1.0`.
+    /// Per-tree-type multipliers on a harasser's chop score, ranked by how much
+    /// denying that fruit hurts the opponent's training: the training fruits
+    /// (lemon→carry, plum→speed, apple→harvest) rank above banana, which is not
+    /// a training resource at all (score/seed only) so felling it never delays a
+    /// troll. This is the *static* ordering; [`Params::harass_bottleneck_weight`]
+    /// sharpens it dynamically toward whatever the opponent currently lacks.
     pub harass_chop_scale_lemon: f32,
-    pub harass_chop_scale_banana: f32,
     pub harass_chop_scale_plum: f32,
+    pub harass_chop_scale_apple: f32,
+    pub harass_chop_scale_banana: f32,
+    /// Dynamic denial sharpening. A harasser's denial term for a tree is scaled
+    /// by `1 + harass_bottleneck_weight * deficit`, where `deficit` is the
+    /// opponent's normalized shortfall of that tree's resource toward their next
+    /// troll (cost per resource is `n + stat²`, `n` = opp troll count,
+    /// `stat` = [`Params::harass_train_min_stat`]). Banana scores 0 (untrainable),
+    /// and a resource they already have enough of scores 0, so denial
+    /// concentrates on the tree whose fruit gates the opponent's next troll.
+    pub harass_bottleneck_weight: f32,
+    /// Assumed minimum attribute level the opponent trains to, used to size the
+    /// next-troll resource cost. A stat of 1 is wasteful (`n + 1`), so default 2.
+    pub harass_train_min_stat: i32,
     /// Weight on a harasser's return-home score. A harasser's wood is
     /// incidental, so the pull back to bank is deliberately weak.
     pub harass_return_weight: f32,
@@ -143,13 +165,21 @@ pub const DEFAULT: Params = Params {
     econ_chop_weight: 5.0,
     econ_pick_early_boost: 4.0,
     econ_pick_boost_turns: 120.0,
+    plant_decay_turns: 10,
     harass_seed_plant_score: 1000.0,
     harass_seed_fetch_score: 0.0,
     harass_camp_score: 0.0,
     harass_denial_weight: 2.0,
     harass_chop_scale_lemon: 1.75,
-    harass_chop_scale_banana: 1.50,
-    harass_chop_scale_plum: 1.25,
+    harass_chop_scale_plum: 1.50,
+    harass_chop_scale_apple: 1.25,
+    harass_chop_scale_banana: 1.00,
+    // Net-negative vs every clean (non-tuning) ref opponent in sweeps (gold-X /
+    // gold-3 / gold-70: WR falls monotonically as this rises), so off by
+    // default. Kept as an opt-in knob — untested against a clean strong-economy
+    // bot, the regime where denying a training bottleneck might actually pay.
+    harass_bottleneck_weight: 0.0,
+    harass_train_min_stat: 2,
     harass_return_weight: 1.0,
     harass_turn_decay: 120.0,
     harass_opp_cap: 150.0,
@@ -204,6 +234,7 @@ fn load_from_env() -> Params {
         econ_chop_weight: env_f32("TF_ECON_CHOP_WEIGHT", DEFAULT.econ_chop_weight),
         econ_pick_early_boost: env_f32("TF_ECON_PICK_EARLY_BOOST", DEFAULT.econ_pick_early_boost),
         econ_pick_boost_turns: env_f32("TF_ECON_PICK_BOOST_TURNS", DEFAULT.econ_pick_boost_turns),
+        plant_decay_turns: env_i32("TF_PLANT_DECAY_TURNS", DEFAULT.plant_decay_turns),
         harass_seed_plant_score: env_f32(
             "TF_HARASS_SEED_PLANT_SCORE",
             DEFAULT.harass_seed_plant_score,
@@ -218,11 +249,20 @@ fn load_from_env() -> Params {
             "TF_HARASS_CHOP_SCALE_LEMON",
             DEFAULT.harass_chop_scale_lemon,
         ),
+        harass_chop_scale_plum: env_f32("TF_HARASS_CHOP_SCALE_PLUM", DEFAULT.harass_chop_scale_plum),
+        harass_chop_scale_apple: env_f32(
+            "TF_HARASS_CHOP_SCALE_APPLE",
+            DEFAULT.harass_chop_scale_apple,
+        ),
         harass_chop_scale_banana: env_f32(
             "TF_HARASS_CHOP_SCALE_BANANA",
             DEFAULT.harass_chop_scale_banana,
         ),
-        harass_chop_scale_plum: env_f32("TF_HARASS_CHOP_SCALE_PLUM", DEFAULT.harass_chop_scale_plum),
+        harass_bottleneck_weight: env_f32(
+            "TF_HARASS_BOTTLENECK_WEIGHT",
+            DEFAULT.harass_bottleneck_weight,
+        ),
+        harass_train_min_stat: env_i32("TF_HARASS_TRAIN_MIN_STAT", DEFAULT.harass_train_min_stat),
         harass_return_weight: env_f32("TF_HARASS_RETURN_WEIGHT", DEFAULT.harass_return_weight),
         harass_turn_decay: env_f32("TF_HARASS_TURN_DECAY", DEFAULT.harass_turn_decay),
         harass_opp_cap: env_f32("TF_HARASS_OPP_CAP", DEFAULT.harass_opp_cap),

@@ -199,6 +199,19 @@ impl Bot {
     /// size: once near cells fill, the walk grows and chopping overtakes planting.
     fn plant_candidate(troll: &Troll, game: &Game, seed: TreeType) -> Option<Candidate> {
         let p = params::get();
+
+        // Don't plant a seed too late to pay off. A fresh size-1 tree needs ~4
+        // cooldown cycles to grow to size 4 and bear its first fruit (dry-ground
+        // worst case, matching early_game's `time_to_fruit`), plus a
+        // `plant_decay_turns` margin to then harvest/chop it. With less game
+        // left the tree yields nothing — bank or chop the cargo instead. (This
+        // is why late apple plants — apple's 9-turn cooldown → 36+ to mature —
+        // were pure waste.)
+        let maturity = Tree::initial_cooldown(seed) * 4 + p.plant_decay_turns;
+        if game.turns_remaining() < maturity {
+            return None;
+        }
+
         let speed = troll.movement_speed.max(1) as f32;
 
         // Re-fruit period for this seed on dry ground vs. beside water; a

@@ -31,6 +31,32 @@ fn opp_resources_empty(game: &Game) -> bool {
         && inv.banana.amount == 0
 }
 
+/// How badly the opponent still needs this tree's fruit for their next troll,
+/// in `[0, 1]` — the dynamic side of denial.
+///
+/// Training a stat costs `n + stat²` of one resource, where `n` is the
+/// opponent's current troll count. Assuming they aim for at least
+/// [`params::Params::harass_train_min_stat`] (a stat of 1 is wasteful), the
+/// target stock per resource is `n + stat²`; the deficit is what they still
+/// lack toward it, normalized by that target. Banana is **not** a training
+/// resource (score/seed only), so it always returns 0 — felling it cannot delay
+/// a troll — and a resource they already have enough of returns 0 too. The
+/// result therefore peaks on the fruit that gates the opponent's next troll.
+fn opp_train_deficit(game: &Game, typ: TreeType) -> f32 {
+    if matches!(typ, TreeType::Banana) {
+        return 0.0;
+    }
+    let p = params::get();
+    let n = game.troll_count(Side::Opp);
+    let stat = p.harass_train_min_stat.max(1);
+    let target = n + stat * stat;
+    let deficit = (target - game.inventory(Side::Opp).get(typ.as_resource_type())).max(0);
+    #[allow(clippy::cast_precision_loss)]
+    {
+        deficit as f32 / target.max(1) as f32
+    }
+}
+
 /// Whether an opponent troll would chop this tree before my troll arrives.
 ///
 /// Compares two whole-turn estimates for the tree's current occupant on the
@@ -302,15 +328,19 @@ impl Bot {
         if opp_dist <= game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32 {
             #[rustfmt::skip]
             let proximity = (game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32 - opp_dist + 1) as f32 / (ret + 1) as f32;
-            score += denial_weight * proximity / (travel + chop).max(1) as f32;
+            // Sharpen denial onto the fruit that actually gates their next troll:
+            // banana and resources they already have score no boost.
+            let bottleneck = 1.0 + p.harass_bottleneck_weight * opp_train_deficit(game, tree.typ);
+            score += denial_weight * proximity / (travel + chop).max(1) as f32 * bottleneck;
         }
 
-        // Tie-break nudge toward the more valuable fruit types.
+        // Static tie-break toward the fruit whose denial hurts training most
+        // (lemon > plum > apple > banana, the non-training fruit).
         let type_scale = match tree.typ {
             TreeType::Lemon => p.harass_chop_scale_lemon,
-            TreeType::Banana => p.harass_chop_scale_banana,
             TreeType::Plum => p.harass_chop_scale_plum,
-            _ => 1.0,
+            TreeType::Apple => p.harass_chop_scale_apple,
+            TreeType::Banana => p.harass_chop_scale_banana,
         };
 
         Candidate {
