@@ -98,6 +98,18 @@ fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> boo
 /// is better off coming home to farm. Reaches `0` at `harass_turn_decay` turns
 /// or once the opponent's score hits `harass_opp_cap`, whichever comes first;
 /// at `0` the harasser flips to the home economy playbook.
+/// Whether a tree sits on the opponent's half — at least as close to their shack
+/// as to ours. A harasser only chops enemy-side trees: felling our own grove is
+/// the economy troll's job, and a close home banana (cheap round-trip → high
+/// wood-per-turn) would otherwise outscore real denial targets and wreck the
+/// banana engine. Our-side trees are left for the economy / the late-game
+/// (`hf<=0`) home playbook.
+fn on_enemy_side(tree: &Tree, game: &Game) -> bool {
+    let me = Bot::dist(game, &game.shack_dist_map, tree.position);
+    let opp = Bot::dist(game, &game.opp_shack_dist_map, tree.position);
+    opp <= me
+}
+
 fn harass_factor(game: &Game) -> f32 {
     let p = params::get();
     let turn_w = (1.0 - f32::from(game.turn) / p.harass_turn_decay.max(1.0)).clamp(0.0, 1.0);
@@ -171,10 +183,23 @@ impl Bot {
             out.push(Bot::score_return(troll, game));
         }
 
+        // Track the top-scoring chop target so the replay shows what a harasser
+        // actually goes for (verify it prefers lemon/plum and shuns banana).
+        let mut best: Option<(TreeType, i32, i32, i32)> = None;
         for tree in game.trees.iter().filter(|t| {
             !tree_occupied_by_others(t, troll, game) && !tree_would_be_gone_on_arrival(t, troll, game)
         }) {
-            out.push(Bot::score_chop(troll, tree, game, hf));
+            let c = Bot::score_chop(troll, tree, game, hf);
+            if best.is_none_or(|(_, _, _, s)| c.score > s) {
+                best = Some((tree.typ, tree.position.x, tree.position.y, c.score));
+            }
+            out.push(c);
+        }
+        if let Some((typ, x, y, s)) = best {
+            eprintln!(
+                "[H] troll={} hf={:.2} top_chop={:?}@({},{}) score={}",
+                troll.id, hf, typ, x, y, s
+            );
         }
     }
 
@@ -325,9 +350,17 @@ impl Bot {
             .get(&tree.position)
             .map_or(i32::MAX, |(d, _)| *d);
 
-        if opp_dist <= game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32 {
-            #[rustfmt::skip]
-            let proximity = (game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32 - opp_dist + 1) as f32 / (ret + 1) as f32;
+        let shack_span = game.shack(Side::Me).manhattan(game.shack(Side::Opp));
+        if opp_dist <= shack_span as i32 {
+            // How deep in THEIR territory the tree stands, normalized 0..1 by
+            // the shack-to-shack span. The old form divided by (ret + 1) — our
+            // OWN return distance — which zeroed denial exactly at the enemy
+            // shack on big maps, so the harasser only ever chopped mid-map
+            // (denial wood doesn't need to come home; travel already prices
+            // the trip in the divisor below).
+            #[allow(clippy::cast_precision_loss)]
+            let proximity =
+                (shack_span as i32 - opp_dist + 1) as f32 / (shack_span + 1) as f32;
             // Sharpen denial onto the fruit that actually gates their next troll:
             // banana and resources they already have score no boost.
             let bottleneck = 1.0 + p.harass_bottleneck_weight * opp_train_deficit(game, tree.typ);
@@ -343,11 +376,21 @@ impl Bot {
             TreeType::Banana => p.harass_chop_scale_banana,
         };
 
+        // A harasser denies the ENEMY half; our-side trees are scaled by
+        // `harass_home_scale` (default 0 → ignored) so it doesn't burn tempo on —
+        // or wreck — our own banana engine. A close home banana (cheap trip →
+        // high wood-per-turn) would otherwise outscore real denial targets.
+        let home_scale = if on_enemy_side(tree, game) {
+            1.0
+        } else {
+            p.harass_home_scale
+        };
+
         Candidate {
             troll_id: troll.id,
             action: Action::Move(troll.id, tree.position),
             #[allow(clippy::cast_possible_truncation)]
-            score: (score * p.score_scale * type_scale) as i32,
+            score: (score * p.score_scale * type_scale * home_scale) as i32,
             tree: Some(tree.position),
         }
     }
@@ -366,7 +409,7 @@ impl Bot {
         let ret_turns =
             Bot::dist(&game, &game.shack_dist_map, troll.position) / troll.movement_speed.max(1);
 
-       let score = troll.carry_wood as f32 / ret_turns.max(1) as f32;
+        let score = troll.carry_wood as f32 / ret_turns.max(1) as f32;
 
         let action = if game.is_adjacent_to_shack(troll) {
             Action::Drop(troll.id)

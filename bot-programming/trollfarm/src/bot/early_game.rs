@@ -112,8 +112,11 @@ impl Bot {
         };
 
         if let Some(candidate) = chosen {
-            self.actions
-                .push(Bot::gather_action(troll, game, candidate));
+            if let Some(action) = Bot::gather_action(troll, game, candidate) {
+                self.actions.push(action);
+            }
+            // A `None` action means the troll is already on the target tree
+            // waiting for it to fruit — committed either way.
             return;
         }
 
@@ -153,15 +156,17 @@ impl Bot {
 
         let inv = game.inventory(Side::Me);
 
+        // A target is either fruited now or a full-size tree about to re-fruit;
+        // for the latter the wait is priced into the trip below, so the troll
+        // leaves early and arrives as the fruit appears instead of idling at
+        // the shack (where the economy fallback used to burn the turns on a
+        // pick→drop churn). Ranked by the effective trip start: max(distance,
+        // cooldown), so a near-but-slow tree can't shadow a ready one.
         let closest_tree = |rt: ResourceType| {
             game.trees
                 .iter()
-                .filter(|t| {
-                    t.get_resource_type() == rt
-                        && (t.fruits > 0)
-                            // || t.position.manhattan(game.shack(Side::Me)) <= t.cooldown as usize)
-                })
-                .min_by_key(|t| dist(&t.position))
+                .filter(|t| t.get_resource_type() == rt && (t.fruits > 0 || t.size == 4))
+                .min_by_key(|t| dist(&t.position).max(if t.fruits > 0 { 0 } else { t.cooldown }))
                 .map(|t| t.position)
         };
 
@@ -175,14 +180,15 @@ impl Bot {
 
         if let Some(pos) = closest_tree(ResourceType::Lemon) {
             let cost_travel = dist_troll(&pos);
-            if let Some(tree) = game.tree_at(pos)
-                && (tree.fruits > 0 || (tree.cooldown <= cost_travel && tree.size == 4))
-            {
+            if let Some(tree) = game.tree_at(pos) {
+                // Travelling and the tree's re-fruit cooldown overlap: the trip
+                // effectively starts at whichever ends later.
+                let wait = if tree.fruits > 0 { 0 } else { tree.cooldown };
                 candidates.push(GatherCandidate {
                     resource: ResourceType::Lemon,
                     target: pos,
                     travel: cost_travel,
-                    cost_now: cost_travel + dist(&pos) + cost_pick_drop,
+                    cost_now: cost_travel.max(wait) + dist(&pos) + cost_pick_drop,
                     cost_next: (dist(&pos) * 2 - 2) + cost_pick_drop,
                     amount: inv.lemon.amount,
                 });
@@ -191,14 +197,13 @@ impl Bot {
 
         if let Some(pos) = closest_tree(ResourceType::Plum) {
             let cost_travel = dist_troll(&pos);
-            if let Some(tree) = game.tree_at(pos)
-                && (tree.fruits > 0 || (tree.cooldown <= cost_travel && tree.size == 4))
-            {
+            if let Some(tree) = game.tree_at(pos) {
+                let wait = if tree.fruits > 0 { 0 } else { tree.cooldown };
                 candidates.push(GatherCandidate {
                     resource: ResourceType::Plum,
                     target: pos,
                     travel: cost_travel,
-                    cost_now: cost_travel + dist(&pos) + cost_pick_drop,
+                    cost_now: cost_travel.max(wait) + dist(&pos) + cost_pick_drop,
                     cost_next: (dist(&pos) * 2 - 2) + cost_pick_drop,
                     amount: inv.plum.amount,
                 });
@@ -295,7 +300,7 @@ impl Bot {
         candidates
             .iter()
             .filter(|c| c.amount < GatherTier::Best.threshold(p))
-            .map(|c| Bot::gather_action(troll, game, c))
+            .filter_map(|c| Bot::gather_action(troll, game, c))
             .find(|a| !matches!(a, Action::Move(_, _)))
     }
 
@@ -321,22 +326,26 @@ impl Bot {
         None
     }
 
+    /// `None` means "stay put": the troll stands on a still-cooling tree it
+    /// came for early — waiting beats a failing `HARVEST` or walking off.
     fn gather_action(
         troll: &crate::game::Troll,
         game: &Game,
         candidate: &GatherCandidate,
-    ) -> Action {
+    ) -> Option<Action> {
         let at_target = match candidate.resource {
             ResourceType::Iron => game.is_adjacent_to_iron(troll),
             _ => troll.position == candidate.target,
         };
 
         if !at_target {
-            Action::Move(troll.id, candidate.target)
+            Some(Action::Move(troll.id, candidate.target))
         } else if candidate.resource == ResourceType::Iron {
-            Action::Mine(troll.id)
+            Some(Action::Mine(troll.id))
+        } else if game.tree_at(candidate.target).is_some_and(|t| t.fruits > 0) {
+            Some(Action::Harvest(troll.id))
         } else {
-            Action::Harvest(troll.id)
+            None
         }
     }
 

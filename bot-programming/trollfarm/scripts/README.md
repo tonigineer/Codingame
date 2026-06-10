@@ -3,11 +3,14 @@
 Helper scripts for developing the bot, grouped into three categories. Run them
 from the `trollfarm/` directory.
 
-```bash
+```text
 scripts/
 ├── _common.py            # shared path anchors + helpers (imported by all)
 ├── local/                # 1. LOCAL HARNESS — benchmark & tune against the referee jar
 │   ├── harness.py        #    aggregate benchmark + shared game runner (run_game)
+│   ├── bench_arena.py    #    THE standard regression bench: 10 pinned arena seeds
+│   │                     #    (5 lost + 5 won, eval/arena_bench_seeds.json), candidate
+│   │                     #    vs baseline binary, margins + failed-action counts
 │   ├── tune.py           #    coordinate-descent tuner (small curated param set)
 │   ├── sweep.py          #    what-if probing on a few hand-picked seeds
 │   ├── sweep_all.py      #    full 39-param coordinate descent vs several opponents
@@ -82,6 +85,7 @@ same set of maps across all of these tools.
 
 - **`sensitivity.py`** — one-at-a-time (OAT) response curves for the economy
   knobs, each swept from the shipped defaults — to bracket useful ranges.
+
     ```bash
     python scripts/local/sensitivity.py --games 100 --only econ_chop_weight
     ```
@@ -107,9 +111,11 @@ Pulls real games from CodinGame's public services into `replays/`.
 
 - **`parse_replay.py`** — fetch one replay by URL or id, print players / map /
   scores, and save the raw JSON to `replays/replay_<id>.json`.
+
     ```bash
     python scripts/replays/parse_replay.py 891040557
     ```
+
     Note: the anonymous API serves **public arena** replays only. Private _sandbox_
     ("Play my code") replays are fetched by `ide/play_my_code.py` from inside the
     logged-in browser instead.
@@ -123,11 +129,13 @@ Pulls real games from CodinGame's public services into `replays/`.
   new `/share-replay/<id>` and report scores/winner. Drives a persistent,
   logged-in Brave profile (`.cg-browser-profile`); attaches to the open window
   on the debug port across runs.
+
     ```bash
     python scripts/ide/play_my_code.py                # full pipeline, random map
     python scripts/ide/play_my_code.py --seed 12345   # replay a fixed map (tuning)
     python scripts/ide/play_my_code.py --no-submit    # play what's in the editor
     ```
+
     `--seed` pins the map via OPTIONS→Manual (honoured by _Play my code_, not
     "Replay in same conditions"). Sandbox replays need your user id (`--user-id`,
     default tonigineer) to authorise the result fetch.

@@ -263,7 +263,7 @@ def report(game_id, res, expected_seed=None) -> int:
     scores, ranks, agents = res.get("scores"), res.get("ranks"), res.get("agents", [])
     for a in agents:
         i = a["i"]
-        rank = ranks[i] if ranks else "?"
+        _rank = ranks[i] if ranks else "?"
         score = scores[i] if scores else "?"
         tag = "  ← WIN" if ranks and ranks[i] == 0 else ""
         print(f"  {a['name']:<16} score {score}{tag}")
@@ -278,7 +278,7 @@ def report(game_id, res, expected_seed=None) -> int:
 
 
 def main() -> int:
-    # sys.stdout.reconfigure(line_buffering=True)
+    sys.stdout.reconfigure(line_buffering=True)  # stream progress even when piped (tee/redirect)
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )

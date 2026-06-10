@@ -12,6 +12,26 @@ const PLANT_CANDIDATES: usize = 6;
 
 impl Bot {
     pub fn economy_candidates(troll: &Troll, game: &Game, out: &mut Vec<Candidate>) {
+        // Grove-size cap: once the grove is full, stop expanding it (no seed
+        // fetch, no new planting) so one troll can actually service it. Harvest,
+        // chop and banking still run, and any held seed gets dropped (banked).
+        // (Expansion is NOT stopped by the liquidation window — the per-seed
+        // maturity gates already taper planting off, and blocking it outright
+        // measured negative.)
+        let p = params::get();
+        let grove = Bot::grove_size(game);
+        let cap = p.grove_cap;
+        let can_expand = grove < cap;
+        eprintln!(
+            "[ECON] turn={} troll={} grove={}/{} expand={} our_trees={}",
+            game.turn,
+            troll.id,
+            grove,
+            cap,
+            can_expand,
+            game.trees.iter().filter(|t| Bot::on_our_side(t, game)).count()
+        );
+
         if troll.has_cargo() {
             out.push(Bot::economy_drop(troll, game));
         }
@@ -23,7 +43,7 @@ impl Bot {
             if tree_occupied_by_others(tree, troll, game) {
                 continue;
             }
-            if let Some(c) = Bot::chop_candidate(troll, tree, game) {
+            if let Some(c) = Bot::chop_candidate(troll, tree, game, grove, cap) {
                 out.push(c);
             }
             if let Some(c) = Bot::harvest_candidate(troll, tree, game) {
@@ -33,13 +53,23 @@ impl Bot {
 
         // Seed priority: banana first (fast-regrowing), then apple, lemon, plum.
         // Drives both which carried seed to plant and which stocked seed to
-        // fetch — the highest-priority type available wins.
+        // fetch — the highest-priority type available wins. Replanting carried
+        // fruit (apple included — a water apple re-fruits every 2 turns)
+        // compounds far better than banking it for 1 pt: a banana-only
+        // restriction halved total production in a 5-seed probe. The price is
+        // tanky trees at the end (a size-4 apple = 20 health), which the
+        // liquidation window pays down instead.
         const SEED_PRIORITY: [TreeType; 4] = [
             TreeType::Banana,
             TreeType::Apple,
             TreeType::Lemon,
             TreeType::Plum,
         ];
+        // NB engine selection is deliberately SOFT: `plant_candidate` already
+        // prefers water cells via the regrowth factor (apple: 9 dry → 2 wet).
+        // A hard "apples only on water" gate measured -9 to -12 margin — even
+        // a dry apple re-fruits ~15 times over its life, far above the 1 pt
+        // from banking the fruit.
         let carried = SEED_PRIORITY
             .iter()
             .copied()
@@ -48,7 +78,8 @@ impl Bot {
         // Fetch a seed from the shack to expand — the highest-priority type
         // stocked there — but only when not already carrying one (a held seed
         // should be planted, not stockpiled).
-        if troll.free_capacity() > 0
+        if can_expand
+            && troll.free_capacity() > 0
             && let Some(seed) = SEED_PRIORITY
                 .iter()
                 .copied()
@@ -60,11 +91,44 @@ impl Bot {
 
         // Plant the carried seed (highest-priority type held) on the nearest
         // free home cell.
-        if let Some(seed) = carried
+        if can_expand
+            && let Some(seed) = carried
             && let Some(c) = Bot::plant_candidate(troll, game, seed)
         {
             out.push(c);
         }
+    }
+
+    /// Size of our home **banana garden**: banana trees on our side of the map
+    /// (closer to our shack than the opponent's). Only bananas count — the
+    /// garden is the renewable banana engine troll 1 cultivates. Natural
+    /// apple/lemon/plum trees on our side are still harvested/chopped, but they
+    /// are NOT the garden and must not count against the cap; otherwise they
+    /// saturate it and block us from ever planting bananas (the "grove never
+    /// grows, we just chop apples" bug).
+    #[must_use]
+    pub fn grove_size(game: &Game) -> i32 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        {
+            game.trees
+                .iter()
+                .filter(|t| Bot::is_grove_tree(t, game))
+                .count() as i32
+        }
+    }
+
+    /// Whether `tree` stands on our half: reachable from our shack and at
+    /// least as close to it as to the opponent's.
+    fn on_our_side(tree: &Tree, game: &Game) -> bool {
+        let me = Bot::dist(game, &game.shack_dist_map, tree.position);
+        let opp = Bot::dist(game, &game.opp_shack_dist_map, tree.position);
+        me != i32::MAX && me <= opp
+    }
+
+    /// Whether `tree` is part of our banana garden: a banana on our side
+    /// (reachable from our shack and at least as close to it as the opponent's).
+    fn is_grove_tree(tree: &Tree, game: &Game) -> bool {
+        matches!(tree.typ, TreeType::Banana) && Bot::on_our_side(tree, game)
     }
 
     fn economy_drop(troll: &Troll, game: &Game) -> Candidate {
@@ -74,8 +138,19 @@ impl Bot {
         let to_shack =
             (Bot::dist(game, &game.shack_dist_map, troll.position) as u32).div_ceil(speed as u32);
 
+        // Carried bananas are seeds, not score, while planting is still
+        // viable — but once it's too late for a new tree to pay off (the same
+        // maturity horizon that gates `plant_candidate`), a held banana is
+        // worth its fruit point only if banked, so count it toward dropping.
+        let banana_pts = if game.turns_remaining()
+            < Tree::initial_cooldown(TreeType::Banana) * 4 + p.plant_decay_turns
+        {
+            troll.carry_banana
+        } else {
+            0
+        };
         let carried_pts = troll.carry_wood * WOOD_PTS
-            + (troll.carry_plum + troll.carry_lemon + troll.carry_apple) * FRUIT_PTS;
+            + (troll.carry_plum + troll.carry_lemon + troll.carry_apple + banana_pts) * FRUIT_PTS;
 
         #[allow(clippy::cast_precision_loss)]
         let score = carried_pts as f32 / (to_shack.max(1)) as f32;
@@ -96,16 +171,36 @@ impl Bot {
     }
 
     /// Fell `tree` for wood, scored `econ_chop_weight` per wood unit over the
-    /// round-trip turns (travel + chop + return). Only offered for a tree that
-    /// has reached max size **and** borne fruit: wood equals size, so a growing
-    /// tree is worth far more felled later, and requiring a fruit first leaves
-    /// the grove a reseed window before it is liquidated. `None` when the troll
-    /// can't chop, the tree isn't ripe to fell, it's full, or it's unreachable.
-    /// seed=8093455799351096000
-    fn chop_candidate(troll: &Troll, tree: &Tree, game: &Game) -> Option<Candidate> {
+    /// round-trip turns (travel + chop + return). `None` when the troll can't
+    /// chop, it's full, or the tree is unreachable. Deliberately NOT gated on
+    /// ripeness or end-game bankability: a fell the opponent would otherwise
+    /// get is denial, and gating it measured -2.4 to -5.7 margin (held-out,
+    /// paired) against every reference opponent.
+    fn chop_candidate(
+        troll: &Troll,
+        tree: &Tree,
+        game: &Game,
+        grove: i32,
+        cap: i32,
+    ) -> Option<Candidate> {
         let p = params::get();
         let free = troll.free_capacity();
         if troll.chop_power == 0 || free == 0 {
+            return None;
+        }
+
+        // Protect the banana engine: only fell a banana once the garden is at
+        // (or above) its cap — i.e. there's a spare one to turn into wood, which
+        // troll 1 then replants. Below the cap, leave bananas to be harvested
+        // (renewable fruit + seeds) so the engine keeps running. Natural
+        // (non-banana) trees can always be felled for their one-time wood.
+        // EXCEPT in the liquidation window at the end of the game: a standing
+        // tree at turn 300 is ~16 unrealized points, so the protection lifts
+        // and the grove gets felled and banked.
+        if matches!(tree.typ, TreeType::Banana)
+            && grove < cap
+            && game.turns_remaining() > p.endgame_liquidate_turns
+        {
             return None;
         }
 
@@ -122,7 +217,21 @@ impl Bot {
         let wood = tree.size.min(free);
         let cost = (travel + chop + ret).max(1);
         #[allow(clippy::cast_precision_loss)]
-        let score = p.econ_chop_weight * wood as f32 / cost as f32;
+        let mut score = p.econ_chop_weight * wood as f32 / cost as f32;
+
+        // Optional zero-trees commitment (`endgame_liquidate_boost` > 1, OFF
+        // by default — see params): clearing our half outranks roaming. Per-
+        // tree gate: only a fell that still fits (chop + walk home + drop)
+        // gets the boost — half-chopping a tree we can't finish forfeits both
+        // fruit and wood.
+        if p.endgame_liquidate_boost > 1.0
+            && Bot::on_our_side(tree, game)
+            && game.turns_remaining() <= p.endgame_liquidate_turns
+            && travel + chop + ret + 1 <= game.turns_remaining()
+        {
+            score *= p.endgame_liquidate_boost;
+        }
+
         Some(Bot::tree_action(troll, tree.position, score))
     }
 
@@ -136,6 +245,31 @@ impl Bot {
         let free = troll.free_capacity();
         if tree.fruits == 0 || troll.harvest_power == 0 || free == 0 {
             return None;
+        }
+
+        // Optional zero-trees commitment (`endgame_liquidate_boost` > 1, OFF
+        // by default — see params): an our-side tree whose fell still fits in
+        // the game is felled, not harvested — a water apple re-fruits every 2
+        // turns, so its harvest candidate would perpetually interrupt
+        // (outscore) its own 10-turn fell and the tree stands at turn 300. A
+        // tree too tanky to clear in the remaining turns keeps being
+        // harvested as usual.
+        if p.endgame_liquidate_boost > 1.0
+            && Bot::on_our_side(tree, game)
+            && game.turns_remaining() <= p.endgame_liquidate_turns
+            && troll.chop_power > 0
+        {
+            let speed = troll.movement_speed.max(1);
+            let travel = Bot::dist(game, &troll.dist_map, tree.position) / speed;
+            let ret = Bot::dist(game, &game.shack_dist_map, tree.position) / speed;
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+            let chop = (tree.health as u32).div_ceil(troll.chop_power as u32) as i32;
+            // saturating: an unreachable tree's distance is i32::MAX
+            if travel.saturating_add(chop).saturating_add(ret).saturating_add(1)
+                <= game.turns_remaining()
+            {
+                return None;
+            }
         }
 
         let speed = troll.movement_speed.max(1);
@@ -159,6 +293,16 @@ impl Bot {
     /// recedes, so picking naturally tapers off. Caller picks `seed` by priority.
     fn pick_candidate(troll: &Troll, game: &Game, seed: TreeType) -> Option<Candidate> {
         let p = params::get();
+
+        // Only fetch a seed we could still plant in time. Without this, once it's
+        // too late to plant (end-game), the troll fetches a seed it can never use
+        // and pick→drops it every turn forever (the apple-churn). Mirrors the same
+        // maturity gate in `plant_candidate`.
+        let maturity = Tree::initial_cooldown(seed) * 4 + p.plant_decay_turns;
+        if game.turns_remaining() < maturity {
+            return None;
+        }
+
         let speed = troll.movement_speed.max(1);
         let (_, cell_dist) = Bot::nearest_free_cell(game, troll)?;
         let to_shack = Bot::dist(game, &game.shack_dist_map, troll.position) / speed;

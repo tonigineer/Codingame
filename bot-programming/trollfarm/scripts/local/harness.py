@@ -44,6 +44,8 @@ GAME_DIR = C.GAME_DIR
 JAR = C.JAR
 DEFAULT_P1 = "./trollfarm"
 DEFAULT_P2 = C.DEFAULT_REF
+# Whose side to report when analyzing downloaded arena replays (--replay-dir).
+ME_PSEUDO = "tonigineer"
 
 INV_RE = re.compile(
     r"turn=(\d+) "
@@ -624,14 +626,24 @@ def parse_downloaded_replay(path: Path, index: int) -> GameResult:
     width, height, water, iron_mines, shack_dist = _parse_view_grid(view_str)
 
     scores = data["scores"]
+    # In arena replays we are index 0 OR 1 — identify by pseudo, don't assume
+    # p1 (assuming index 0 reported ~35% WR for a 70% run).
+    me = next(
+        (
+            a["index"]
+            for a in data.get("agents") or []
+            if (a.get("codingamer") or {}).get("pseudo") == ME_PSEUDO
+        ),
+        0,
+    )
     n_frames = len(data["frames"])
     game_length = max(0, n_frames - 1) // 2
 
     return GameResult(
         index=index,
         seed=0,
-        p1=int(scores[0]),
-        p2=int(scores[1]),
+        p1=int(scores[me]),
+        p2=int(scores[1 - me]),
         width=width,
         height=height,
         water=water,

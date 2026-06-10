@@ -1,6 +1,7 @@
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 project_dir = Path(__file__).parent / sys.argv[1] / "src"
@@ -49,12 +50,32 @@ if __name__ == "__main__":
     flat = inline(project_dir / "main.rs")
     flat = "\n".join([line.replace("    ", " ") for line in flat.splitlines()])
     flat += "\n"
+
+    # Stamp the build time. Done LAST, after comment stripping, so it survives:
+    #  1. rewrite the `FLATTENED_AT` constant so the bot can eprintln it at runtime
+    #     (a comment can't be read at runtime);
+    #  2. prepend a `// flattened <ts>` first line for eyeballing the pasted code.
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    flat = re.sub(
+        r'(const FLATTENED_AT: &str = )"[^"]*"', rf'\g<1>"{ts}"', flat, count=1
+    )
+    flat = f"// flattened {ts}\n" + flat
+
     out = project_dir / "main.rs.flattened"
     out.write_text(flat)
-    subprocess.run(["wl-copy"], input=flat, text=True)
+    # wl-copy forks a clipboard daemon that inherits our fds; point its
+    # stdout/stderr at /dev/null so it can't hold a caller's captured pipe open
+    # (otherwise `just submit` under capture_output=True hangs forever waiting
+    # for EOF). stdin still carries the payload.
+    subprocess.run(
+        ["wl-copy"],
+        input=flat,
+        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     print(
         f"\033[92mWrote\033[0m {out.relative_to(project_dir.parent)} ({len(flat.splitlines())} lines)"
     )
-
-    print("\033[94mCopied\033[0m to clipboard")
+    print(f"\033[94mCopied\033[0m to clipboard  \033[90m(flattened {ts})\033[0m")

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Coordinate-descent tuner for the Troll-Farm bot hyperparameters.
 
 Builds a `--features tuning` bot once, then probes parameter settings by
@@ -36,11 +35,11 @@ import harness as ev  # reuse run_game + seeding + scoring
 
 # Defaults must mirror params.rs::DEFAULT for the params we tune.
 DEFAULTS = {
-    "early_max_turns": 20,
+    "early_max_turns": 24,
     "gather_best": 10,
     "min_carry_capacity": 2,
-    "min_chop_power": 1,
-    "grove_value": 2.0,
+    "min_chop_power": 2,
+    "grove_value": 4.0,
 }
 
 # Small ranges swept per parameter (coordinate descent visits them in order).

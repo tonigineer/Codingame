@@ -48,18 +48,23 @@ impl Bot {
     /// Decide this turn's actions for every troll once past the opening.
     ///
     /// Collects each troll's scored candidates, sorts them best-first, and
-    /// greedily assigns them. Bails out early while still a single troll that is
-    /// mid-move in the opening (anything other than a pending `Train`), leaving
-    /// that earlier action in place.
+    /// greedily assigns them. Bails out early while still a single troll in
+    /// the opening, both when it is mid-move (anything other than a pending
+    /// `Train`) and when the opening deliberately produced no action (e.g.
+    /// waiting on a tree to fruit) — otherwise the economy playbook would
+    /// interject for one turn and undo the opening's plan (the t1 pick → t2
+    /// drop churn). The one exception is a pending `Train`: the shack trains
+    /// while the troll still acts, so the economy may fill that turn.
     pub fn late_game(&mut self, game: &Game) {
         let trolls: Vec<&Troll> = game.trolls(Side::Me);
 
-        // Skip if still in early game and moving.
+        // Skip if still in early game and moving or deliberately waiting.
         if trolls.len() <= 1
-            && self
-                .actions
-                .iter()
-                .any(|a| !matches!(a, Action::Train(_, _, _, _)))
+            && (self.actions.is_empty()
+                || self
+                    .actions
+                    .iter()
+                    .any(|a| !matches!(a, Action::Train(_, _, _, _))))
         {
             return;
         }

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Full-parameter coordinate-descent sweep across MULTIPLE opponents.
 
 Sweeps *every* tunable `TF_*` parameter of OUR bot (P1 only) to maximise an
@@ -46,14 +45,14 @@ import harness as ev  # reuse run_game + scoring
 
 # Must mirror src/bot/params.rs::DEFAULT.
 DEFAULTS = {
-    "early_max_turns": 20,
+    "early_max_turns": 24,
     "gather_best": 10,
     "gather_good": 5,
     "gather_least": 2,
     "cost_pick_drop": 2,
-    "min_movement_speed": 2,
+    "min_movement_speed": 1,
     "min_carry_capacity": 2,
-    "min_chop_power": 1,
+    "min_chop_power": 2,
     "relax_movement_speed": 1,
     "relax_carry_capacity": 1,
     "relax_chop_power": 1,
@@ -80,6 +79,7 @@ DEFAULTS = {
     "harass_chop_scale_plum": 1.50,
     "harass_chop_scale_apple": 1.25,
     "harass_chop_scale_banana": 1.00,
+    "harass_home_scale": 1.0,
     "harass_return_weight": 1.0,
     "harass_turn_decay": 120.0,
     "harass_opp_cap": 150.0,
@@ -237,7 +237,7 @@ def rust_lines(best) -> str:
 def main() -> int:
     # Line-buffer stdout so progress shows live even when redirected to a file
     # (block buffering otherwise hides output until ~8 KB accumulates).
-    sys.stdout.reconfigure(line_buffering=True)
+    sys.stdout.reconfigure(line_buffering=True)  # pyright: ignore
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--games", type=int, default=60, help="games per opponent per trial (default 60)")

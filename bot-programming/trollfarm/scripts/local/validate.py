@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Held-out validation of a tuned candidate config vs the shipped defaults.
 
 `sweep_all.py` optimises greedily, so it can ratchet in evaluation noise
@@ -95,6 +94,25 @@ def fmt_row(label: str, res: dict, opponents: list[str], base_obj: float | None)
 LAST_SEEDS: list[int] = []
 
 
+def run_explicit(labeled: dict, seeds: list[int], opponents: list[str], args) -> int:
+    """Compare an explicit set of labeled configs; deltas are vs the FIRST entry."""
+    t0 = time.time()
+    results, base_obj = {}, None
+    print("─" * 90)
+    for label, cfg in labeled.items():
+        res = run_config(cfg, seeds, opponents, args.jobs)
+        results[label] = res
+        print(fmt_row(label, res, opponents, base_obj))
+        if base_obj is None:
+            base_obj = res["obj"]
+    print("─" * 90)
+    Path(args.out).write_text(json.dumps(
+        {"games": args.games, "seed": args.seed, "opponents": opponents,
+         "configs": labeled, "results": results}, indent=2))
+    print(f"\nDone in {(time.time() - t0) / 60:.1f} min. Written to {args.out}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -109,6 +127,12 @@ def main() -> int:
         help="sweep output json (uses its changed_from_default block)",
     )
     ap.add_argument("--no-oat", action="store_true", help="skip the per-change decomposition")
+    ap.add_argument(
+        "--configs",
+        default=None,
+        help="JSON file {label: {param: val}} to compare directly (deltas vs the "
+        "first entry); bypasses the candidate/OAT flow. Use for stacking tests.",
+    )
     ap.add_argument("--no-build", action="store_true")
     ap.add_argument("--out", default=str(C.EVAL_DIR / "validate.json"))
     args = ap.parse_args()
@@ -117,17 +141,24 @@ def main() -> int:
     opponents = args.opponents.split(",")
     seeds = LAST_SEEDS = C.make_seeds(args.games, args.seed)
 
-    candidate = json.loads(Path(args.candidate).read_text())["changed_from_default"]
-
     print(f"Held-out validation | {args.games} games/opp | base seed {args.seed} (sweep used 1)")
     print(f"Opponents: {[short(o) for o in opponents]}")
-    print(f"Candidate ({len(candidate)} changes): {candidate}")
-    n_configs = 2 + (0 if args.no_oat else len(candidate))
-    print(f"{n_configs} configs × {len(opponents)} opp × {args.games} games "
-          f"= {n_configs * len(opponents) * args.games} games\n")
+
+    if args.configs:
+        labeled = json.loads(Path(args.configs).read_text())
+        print(f"Explicit configs ({len(labeled)}): {list(labeled)}\n")
+    else:
+        candidate = json.loads(Path(args.candidate).read_text())["changed_from_default"]
+        print(f"Candidate ({len(candidate)} changes): {candidate}")
+        n_configs = 2 + (0 if args.no_oat else len(candidate))
+        print(f"{n_configs} configs × {len(opponents)} opp × {args.games} games "
+              f"= {n_configs * len(opponents) * args.games} games\n")
 
     if not args.no_build:
         C.build_tuning_bot()
+
+    if args.configs:
+        return run_explicit(labeled, seeds, opponents, args)
 
     t0 = time.time()
     results = {}
@@ -153,18 +184,18 @@ def main() -> int:
             print(fmt_row(f"+{k}={v}", res, opponents, base["obj"]))
         print("─" * 90)
 
-    print(f"\nSummary (objective = mean margin across opponents):")
+    print("\nSummary (objective = mean margin across opponents):")
     print(f"  baseline        {base['obj']:+.2f}")
     print(f"  full candidate  {full['obj']:+.2f}   (Δ {full['obj'] - base['obj']:+.2f})")
     if oat:
         survivors = [(k, v, r) for k, v, r in oat if r["obj"] - base["obj"] > 0.5]
         inert = [(k, v, r) for k, v, r in oat if abs(r["obj"] - base["obj"]) <= 0.5]
         hurt = [(k, v, r) for k, v, r in oat if r["obj"] - base["obj"] < -0.5]
-        print(f"  OAT survivors (Δobj > +0.5): "
+        print("  OAT survivors (Δobj > +0.5): "
               + (", ".join(f"{k}({r['obj'] - base['obj']:+.1f})" for k, v, r in survivors) or "none"))
-        print(f"  OAT inert (|Δ| ≤ 0.5): "
+        print("  OAT inert (|Δ| ≤ 0.5): "
               + (", ".join(k for k, v, r in inert) or "none"))
-        print(f"  OAT harmful (Δobj < -0.5): "
+        print("  OAT harmful (Δobj < -0.5): "
               + (", ".join(f"{k}({r['obj'] - base['obj']:+.1f})" for k, v, r in hurt) or "none"))
 
     Path(args.out).write_text(json.dumps(

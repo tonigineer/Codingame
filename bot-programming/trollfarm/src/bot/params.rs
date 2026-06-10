@@ -65,9 +65,14 @@ pub struct Params {
     /// per turn over the pick→walk→plant cost, so as near-shack cells fill and
     /// the walk grows, expansion naturally yields to chopping the grown grove.
     pub grove_value: f32,
+    /// Hard cap on the home grove: the economy troll stops expanding (no seed
+    /// fetch, no new planting) once this many trees stand on our side of the map.
+    /// Keeps the grove small enough for one troll to actually service instead of
+    /// letting it sprawl to ~20 trees it can never harvest+bank in time.
+    pub grove_cap: i32,
     /// Per-turn value coefficients for the home economy troll's three actions,
     /// each its own knob so picking, harvesting and chopping rebalance
-    /// independently. The candidate score is `weight * gain / trip_turns`
+    /// independently. The candidate score is `weight * gain / trip_turns`:
     /// (before `score_scale`): `econ_pick_weight` per seed-fetch trip,
     /// `econ_harvest_weight` per fruit harvested, `econ_chop_weight` per wood
     /// unit felled.
@@ -86,6 +91,23 @@ pub struct Params {
     /// cycles), plus this margin to actually harvest/chop it. Otherwise the
     /// planting scores nothing and the troll banks/chops the cargo instead.
     pub plant_decay_turns: i32,
+    /// Grove liquidation horizon (turns before the end). Inside the last this
+    /// many turns, `chop_candidate` lifts the below-cap banana protection so
+    /// the standing grove gets felled and banked (a size-4 banana = 4 wood =
+    /// 16 pts) instead of being harvested for 1-pt fruits until trees are left
+    /// standing at turn 300. The same window stops grove expansion, suppresses
+    /// our-side harvests (they'd perpetually interrupt a fell on fast-refruit
+    /// trees) and applies [`Params::endgame_liquidate_boost`].
+    pub endgame_liquidate_turns: i32,
+    /// Zero-trees commitment, OFF at the default `1.0`. When set above 1, an
+    /// our-side tree whose fell still fits in the remaining turns has its
+    /// harvest candidates suppressed and its chop score multiplied by this, so
+    /// the home half ends the game fully cleared. Measured -4 to -5 margin
+    /// (held-out, all ref opponents) at 2.5-8.0: a standing water apple earns
+    /// more as a harvest engine to turn 300 than its wood (20 health = 10
+    /// chop turns for 16 pts). Kept as an opt-in knob; bananas and other
+    /// cheap trees already get felled by the normal liquidation scoring.
+    pub endgame_liquidate_boost: f32,
 
     // ---- harassment (src/bot/strat_harassment.rs) ----
     /// Flat ranking score for a free harasser planting a held seed on a home
@@ -103,16 +125,28 @@ pub struct Params {
     /// from the economy-side [`Params::denial_bonus`] /
     /// [`Params::denial_weight_economy`].
     pub harass_denial_weight: f32,
-    /// Per-tree-type multipliers on a harasser's chop score, ranked by how much
-    /// denying that fruit hurts the opponent's training: the training fruits
-    /// (lemon→carry, plum→speed, apple→harvest) rank above banana, which is not
-    /// a training resource at all (score/seed only) so felling it never delays a
-    /// troll. This is the *static* ordering; [`Params::harass_bottleneck_weight`]
-    /// sharpens it dynamically toward whatever the opponent currently lacks.
+    /// Per-tree-type multipliers on a harasser's chop score, a mild lean toward
+    /// the training fruits (lemon→carry, plum→speed, apple→harvest) over banana.
+    /// Keep the spread SMALL. Empirically (vs OldJohn, an economy/wood opponent),
+    /// the harasser's real value is denying *wood* — chopping whatever tree sits
+    /// nearest the enemy before they fell it — so being picky about fruit type
+    /// backfires: lemon=plum=2.0/banana=0.25 made it skip near-enemy bananas and
+    /// the opp out-chopped us for +200 (216→196 us, 223→438 them). So leave
+    /// banana ≈ 1; the proximity/denial term, not the type, should drive targets.
+    /// [`Params::harass_bottleneck_weight`] can sharpen toward training fruit.
     pub harass_chop_scale_lemon: f32,
     pub harass_chop_scale_plum: f32,
     pub harass_chop_scale_apple: f32,
     pub harass_chop_scale_banana: f32,
+    /// Multiplier on a harasser's chop score for trees on OUR half (closer to
+    /// our shack than the opponent's). `1.0` (default) = treat them like any
+    /// other tree — chop them for wood. Lowering it makes the harasser focus on
+    /// enemy-side denial, but a broad A/B (5 opponents, seed 2) showed that
+    /// **tanks** vs no-economy wood-rushers (gold-X/3/70: ~+55 → ~+7) because
+    /// there's nothing to deny and troll 2 is far better off gathering wood;
+    /// only vs a strong economy were 0.0 and 1.0 a wash. So denial is not the
+    /// harasser's job — wood is. Kept as a knob for the rare all-economy field.
+    pub harass_home_scale: f32,
     /// Dynamic denial sharpening. A harasser's denial term for a tree is scaled
     /// by `1 + harass_bottleneck_weight * deficit`, where `deficit` is the
     /// opponent's normalized shortfall of that tree's resource toward their next
@@ -138,14 +172,14 @@ pub struct Params {
 
 /// The shipped defaults — the values used when the `tuning` feature is off.
 pub const DEFAULT: Params = Params {
-    early_max_turns: 20,
+    early_max_turns: 24,
     gather_best: 10,
     gather_good: 5,
     gather_least: 2,
     cost_pick_drop: 2,
-    min_movement_speed: 2,
+    min_movement_speed: 1,
     min_carry_capacity: 2,
-    min_chop_power: 1,
+    min_chop_power: 2,
     relax_movement_speed: 1,
     relax_carry_capacity: 1,
     relax_chop_power: 1,
@@ -160,12 +194,20 @@ pub const DEFAULT: Params = Params {
     return_weight_harasser: 0.3,
     return_full_boost: 4.0,
     grove_value: 4.0,
+    grove_cap: 6,
     econ_pick_weight: 2.0,
+    // Tried 5.0 (2026-06-10) to redirect fruit-turns into wood after losses
+    // with 54-69 banked fruit: DISPROVED in the IDE bench — harvests are also
+    // the SEED SUPPLY, so nerfing them starves the plant→fell wood engine
+    // (one map collapsed 179→129 with wood 41→31). Keep harvest hot; fruit
+    // banked is a byproduct of seed gathering, not a detour.
     econ_harvest_weight: 8.0,
     econ_chop_weight: 5.0,
     econ_pick_early_boost: 4.0,
     econ_pick_boost_turns: 120.0,
     plant_decay_turns: 10,
+    endgame_liquidate_turns: 40,
+    endgame_liquidate_boost: 1.0,
     harass_seed_plant_score: 1000.0,
     harass_seed_fetch_score: 0.0,
     harass_camp_score: 0.0,
@@ -174,11 +216,19 @@ pub const DEFAULT: Params = Params {
     harass_chop_scale_plum: 1.50,
     harass_chop_scale_apple: 1.25,
     harass_chop_scale_banana: 1.00,
+    harass_home_scale: 1.0,
     // Net-negative vs every clean (non-tuning) ref opponent in sweeps (gold-X /
     // gold-3 / gold-70: WR falls monotonically as this rises), so off by
     // default. Kept as an opt-in knob — untested against a clean strong-economy
     // bot, the regime where denying a training bottleneck might actually pay.
-    harass_bottleneck_weight: 0.0,
+    // 0.0 → 2.0 (2026-06-10): vs REAL 4-troll opponents the extra trolls are
+    // financed by a handful of plum/lemon/apple trees at their shack (one plum
+    // tree funded 12 plums by t80 in a Tictac75 loss; 3rd troll t~70, 4th
+    // t~120 — our harasser can be there by t~35). The old "net-negative"
+    // verdict ([[denial sweeps]]) was measured vs referee bots that never
+    // train past 2 — nothing to deny. Re-judged on the real-opponent IDE
+    // bench together with the proximity normalization fix in score_chop.
+    harass_bottleneck_weight: 2.0,
     harass_train_min_stat: 2,
     harass_return_weight: 1.0,
     harass_turn_decay: 120.0,
@@ -232,12 +282,21 @@ fn load_from_env() -> Params {
         ),
         return_full_boost: env_f32("TF_RETURN_FULL_BOOST", DEFAULT.return_full_boost),
         grove_value: env_f32("TF_GROVE_VALUE", DEFAULT.grove_value),
+        grove_cap: env_i32("TF_GROVE_CAP", DEFAULT.grove_cap),
         econ_pick_weight: env_f32("TF_ECON_PICK_WEIGHT", DEFAULT.econ_pick_weight),
         econ_harvest_weight: env_f32("TF_ECON_HARVEST_WEIGHT", DEFAULT.econ_harvest_weight),
         econ_chop_weight: env_f32("TF_ECON_CHOP_WEIGHT", DEFAULT.econ_chop_weight),
         econ_pick_early_boost: env_f32("TF_ECON_PICK_EARLY_BOOST", DEFAULT.econ_pick_early_boost),
         econ_pick_boost_turns: env_f32("TF_ECON_PICK_BOOST_TURNS", DEFAULT.econ_pick_boost_turns),
         plant_decay_turns: env_i32("TF_PLANT_DECAY_TURNS", DEFAULT.plant_decay_turns),
+        endgame_liquidate_turns: env_i32(
+            "TF_ENDGAME_LIQUIDATE_TURNS",
+            DEFAULT.endgame_liquidate_turns,
+        ),
+        endgame_liquidate_boost: env_f32(
+            "TF_ENDGAME_LIQUIDATE_BOOST",
+            DEFAULT.endgame_liquidate_boost,
+        ),
         harass_seed_plant_score: env_f32(
             "TF_HARASS_SEED_PLANT_SCORE",
             DEFAULT.harass_seed_plant_score,
@@ -264,6 +323,7 @@ fn load_from_env() -> Params {
             "TF_HARASS_CHOP_SCALE_BANANA",
             DEFAULT.harass_chop_scale_banana,
         ),
+        harass_home_scale: env_f32("TF_HARASS_HOME_SCALE", DEFAULT.harass_home_scale),
         harass_bottleneck_weight: env_f32(
             "TF_HARASS_BOTTLENECK_WEIGHT",
             DEFAULT.harass_bottleneck_weight,

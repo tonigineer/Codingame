@@ -19,9 +19,18 @@ impl Bot {
 
         // Finalize actions
         self.resolve_movement(game);
+
+        // Feed next turn's stuck detector (see `reset_turn`).
+        self.remember_turn(game);
     }
 
     /// Resolve each `Move` action into a single step, avoiding collisions.
+    /// NB: opponent trolls are deliberately NOT in the blocked set — treating
+    /// their (moving) bodies as walls re-routed paths so badly it cost ~40
+    /// margin against every reference; pushing into their cells is kept on
+    /// purpose — moves resolve simultaneously, so a push succeeds the moment
+    /// they leave. Gridlock against OUR OWN bodies is prevented earlier, in
+    /// `reset_turn`'s ally-blocked per-troll dist maps.
     fn resolve_movement(&mut self, game: &Game) {
         let mut blocked: HashSet<Position> = HashSet::new();
 
@@ -36,13 +45,16 @@ impl Bot {
             }
         }
 
-        // Add stationary trolls with actions
+        // Add stationary trolls with actions (Drop included — a troll banking
+        // at a shack-adjacent cell blocks it just like any other in-place
+        // action; omitting it cost a failed move per shared banking turn).
         for action in &self.actions {
             match action {
                 Action::Chop(id)
                 | Action::Harvest(id)
                 | Action::Mine(id)
                 | Action::Pick(id, _)
+                | Action::Drop(id)
                 | Action::Plant(id, _) => {
                     if let Some(troll) = game.trolls.iter().find(|&t| t.id == *id) {
                         blocked.insert(troll.position);
@@ -51,6 +63,19 @@ impl Bot {
                 _ => {}
             }
         }
+
+        let stuck = self.stuck_ids(game);
+        let my_bodies: Vec<(i32, Position)> = game
+            .trolls
+            .iter()
+            .filter(|t| t.side == Side::Me)
+            .map(|t| (t.id, t.position))
+            .collect();
+        let all_bodies: Vec<(i32, Position)> = game
+            .trolls
+            .iter()
+            .map(|t| (t.id, t.position))
+            .collect();
 
         for action in &mut self.actions {
             let Action::Move(id, target) = action else {
@@ -61,21 +86,52 @@ impl Bot {
                 continue;
             };
 
-            let dist_map = bfs_distance_map(troll.position, &game.grid, &blocked);
+            // A stuck troll's step is planned with MY other trolls' bodies as
+            // walls (matching its re-planned candidates from `reset_turn`),
+            // so an existing detour around a blocking ally is actually taken
+            // — the candidate map alone didn't help when the winning action
+            // (e.g. banking) scores off the global shack map. Falls back to
+            // the plain map when the walls leave no route.
+            let mut local_blocked = blocked.clone();
+            if stuck.contains(id) {
+                local_blocked.extend(
+                    my_bodies
+                        .iter()
+                        .filter(|(tid, _)| tid != id)
+                        .map(|(_, p)| *p),
+                );
+            }
+            let dist_map = bfs_distance_map(troll.position, &game.grid, &local_blocked);
             if *target == game.shack(Side::Me) {
                 let shack = game.shack(Side::Me);
                 let dist = |p: &Position| dist_map.get(p).map_or(i32::MAX, |(d, _)| *d);
+                // Prefer an UNOCCUPIED banking cell: both trolls funneling to
+                // the same nearest shack-adjacent cell blocked each other for
+                // 36 failed moves in one arena loss. A body on the cell may
+                // be gone next turn, so occupied cells stay eligible — just
+                // ranked last.
+                let occupied = |p: &Position| {
+                    all_bodies.iter().any(|(tid, b)| tid != id && b == p)
+                };
                 if let Some(adj) = CARDINALS
                     .iter()
                     .map(|c| shack + *c)
                     .filter(|p| game.grid.contains(*p) && b"~.ABLP".contains(&game.grid[*p]))
-                    .min_by_key(|p| dist(p))
+                    .min_by_key(|p| (occupied(p), dist(p)))
                 {
                     *target = adj;
                 }
             }
 
-            if let Some(path) = reconstruct_path(troll.position, *target, &dist_map) {
+            let path = reconstruct_path(troll.position, *target, &dist_map)
+                .filter(|p| !p.is_empty())
+                .or_else(|| {
+                    // walls left no route — plain map, old behavior
+                    let dm = bfs_distance_map(troll.position, &game.grid, &blocked);
+                    reconstruct_path(troll.position, *target, &dm).filter(|p| !p.is_empty())
+                });
+
+            if let Some(path) = path {
                 let steps = usize::try_from(troll.movement_speed.max(0))
                     .unwrap_or(0)
                     .min(path.len());

@@ -7,6 +7,12 @@ pub struct Bot {
     #[allow(dead_code)]
     pub side: Side,
     pub actions: Vec<Action>,
+    /// Where each of my trolls stood at the END of the previous turn, plus
+    /// whether it was ordered to move — together they detect a troll whose
+    /// move the referee rejected (same cell despite a `Move`). See
+    /// [`Bot::reset_turn`] for how a stuck troll re-plans.
+    last_positions: HashMap<i32, Position>,
+    moved_last: HashSet<i32>,
 }
 
 impl Bot {
@@ -15,6 +21,8 @@ impl Bot {
         Self {
             side: Side::Me,
             actions: Vec::new(),
+            last_positions: HashMap::new(),
+            moved_last: HashSet::new(),
         }
     }
 
@@ -27,9 +35,76 @@ impl Bot {
         game.opp_shack_dist_map =
             crate::utils::bfs_distance_map(game.shack(Side::Opp), &game.grid, &blocked);
 
+        // STUCK detector: a troll that was ordered to move last turn but
+        // stands on the same cell had its move rejected by the referee. Only
+        // such a troll gets a dist map with MY other trolls' bodies as walls,
+        // so blocked-corridor targets score unreachable and it re-plans
+        // around (or elsewhere) instead of bonking forever — a corridor once
+        // gridlocked a troll from turn 142 to 300. Walling allies for
+        // EVERYONE all the time cost ~3 margin (constant plan perturbation),
+        // and walling opponents cost ~40 (see `tree_occupied_by_others`), so
+        // the wall applies precisely where the referee proved it real.
+        let my_bodies: Vec<(i32, Position)> = game
+            .trolls
+            .iter()
+            .filter(|t| t.side == Side::Me)
+            .map(|t| (t.id, t.position))
+            .collect();
         for troll in &mut game.trolls {
+            let stuck = Self::is_stuck(&self.moved_last, &self.last_positions, troll);
+            let blocked: HashSet<Position> = if stuck {
+                my_bodies
+                    .iter()
+                    .filter(|(id, _)| *id != troll.id)
+                    .map(|(_, p)| *p)
+                    .collect()
+            } else {
+                HashSet::new()
+            };
             troll.dist_map = crate::utils::bfs_distance_map(troll.position, &game.grid, &blocked);
         }
+    }
+
+    /// Whether this troll was ordered to move last turn yet stands on the
+    /// same cell — i.e. the referee rejected its move. Associated form (not
+    /// `&self`) so callers holding partial borrows of `Bot` can use it.
+    pub(crate) fn is_stuck(
+        moved_last: &HashSet<i32>,
+        last_positions: &HashMap<i32, Position>,
+        troll: &Troll,
+    ) -> bool {
+        troll.side == Side::Me
+            && moved_last.contains(&troll.id)
+            && last_positions.get(&troll.id) == Some(&troll.position)
+    }
+
+    /// Ids of my trolls currently stuck (see [`Bot::is_stuck`]); an owned set
+    /// so `resolve_movement` can consult it while mutating `self.actions`.
+    pub(crate) fn stuck_ids(&self, game: &Game) -> HashSet<i32> {
+        game.trolls
+            .iter()
+            .filter(|t| Self::is_stuck(&self.moved_last, &self.last_positions, t))
+            .map(|t| t.id)
+            .collect()
+    }
+
+    /// Record end-of-turn troll state for next turn's stuck detector
+    /// (call after actions are finalized).
+    pub fn remember_turn(&mut self, game: &Game) {
+        self.last_positions = game
+            .trolls
+            .iter()
+            .filter(|t| t.side == Side::Me)
+            .map(|t| (t.id, t.position))
+            .collect();
+        self.moved_last = self
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::Move(id, _) => Some(*id),
+                _ => None,
+            })
+            .collect();
     }
 
     pub fn debug(game: &Game) {
@@ -332,6 +407,13 @@ impl Default for Bot {
 /// Used to spread workers out: a tree one of my trolls already occupies is
 /// excluded from another troll's candidates, so two trolls don't converge on
 /// the same trunk. Shared by both the economy and harasser strategies.
+///
+/// OPPONENT trolls on the tree are deliberately NOT counted, in either form:
+/// excluding enemy-occupied trees wholesale cedes every contested tree
+/// (-42 to -62 margin), and an adjacency-only exclusion makes the troll
+/// oscillate beside a long-camped tree (-60 to -80). The "failed move" spam
+/// against a camper is actually optimal waiting: moves resolve
+/// simultaneously, so the step succeeds the instant the camper leaves.
 pub fn tree_occupied_by_others(tree: &Tree, troll: &Troll, game: &Game) -> bool {
     game.trolls
         .iter()
