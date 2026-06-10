@@ -1,0 +1,16 @@
+[project]
+name = "cg-tools"
+version = "0.1.0"
+description = "Dev tooling for the CodinGame bots (see README.md)"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32",
+    "selenium>=4.27",
+]
+
+[dependency-groups]
+dev = ["ruff==0.15.16"]
+
+# Not a buildable package — just a dependency manifest for `uv run`/`uv sync`.
+[tool.uv]
+package = false

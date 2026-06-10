@@ -1,0 +1,21 @@
+# One Billion Rows challenge (1BRC) — see README.md.
+# `input.in` is created in this directory; recipes run from here.
+
+pkg := 'one-billion-rows'
+
+# List available recipes
+default:
+    @just --list
+
+# Generate an input file with N rows
+input rows='1_000_000_000':
+    cargo run --release -p {{ pkg }} --bin create-input {{ rows }}
+
+# Run the solver against input.in
+solve:
+    cargo run --release -p {{ pkg }} --bin solve
+
+# One-click: generate the input if missing, then solve
+run:
+    @test -f input.in || just input
+    @just solve

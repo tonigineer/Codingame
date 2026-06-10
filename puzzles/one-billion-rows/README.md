@@ -6,11 +6,6 @@ An implementation of the “One Billion Rows” challenge.
 
 ## Quick Start
 
-From the workspace root:
-
 ```bash
-# 1) Create example data
-cargo run --release -p one-billion-rows --bin create-input
-
-# 2) Solve the problem
-cargo run --release -p one-billion-rows --bin solve
+just input 
+just solve

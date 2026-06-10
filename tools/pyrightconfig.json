@@ -1,0 +1,6 @@
+{
+  "//": "The ide/ scripts import siblings (`import _browser`, `import play`), which resolves at runtime via the script directory — extraPaths lets the editor resolve them too. venvPath/venv point the LSP at the uv-managed env so third-party imports (selenium, requests) resolve.",
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": ["ide"],
+}

@@ -1,4 +1,0 @@
-{
-  "//": "Tooling scripts live in scripts/ and cross-import siblings (e.g. `import _common`, `import harness`) via a sys.path bootstrap that Pyright can't see. List those dirs here so the editor resolves them. Keeps `import harness` from resolving to the eval/ output dir.",
-  "extraPaths": ["scripts", "scripts/local", "scripts/ide"]
-}

@@ -1,6 +1,5 @@
-
 # ---------------------------------------------------------------------------
-# Project-wide tasks
+# Workspace-wide tasks
 #
 # These take an optional package name. With no argument they run across the
 # whole workspace; with one they scope to a single crate:
@@ -16,7 +15,7 @@ default:
 fmt:
     cargo fmt --all
 
-# Check formatting across the whole workspace
+# Verify formatting without modifying files
 fmt-check:
     cargo fmt --all --check
 
@@ -33,64 +32,47 @@ build pkg='':
 test pkg='':
     cargo test --release {{ if pkg == '' { '--workspace' } else { '-p ' + pkg } }}
 
-# Full pipeline for the entire project
+# Full pipeline for the entire workspace
 ci: fmt-check lint build test
 
-# ---------------------------------------------------------------------------
-# CodinGame bots
-#
-# `flatten` inlines a modular crate into one submittable file.
-# `submit`  builds + flattens any bot crate: `just submit trollfarm`.
-# `play`    play against ref for given seed (or random)
-# `eval`    evaluate 100 games against ref
-# ---------------------------------------------------------------------------
-
-# Flatten a bot crate into a single-file CG submission
+# Flatten a bot crate into a single-file CG submission (tools/README.md)
 flatten pkg:
-    python ./bot-programming/flatten.py {{ pkg }}
-
-# Build a bot and flatten it for submission
-submit pkg: (build pkg) (flatten pkg)
-
-play pkg='trollfarm' seed='1': (build pkg)
-    #!/usr/bin/env bash
-    set -euo pipefail
-    game_dir="./bot-programming/trollfarm/assets/Troll-Farm"
-    cp "./target/release/{{ pkg }}" "$game_dir/"
-    cd "$game_dir"
-
-    nohup java -jar ./troll-farm-1.0-SNAPSHOT.jar \
-        -p1 "./{{ pkg }}" -p2 "./{{ pkg }}-ref" -s -seed "{{ seed }}" > server.log 2>&1 &
-    disown
-    # echo "started; tail -f $runner/server.log to watch"
-
-# Named bot pipelines (test first, then build + flatten)
-trollfarm: (test "trollfarm") (submit "trollfarm")
-
-snakebyte: (test "snakebyte") (submit "snakebyte")
-    # ./bot-programming/snakebyte/sim.sh
-
-# # ---------------------------------------------------------------------------
-# # Local game runner
-# # ---------------------------------------------------------------------------
-
-# # Play a game locally: `just play tic-tac-toe`
-# play game:
-#     cargo run --release --bin play -- --game {{ game }}
-
-# # Shortcuts
-# play-ttt: (play "tic-tac-toe")
-# play-c4: (play "connect-four")
-# play-uttt: (play "ult-tic-tac-toe")
+    uv run --project tools ./tools/flatten.py {{ pkg }}
 
 # ---------------------------------------------------------------------------
-# One Billion Row Challenge
+# One-click solutions, one per project.
+#
+# Each project also has its own dedicated Justfile with the full recipe set —
+# run `just --list` inside the project dir (or `just -d <dir> -f <dir>/Justfile`).
 # ---------------------------------------------------------------------------
 
-# Generate an input file with N rows
-brc-input rows='1_000_000':
-    cargo run --release -p one-billion-rows --bin create-input {{ rows }}
+# Shared library: run its test suite
+common: (test 'common')
 
-# Run the solver
-brc:
-    cargo run --release -p one-billion-rows --bin solve
+# Play tic-tac-toe in the terminal (human vs minimax)
+tic-tac-toe:
+    @just -d games/tic-tac-toe -f games/tic-tac-toe/Justfile play
+
+# Play connect-four in the terminal (human vs minimax)
+connect-four:
+    @just -d games/connect-four -f games/connect-four/Justfile play
+
+# Troll Farm bot: test, then build + flatten + compile-check for the CG editor
+trollfarm: (test 'trollfarm')
+    @just -d bots/trollfarm -f bots/trollfarm/Justfile submit
+
+# Snakebyte bot: test, then build + flatten for the CG editor
+snakebyte: (test 'snakebyte')
+    @just -d bots/snakebyte -f bots/snakebyte/Justfile submit
+
+# Ultimate Tic-Tac-Toe bot: test, then build + flatten for the CG editor
+ultimate-tic-tac-toe: (test 'ultimate-tic-tac-toe')
+    @just -d bots/ultimate-tic-tac-toe -f bots/ultimate-tic-tac-toe/Justfile submit
+
+alias uttt := ultimate-tic-tac-toe
+
+# One Billion Rows: generate the input if missing, then solve
+one-billion-rows:
+    @just -d puzzles/one-billion-rows -f puzzles/one-billion-rows/Justfile run
+
+alias brc := one-billion-rows

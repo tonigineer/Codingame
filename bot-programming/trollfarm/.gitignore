@@ -1,7 +1,0 @@
-.venv/
-.venv-browser/
-.cg-browser-profile/
-__pycache__/
-codingame/
-eval/
-replays/
