@@ -79,6 +79,14 @@ impl Bot {
     fn collect_actions(&self, trolls: &[&Troll], game: &Game) -> Vec<Candidate> {
         let mut actions = Vec::new();
         for troll in trolls {
+            // On the 3rd-troll mission BOTH trolls get mission candidates
+            // first — each gathers only what it can (the harasser has no
+            // harvest power, so fruits fall to the economy troll, iron to the
+            // harasser). Mission scores dominate; the role candidates below
+            // remain as fallback so nobody idles.
+            if self.third_troll_mission {
+                Bot::train_gather_candidates(troll, game, &mut actions);
+            }
             match role(troll, game) {
                 Role::Economy => Bot::economy_candidates(troll, game, &mut actions),
                 Role::Harasser => Bot::harasser_candidates(troll, game, &mut actions),

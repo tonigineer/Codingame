@@ -14,6 +14,18 @@ impl Bot {
             self.second_troll(game);
         }
 
+        // Conditional 3rd troll: when a bigger workforce is outscaling a lead
+        // we hold, convert part of the lead into a worker. Strictly additive —
+        // off-latch behavior is unchanged.
+        self.update_third_troll_mission(game);
+        if self.third_troll_mission
+            && let Some((ms, cc, hp, cp)) = Bot::third_troll_plan(game)
+            && game.can_train(Side::Me, ms, cc, hp, cp)
+        {
+            eprintln!("[3RD] training {ms}/{cc}/{hp}/{cp} at turn={}", game.turn);
+            self.actions.push(Action::Train(ms, cc, hp, cp));
+        }
+
         // Late game
         self.late_game(game);
 
@@ -71,11 +83,8 @@ impl Bot {
             .filter(|t| t.side == Side::Me)
             .map(|t| (t.id, t.position))
             .collect();
-        let all_bodies: Vec<(i32, Position)> = game
-            .trolls
-            .iter()
-            .map(|t| (t.id, t.position))
-            .collect();
+        let all_bodies: Vec<(i32, Position)> =
+            game.trolls.iter().map(|t| (t.id, t.position)).collect();
 
         for action in &mut self.actions {
             let Action::Move(id, target) = action else {
@@ -110,9 +119,7 @@ impl Bot {
                 // 36 failed moves in one arena loss. A body on the cell may
                 // be gone next turn, so occupied cells stay eligible — just
                 // ranked last.
-                let occupied = |p: &Position| {
-                    all_bodies.iter().any(|(tid, b)| tid != id && b == p)
-                };
+                let occupied = |p: &Position| all_bodies.iter().any(|(tid, b)| tid != id && b == p);
                 if let Some(adj) = CARDINALS
                     .iter()
                     .map(|c| shack + *c)
@@ -142,6 +149,4 @@ impl Bot {
             }
         }
     }
-
-
 }

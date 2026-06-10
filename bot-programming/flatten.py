@@ -39,7 +39,11 @@ def inline(file_path: Path) -> str:
         indented = "\n".join(
             "    " + line
             for line in body.splitlines()
-            if not line.strip().startswith("/") and len(line.strip()) > 0
+            # Strip only real `//` comment lines: a bare "/" prefix also
+            # matched rustfmt's division continuation lines
+            # (`/ troll.movement_speed.max(1);`) and silently broke the
+            # pasted build (compile error, score -2 in the IDE).
+            if not line.strip().startswith("//") and len(line.strip()) > 0
         )
         return f"mod {name} {{\n{indented}\n}}\n"
 

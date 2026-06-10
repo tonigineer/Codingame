@@ -169,7 +169,7 @@ def main() -> int:
     code = (C.TROLLFARM_DIR / "src" / "main.rs.flattened").read_text()
     if not args.no_paste:
         print(f"pasting bot ({len(code)} chars, {code.splitlines()[0]!r})")
-        pnc.set_via_browser_clipboard(driver, code)
+        retry(lambda: pnc.set_via_browser_clipboard(driver, code), tries=4, label="paste")
 
     rows = []
     for i, e in enumerate(games):

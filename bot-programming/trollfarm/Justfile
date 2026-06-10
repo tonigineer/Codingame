@@ -58,8 +58,17 @@ _flatten pkg="trollfarm":
 _deploy pkg="trollfarm": (build pkg)
     cp "{{ target_dir }}/release/{{ pkg }}" "{{ game_dir }}/"
 
-# Build and flatten a bot for submission
-submit pkg="trollfarm": (_deploy pkg) (_flatten pkg)
+# Compile-check the flattened single file exactly as CodinGame will see it.
+# Catches flattener bugs (it once silently dropped rustfmt's leading-`/`
+# division continuation lines -> compile error -> score -2 in the IDE).
+_flatcheck pkg="trollfarm":
+    rustc --edition 2024 -O --crate-name answer src/main.rs.flattened -o /tmp/flatcheck_{{ pkg }} \
+        -L dependency="{{ target_dir }}/release/deps" \
+        --extern itertools=$(ls "{{ target_dir }}"/release/deps/libitertools-*.rlib | head -1)
+    @echo "flattened file compiles ✓"
+
+# Build and flatten a bot for submission (incl. flattened-file compile check)
+submit pkg="trollfarm": (_deploy pkg) (_flatten pkg) (_flatcheck pkg)
 
 # Args: seed, opponent binary in the game dir (e.g. `just play 7 trollfarm-ref-gold-3`).
 # Play one game detached; watch at http://localhost:8888 (`just stop` to end)

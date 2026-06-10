@@ -29,7 +29,10 @@ impl Bot {
             grove,
             cap,
             can_expand,
-            game.trees.iter().filter(|t| Bot::on_our_side(t, game)).count()
+            game.trees
+                .iter()
+                .filter(|t| Bot::on_our_side(t, game))
+                .count()
         );
 
         if troll.has_cargo() {
@@ -265,7 +268,10 @@ impl Bot {
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
             let chop = (tree.health as u32).div_ceil(troll.chop_power as u32) as i32;
             // saturating: an unreachable tree's distance is i32::MAX
-            if travel.saturating_add(chop).saturating_add(ret).saturating_add(1)
+            if travel
+                .saturating_add(chop)
+                .saturating_add(ret)
+                .saturating_add(1)
                 <= game.turns_remaining()
             {
                 return None;

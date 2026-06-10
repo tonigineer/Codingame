@@ -25,10 +25,7 @@ use crate::game::{Action, Game, Side, Tree, TreeType, Troll};
 /// excluded — it is finished score, not a means we could deny.
 fn opp_resources_empty(game: &Game) -> bool {
     let inv = game.inventory(Side::Opp);
-    inv.plum.amount == 0
-        && inv.lemon.amount == 0
-        && inv.apple.amount == 0
-        && inv.banana.amount == 0
+    inv.plum.amount == 0 && inv.lemon.amount == 0 && inv.apple.amount == 0 && inv.banana.amount == 0
 }
 
 /// How badly the opponent still needs this tree's fruit for their next troll,
@@ -89,7 +86,6 @@ fn tree_would_be_gone_on_arrival(tree: &Tree, troll: &Troll, game: &Game) -> boo
     false
 }
 
-
 /// Harassment intensity in `[0,1]`: how much the harasser should still chase
 /// denial rather than farm at home.
 ///
@@ -113,9 +109,14 @@ fn on_enemy_side(tree: &Tree, game: &Game) -> bool {
 fn harass_factor(game: &Game) -> f32 {
     let p = params::get();
     let turn_w = (1.0 - f32::from(game.turn) / p.harass_turn_decay.max(1.0)).clamp(0.0, 1.0);
+    // Fade with the score DIFFERENTIAL, not the opponent's absolute score:
+    // "they outscore us by X" means denial isn't working — come home. The old
+    // absolute form (opp ≥ 150 → stop) switched harassment off mid-game in
+    // every top-league match regardless of standing; 5 of 6 bench losses were
+    // leads blown exactly in that unmolested second half.
     #[allow(clippy::cast_precision_loss)]
-    let opp = game.inventory(Side::Opp).score() as f32;
-    let opp_w = (1.0 - opp / p.harass_opp_cap.max(1.0)).clamp(0.0, 1.0);
+    let deficit = (game.inventory(Side::Opp).score() - game.inventory(Side::Me).score()) as f32;
+    let opp_w = (1.0 - deficit / p.harass_opp_cap.max(1.0)).clamp(0.0, 1.0);
     turn_w * opp_w
 }
 
@@ -187,7 +188,8 @@ impl Bot {
         // actually goes for (verify it prefers lemon/plum and shuns banana).
         let mut best: Option<(TreeType, i32, i32, i32)> = None;
         for tree in game.trees.iter().filter(|t| {
-            !tree_occupied_by_others(t, troll, game) && !tree_would_be_gone_on_arrival(t, troll, game)
+            !tree_occupied_by_others(t, troll, game)
+                && !tree_would_be_gone_on_arrival(t, troll, game)
         }) {
             let c = Bot::score_chop(troll, tree, game, hf);
             if best.is_none_or(|(_, _, _, s)| c.score > s) {
@@ -265,7 +267,10 @@ impl Bot {
             TreeType::Lemon,
             TreeType::Plum,
         ];
-        let carried = SEED_PRIORITY.iter().copied().find(|&t| troll.carries(t) > 0);
+        let carried = SEED_PRIORITY
+            .iter()
+            .copied()
+            .find(|&t| troll.carries(t) > 0);
 
         // 1. Plant a carried seed on the nearest free home cell (the
         //    highest-priority type we hold).
@@ -350,6 +355,22 @@ impl Bot {
             .get(&tree.position)
             .map_or(i32::MAX, |(d, _)| *d);
 
+        // Squat value: trolls can't share a cell, so STANDING on a fruited
+        // enemy tree while felling it blocks every harvest of it — their
+        // best water tree re-fruits every ~2 turns, and an unmolested orchard
+        // banked 102 fruit in one lost bench game. Valued as the orchard
+        // yield denied per turn of occupation (1/period), independent of the
+        // wood; the slow fell of a tanky apple is a FEATURE here.
+        if tree.fruits > 0 && on_enemy_side(tree, game) {
+            #[allow(clippy::cast_precision_loss)]
+            let period = if game.is_near_water(tree.position) {
+                tree.cooldown_time_water()
+            } else {
+                tree.cooldown_time()
+            } as f32;
+            score += p.harass_squat_weight * hf / period.max(1.0);
+        }
+
         let shack_span = game.shack(Side::Me).manhattan(game.shack(Side::Opp));
         if opp_dist <= shack_span as i32 {
             // How deep in THEIR territory the tree stands, normalized 0..1 by
@@ -359,8 +380,7 @@ impl Bot {
             // (denial wood doesn't need to come home; travel already prices
             // the trip in the divisor below).
             #[allow(clippy::cast_precision_loss)]
-            let proximity =
-                (shack_span as i32 - opp_dist + 1) as f32 / (shack_span + 1) as f32;
+            let proximity = (shack_span as i32 - opp_dist + 1) as f32 / (shack_span + 1) as f32;
             // Sharpen denial onto the fruit that actually gates their next troll:
             // banana and resources they already have score no boost.
             let bottleneck = 1.0 + p.harass_bottleneck_weight * opp_train_deficit(game, tree.typ);

@@ -109,6 +109,31 @@ pub struct Params {
     /// cheap trees already get felled by the normal liquidation scoring.
     pub endgame_liquidate_boost: f32,
 
+    // ---- conditional 3rd troll (src/bot/early_game.rs::train_gather) ----
+    /// Trigger: the opponent has at least this many trolls. Arena analysis
+    /// (15 losses): we led at t100 in 15/15 losses yet got outscaled by their
+    /// 3rd/4th troll — but could afford a 3rd in only 1/15 games because we
+    /// never bank plum/lemon/iron. The mission gathers them deliberately.
+    pub third_troll_opp_trolls: i32,
+    /// Trigger: our banked-score lead must be at least this (the mission
+    /// spends tempo; only convert a lead we actually hold). Mission aborts if
+    /// the lead goes negative.
+    pub third_troll_lead: i32,
+    /// Trigger/abort: turns remaining must exceed this — the gather takes
+    /// ~25-40 turns and the new troll needs life left to pay back.
+    pub third_troll_min_turns: i32,
+    /// Mission budget: abort (for the rest of the game) when the troll is not
+    /// trained within this many turns of latching — an uncompletable mission
+    /// must not bleed the economy forever (a forced probe lost 40+ points
+    /// chasing the last plums of a stripped map).
+    pub third_troll_deadline: i32,
+    /// Fruit-gathering reach (trip turns incl. re-fruit wait) for the economy
+    /// troll during the mission: it picks up plum/lemon near its working area
+    /// instead of crossing the map — the grove it runs IS the lead being
+    /// converted. Iron has no reach limit (the harasser handles it; mines
+    /// don't deplete).
+    pub third_troll_reach: i32,
+
     // ---- harassment (src/bot/strat_harassment.rs) ----
     /// Flat ranking score for a free harasser planting a held seed on a home
     /// cell. High, so once the opponent has nothing left to deny, growing the
@@ -147,6 +172,11 @@ pub struct Params {
     /// only vs a strong economy were 0.0 and 1.0 a wash. So denial is not the
     /// harasser's job — wood is. Kept as a knob for the rare all-economy field.
     pub harass_home_scale: f32,
+    /// Orchard-squat weight: bonus on a harasser's chop score for FRUITED
+    /// enemy-side trees, valued as the yield denied per turn of standing on
+    /// them (weight / refruit-period) — blocking their best water tree denies
+    /// ~a fruit every 2 turns at zero stat cost.
+    pub harass_squat_weight: f32,
     /// Dynamic denial sharpening. A harasser's denial term for a tree is scaled
     /// by `1 + harass_bottleneck_weight * deficit`, where `deficit` is the
     /// opponent's normalized shortfall of that tree's resource toward their next
@@ -162,10 +192,14 @@ pub struct Params {
     /// incidental, so the pull back to bank is deliberately weak.
     pub harass_return_weight: f32,
     /// Harassment fade. The harasser's denial/camp intensity is
-    /// `clamp(1 - turn/harass_turn_decay) * clamp(1 - opp_score/harass_opp_cap)`,
-    /// in `[0,1]`. Once it reaches 0 — late game, or the opponent is outscoring
-    /// us, so denial isn't working — the harasser flips to home economy
-    /// instead of wasting tempo on the far side.
+    /// `clamp(1 - turn/harass_turn_decay) * clamp(1 - (opp-me)/harass_opp_cap)`,
+    /// in `[0,1]`. Once it reaches 0 — endgame, or the opponent OUTSCORES us
+    /// by `harass_opp_cap` (denial isn't working) — the harasser flips to home
+    /// economy. 120/absolute-150 shut harassment off mid-game in every
+    /// top-league match (their banked score passes 150 regardless of
+    /// standing); 5 of 6 bench losses were leads blown in that unmolested
+    /// second half, so: 260 (fades into the liquidation window) and the cap
+    /// reads the score DIFFERENCE.
     pub harass_turn_decay: f32,
     pub harass_opp_cap: f32,
 }
@@ -208,6 +242,11 @@ pub const DEFAULT: Params = Params {
     plant_decay_turns: 10,
     endgame_liquidate_turns: 40,
     endgame_liquidate_boost: 1.0,
+    third_troll_opp_trolls: 3,
+    third_troll_lead: 20,
+    third_troll_min_turns: 130,
+    third_troll_deadline: 50,
+    third_troll_reach: 14,
     harass_seed_plant_score: 1000.0,
     harass_seed_fetch_score: 0.0,
     harass_camp_score: 0.0,
@@ -228,10 +267,11 @@ pub const DEFAULT: Params = Params {
     // verdict ([[denial sweeps]]) was measured vs referee bots that never
     // train past 2 — nothing to deny. Re-judged on the real-opponent IDE
     // bench together with the proximity normalization fix in score_chop.
+    harass_squat_weight: 1.5,
     harass_bottleneck_weight: 2.0,
     harass_train_min_stat: 2,
     harass_return_weight: 1.0,
-    harass_turn_decay: 120.0,
+    harass_turn_decay: 260.0,
     harass_opp_cap: 150.0,
 };
 
@@ -297,6 +337,14 @@ fn load_from_env() -> Params {
             "TF_ENDGAME_LIQUIDATE_BOOST",
             DEFAULT.endgame_liquidate_boost,
         ),
+        third_troll_opp_trolls: env_i32(
+            "TF_THIRD_TROLL_OPP_TROLLS",
+            DEFAULT.third_troll_opp_trolls,
+        ),
+        third_troll_lead: env_i32("TF_THIRD_TROLL_LEAD", DEFAULT.third_troll_lead),
+        third_troll_min_turns: env_i32("TF_THIRD_TROLL_MIN_TURNS", DEFAULT.third_troll_min_turns),
+        third_troll_deadline: env_i32("TF_THIRD_TROLL_DEADLINE", DEFAULT.third_troll_deadline),
+        third_troll_reach: env_i32("TF_THIRD_TROLL_REACH", DEFAULT.third_troll_reach),
         harass_seed_plant_score: env_f32(
             "TF_HARASS_SEED_PLANT_SCORE",
             DEFAULT.harass_seed_plant_score,
@@ -324,6 +372,7 @@ fn load_from_env() -> Params {
             DEFAULT.harass_chop_scale_banana,
         ),
         harass_home_scale: env_f32("TF_HARASS_HOME_SCALE", DEFAULT.harass_home_scale),
+        harass_squat_weight: env_f32("TF_HARASS_SQUAT_WEIGHT", DEFAULT.harass_squat_weight),
         harass_bottleneck_weight: env_f32(
             "TF_HARASS_BOTTLENECK_WEIGHT",
             DEFAULT.harass_bottleneck_weight,

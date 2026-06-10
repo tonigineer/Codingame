@@ -1,6 +1,6 @@
-use crate::bot::Bot;
 use crate::bot::params;
-use crate::game::{Action, Game, ResourceType, Side, TrainCost, Tree, TreeType};
+use crate::bot::{Bot, Candidate};
+use crate::game::{Action, Game, ResourceType, Side, TrainCost, Tree, TreeType, Troll};
 use crate::utils::{CARDINALS, Position};
 
 #[derive(Debug, Clone, Copy)]
@@ -377,7 +377,12 @@ impl Bot {
 
     /// Highest-stat-total troll affordable now, with each attribute at or above
     /// the given lower bounds (harvest power is always 0 — we don't gather apple).
-    fn best_trainable_with(game: &Game, min_speed: i32, min_carry: i32, min_chop: i32) -> Option<Action> {
+    fn best_trainable_with(
+        game: &Game,
+        min_speed: i32,
+        min_carry: i32,
+        min_chop: i32,
+    ) -> Option<Action> {
         let mut best: Option<(Action, i32)> = None;
 
         for ms in min_speed..=4 {
@@ -425,6 +430,148 @@ impl Bot {
             .map(|t| Self::time_to_fruit(t, game))
             .min()
             .unwrap_or(i32::MAX)
+    }
+
+    /// Candidates for the conditional-3rd-troll mission (latch in `core.rs`):
+    /// gather the still-missing training resources for a 2/2/0/2 troll and
+    /// bank them — training spends the BANK, and plum/lemon/iron are types the
+    /// normal economy never stocks. Scores sit far above the regular harasser
+    /// candidates (which the caller pushes as fallback), so mission work wins
+    /// whenever any is available and the troll never idles when none is.
+    pub(super) fn train_gather_candidates(troll: &Troll, game: &Game, out: &mut Vec<Candidate>) {
+        let p = params::get();
+        let scale = p.score_scale * 30.0;
+        let Some((ms, cc, hp, cp)) = Bot::third_troll_plan(game) else {
+            return; // mission is being unlatched this turn
+        };
+        let cost = game.train_cost(Side::Me, ms, cc, hp, cp);
+        let inv = game.inventory(Side::Me);
+
+        let short = |c: i32, have: i32| (c - have).max(0);
+        let shorts = [
+            (ResourceType::Plum, short(cost.plum, inv.plum.amount)),
+            (ResourceType::Lemon, short(cost.lemon, inv.lemon.amount)),
+            (ResourceType::Apple, short(cost.apple, inv.apple.amount)),
+            (ResourceType::Iron, short(cost.iron, inv.iron.amount)),
+        ];
+        let total_short: i32 = shorts.iter().map(|&(_, s)| s).sum();
+        let carried_useful: i32 = shorts
+            .iter()
+            .map(|&(rt, s)| troll.carries_resource(rt).min(s))
+            .sum();
+
+        let bank = |score: f32| {
+            let action = if game.is_adjacent_to_shack(troll) {
+                Action::Drop(troll.id)
+            } else {
+                Action::Move(troll.id, game.shack(Side::Me))
+            };
+            Candidate {
+                troll_id: troll.id,
+                action,
+                #[allow(clippy::cast_possible_truncation)]
+                score: score as i32,
+                tree: None,
+            }
+        };
+        #[rustfmt::skip]
+        let ret = Bot::dist(game, &game.shack_dist_map, troll.position) / troll.movement_speed.max(1);
+
+        // 1. Bank when the hands are full, or when what we carry closes the
+        //    remaining bank gap — the Train itself fires in `play()` as soon
+        //    as the bank covers the cost.
+        #[allow(clippy::cast_precision_loss)]
+        if (carried_useful > 0 && carried_useful >= total_short)
+            || (troll.free_capacity() == 0 && troll.has_cargo())
+        {
+            out.push(bank(scale / (1 + ret.max(0)) as f32));
+            return;
+        }
+
+        // 2. Gather each still-missing resource from its nearest source —
+        //    but only what THIS troll can collect: the harasser is trained
+        //    with harvest power 0 (it spammed 47 failed harvests before this
+        //    gate), so fruits fall to the economy troll, iron to whoever can
+        //    mine. The caller runs this for both trolls during the mission.
+        for (rt, s) in shorts {
+            let to_gather = s - troll.carries_resource(rt);
+            if to_gather <= 0 {
+                continue;
+            }
+            if rt != ResourceType::Iron && troll.harvest_power == 0 {
+                continue;
+            }
+            if rt == ResourceType::Iron {
+                let target = game
+                    .mines()
+                    .flat_map(|m| CARDINALS.iter().map(move |&c| m + c))
+                    .filter(|pos| game.grid.contains(*pos) && b".ABPL".contains(&game.grid[*pos]))
+                    .min_by_key(|pos| Bot::dist(game, &troll.dist_map, *pos));
+                if let Some(pos) = target {
+                    let travel = Bot::dist(game, &troll.dist_map, pos);
+                    if travel == i32::MAX {
+                        continue;
+                    }
+                    let action = if game.is_adjacent_to_iron(troll) {
+                        Action::Mine(troll.id)
+                    } else {
+                        Action::Move(troll.id, pos)
+                    };
+                    #[allow(clippy::cast_precision_loss)]
+                    out.push(Candidate {
+                        troll_id: troll.id,
+                        action,
+                        #[allow(clippy::cast_possible_truncation)]
+                        score: (scale / (1 + travel) as f32) as i32,
+                        tree: None,
+                    });
+                }
+                continue;
+            }
+            // Fruit: nearest tree of the type, fruited now or full-size and
+            // re-fruiting by arrival (same waiting-aware costing as the
+            // opening). A fruitless tree we already stand on is skipped — the
+            // fallback harasser candidates fill that turn.
+            let target = game
+                .trees
+                .iter()
+                .filter(|t| {
+                    t.get_resource_type() == rt
+                        && (t.fruits > 0 || t.size == 4)
+                        && !(t.position == troll.position && t.fruits == 0)
+                })
+                .min_by_key(|t| {
+                    let d = Bot::dist(game, &troll.dist_map, t.position);
+                    d.max(if t.fruits > 0 { 0 } else { t.cooldown })
+                });
+            if let Some(tree) = target {
+                let travel = Bot::dist(game, &troll.dist_map, tree.position);
+                if travel == i32::MAX {
+                    continue;
+                }
+                let wait = if tree.fruits > 0 { 0 } else { tree.cooldown };
+                // Opportunistic only: the economy troll picks fruit near its
+                // working area — abandoning the grove for a cross-map plum
+                // costs more than the troll it buys (the deadline handles
+                // maps where nothing is ever in reach).
+                if travel.max(wait) > p.third_troll_reach {
+                    continue;
+                }
+                let action = if troll.position == tree.position {
+                    Action::Harvest(troll.id)
+                } else {
+                    Action::Move(troll.id, tree.position)
+                };
+                #[allow(clippy::cast_precision_loss)]
+                out.push(Candidate {
+                    troll_id: troll.id,
+                    action,
+                    #[allow(clippy::cast_possible_truncation)]
+                    score: (scale / (1 + travel.max(wait)) as f32) as i32,
+                    tree: Some(tree.position),
+                });
+            }
+        }
     }
 
     /// Turns until `tree` next bears fruit. A tree only fruits at size 4; below

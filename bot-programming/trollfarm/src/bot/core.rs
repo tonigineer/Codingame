@@ -1,4 +1,4 @@
-use crate::game::{Action, Game, Side, Tree, Troll};
+use crate::game::{Action, Game, ResourceType, Side, Tree, Troll};
 use crate::utils::{CARDINALS, Position, bfs_distance_map};
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -13,6 +13,16 @@ pub struct Bot {
     /// [`Bot::reset_turn`] for how a stuck troll re-plans.
     last_positions: HashMap<i32, Position>,
     moved_last: HashSet<i32>,
+    /// Latched while the conditional-3rd-troll mission is on: a bigger enemy
+    /// workforce is outscaling a lead we hold, so the trolls gather the
+    /// training resources (plum/lemon/iron we otherwise never bank). Strictly
+    /// additive — with the latch off, behavior is unchanged. See
+    /// [`Bot::update_third_troll_mission`].
+    pub(crate) third_troll_mission: bool,
+    /// Turn the mission latched (deadline accounting), and the permanent
+    /// abort: once the deadline passes untrained, never retry this game.
+    third_troll_since: i32,
+    third_troll_given_up: bool,
 }
 
 impl Bot {
@@ -23,6 +33,108 @@ impl Bot {
             actions: Vec::new(),
             last_positions: HashMap::new(),
             moved_last: HashSet::new(),
+            third_troll_mission: false,
+            third_troll_since: 0,
+            third_troll_given_up: false,
+        }
+    }
+
+    /// The stat target for the conditional 3rd troll. Deliberately CHEAP:
+    /// 1/1/0/2 (3 plum / 3 lemon / 2 apple / 6 iron) — the first version
+    /// targeted 2/2/0/2 and in a 20-game bench latched, gathered, and never
+    /// once completed (6+6 fruit is not collectable mid-game): all tax, no
+    /// troll. Speed/carry bump to 2 only when that resource is ALREADY
+    /// banked; chop stays 2 (iron is the easy resource — mined 1/turn from
+    /// non-depleting mines — and chopping is the new troll's whole job).
+    /// `None` when some resource is neither banked nor gatherable.
+    pub(crate) fn third_troll_plan(game: &Game) -> Option<(i32, i32, i32, i32)> {
+        let inv = game.inventory(Side::Me);
+        let gatherable = |rt: ResourceType| {
+            game.trees
+                .iter()
+                .any(|t| t.get_resource_type() == rt && (t.fruits > 0 || t.size == 4))
+        };
+        // cost for a 3rd troll is 2 + stat² per resource
+        let pick = |have: i32, can_gather: bool| -> Option<i32> {
+            if have >= 6 {
+                Some(2)
+            } else if have >= 3 || can_gather {
+                Some(1)
+            } else {
+                None
+            }
+        };
+        let ms = pick(inv.plum.amount, gatherable(ResourceType::Plum))?;
+        let cc = pick(inv.lemon.amount, gatherable(ResourceType::Lemon))?;
+        // Harvest 1 ("thief stats") costs one extra apple (3 vs 2) and lets
+        // the new troll BANK the enemy-orchard fruit it squats on, not just
+        // block it. Skip the upgrade only when apples are that scarce.
+        let hp = i32::from(inv.apple.amount >= 3 || gatherable(ResourceType::Apple));
+        if inv.apple.amount < 2 && !gatherable(ResourceType::Apple) {
+            return None;
+        }
+        let cp = if inv.iron.amount >= 6 || game.mines().next().is_some() {
+            2
+        } else if inv.iron.amount >= 3 {
+            1
+        } else {
+            return None;
+        };
+        Some((ms, cc, hp, cp))
+    }
+
+    /// Latch / release the conditional-3rd-troll mission.
+    ///
+    /// Latches ON when: we field exactly 2 trolls, the opponent fields at
+    /// least [`params::Params::third_troll_opp_trolls`], our banked score
+    /// leads by [`params::Params::third_troll_lead`], and more than
+    /// [`params::Params::third_troll_min_turns`] turns remain. Releases when
+    /// the 3rd troll exists, the time budget is gone, or the lead flips
+    /// negative (converting a lead we no longer hold would dig the hole
+    /// deeper). Hysteresis between the +lead latch and the 0 release stops
+    /// flapping.
+    pub fn update_third_troll_mission(&mut self, game: &Game) {
+        let p = crate::bot::params::get();
+        let lead = game.inventory(Side::Me).score() - game.inventory(Side::Opp).score();
+        // Deadline: a mission that hasn't produced the troll within its budget
+        // is uncompletable on this map — stop bleeding the economy, for good.
+        // The clock runs from the FIRST latch and keeps running through
+        // unlatched stretches, so a flapping lead (latch → lead dips → unlatch
+        // → relatch …) cannot stretch the budget all game (one probe bled -67
+        // exactly that way).
+        if self.third_troll_since > 0
+            && i32::from(game.turn) - self.third_troll_since > p.third_troll_deadline
+        {
+            if self.third_troll_mission {
+                eprintln!("[3RD] mission ABORT (deadline) turn={}", game.turn);
+            }
+            self.third_troll_mission = false;
+            self.third_troll_given_up = true;
+            return;
+        }
+        if self.third_troll_given_up
+            || game.troll_count(Side::Me) != 2
+            || game.turns_remaining() < p.third_troll_min_turns
+            || (self.third_troll_mission && lead < 0)
+            || Self::third_troll_plan(game).is_none()
+        {
+            self.third_troll_mission = false;
+            return;
+        }
+        if !self.third_troll_mission
+            && game.troll_count(Side::Opp) >= p.third_troll_opp_trolls
+            && lead >= p.third_troll_lead
+        {
+            eprintln!(
+                "[3RD] mission ON turn={} lead={} opp_trolls={}",
+                game.turn,
+                lead,
+                game.troll_count(Side::Opp)
+            );
+            self.third_troll_mission = true;
+            if self.third_troll_since == 0 {
+                self.third_troll_since = i32::from(game.turn);
+            }
         }
     }
 
