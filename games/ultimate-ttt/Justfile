@@ -1,0 +1,24 @@
+# Ultimate tic-tac-toe on the common Game trait: lib = the game state
+# machine, bin = play it in the terminal against a baseline bot.
+
+pkg := 'ultimate-ttt'
+
+# List available recipes
+default:
+    @just --list
+
+# Play in the terminal: first-possible-move (X) vs you (O)
+play:
+    cargo run --release -p {{ pkg }}
+
+# Run all tests (game rules)
+test:
+    cargo test --release -p {{ pkg }}
+
+# Clippy with warnings as errors
+lint:
+    cargo clippy -p {{ pkg }} --all-targets --all-features -- --deny warnings
+
+# Release build
+build:
+    cargo build --release -p {{ pkg }}
