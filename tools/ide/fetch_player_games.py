@@ -1,14 +1,15 @@
 """Download a player's arena replays via the anonymous public API.
 
-The arena is selected by `--bot` (crate name = puzzle URL slug; `--puzzle`
-overrides). Replays are saved to bots/<bot>/replays/<pseudo>/<game_id>.json;
-existing files are skipped, so re-running tops up with new games.
-Equivalent: `just get-games <player>` from the bot dir.
+The arena is selected by `--game` (its puzzle URL slug comes from
+`_browser.PUZZLE_SLUGS`). Replays are saved to
+bots/<game>/replays/<pseudo>/<game_id>.json; existing files are skipped, so
+re-running tops up with new games. Equivalent: `just get-games <player>`
+from the bot dir.
 
 Usage:
-  uv run --project tools tools/ide/fetch_player_games.py --bot trollfarm tonigineer
-  uv run --project tools tools/ide/fetch_player_games.py --bot soak-overflow 4083906 --limit 5
-  uv run --project tools tools/ide/fetch_player_games.py --bot soak-overflow --list-top 20
+  uv run --project tools tools/ide/fetch_player_games.py --game trollfarm tonigineer
+  uv run --project tools tools/ide/fetch_player_games.py --game soak-overflow 4083906 --limit 5
+  uv run --project tools tools/ide/fetch_player_games.py --game soak-overflow --list-top 20
 """
 
 import argparse
@@ -93,13 +94,12 @@ def main() -> int:
     ap.add_argument(
         "--list-top", type=int, default=None, metavar="N", help="list top N players"
     )
-    ap.add_argument("--bot", required=True, help="bot crate in bots/")
     ap.add_argument(
-        "--puzzle", default=None, help="CodinGame puzzle id (default: from --bot)"
+        "--game", required=True, help="game whose arena to query (bot crate in bots/)"
     )
     args = ap.parse_args()
 
-    puzzle = B.puzzle_id(args.bot, args.puzzle)
+    puzzle = B.puzzle_slug(args.game)
     print(f"Fetching leaderboard ({puzzle}) ...", file=sys.stderr)
     data = fetch_leaderboard(puzzle)
 
@@ -132,7 +132,7 @@ def main() -> int:
         game_ids = game_ids[: args.limit]
 
     print(f"Found {len(game_ids)} games. Downloading replays...\n")
-    out_dir = B.bot_dir(args.bot) / "replays" / pseudo
+    out_dir = B.bot_dir(args.game) / "replays" / pseudo
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for i, gid in enumerate(game_ids, 1):
