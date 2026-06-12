@@ -47,6 +47,35 @@ const WINS: [u16; 8] = [
     0b001_010_100,
 ];
 
+/// Cells (and small boards, on the main board) by tactical preference:
+/// center, corners, edges. Doubles as the move-generation order, which is
+/// what alpha-beta prunes off.
+const ORDER: [usize; 9] = [4, 0, 2, 6, 8, 1, 3, 5, 7];
+
+/// Positional value of each cell: the center sits on 4 win lines, corners
+/// on 3, edges on 2.
+const CELL_WEIGHTS: [i32; 9] = [3, 2, 3, 2, 4, 2, 3, 2, 3];
+
+/// Value of holding 0/1/2/3 cells of a win line nobody else blocks. Index 3
+/// only occurs for positions the search scores as terminal before evaluating.
+const LINE_SCORES: [i32; 4] = [0, 1, 4, 32];
+
+/// Sum of `LINE_SCORES` over all win lines `mine` could still complete.
+fn line_potential(mine: u16, blockers: u16) -> i32 {
+    WINS.iter()
+        .filter(|&&line| blockers & line == 0)
+        .map(|&line| LINE_SCORES[(mine & line).count_ones() as usize])
+        .sum()
+}
+
+/// Sum of `CELL_WEIGHTS` over the set bits.
+fn positional(mask: u16) -> i32 {
+    (0..9)
+        .filter(|&i| mask & (1 << i) != 0)
+        .map(|i| CELL_WEIGHTS[i])
+        .sum()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerMask {
     X,
@@ -197,14 +226,19 @@ impl Game for UltimateTicTacToe {
             .filter(|&b| self.is_board_open(b))
             .fold(0, |mask, b| mask | (1 << b));
 
-        (0..81).filter(move |&m| {
-            let (board, cell) = (m / 9, m % 9);
-            let board_allowed = match constraint {
-                Some(forced) => board == forced,
-                None => open & (1 << board) != 0,
-            };
-            board_allowed && boards[board].occupied() & (1 << cell) == 0
-        })
+        // Center-then-corners for both the board and the cell, so the
+        // strongest candidates come out first for alpha-beta.
+        ORDER
+            .iter()
+            .flat_map(|&board| ORDER.iter().map(move |&cell| board * 9 + cell))
+            .filter(move |&m| {
+                let (board, cell) = (m / 9, m % 9);
+                let board_allowed = match constraint {
+                    Some(forced) => board == forced,
+                    None => open & (1 << board) != 0,
+                };
+                board_allowed && boards[board].occupied() & (1 << cell) == 0
+            })
     }
 
     fn apply_move(&mut self, chosen_move: Self::Move) {
@@ -344,11 +378,39 @@ impl Game for UltimateTicTacToe {
     }
 
     fn evaluate(&self) -> f32 {
-        // INFO: No heuristic yet — fine for the baseline/human matchup this
-        // crate ships with. Pointing minimax at ultimate tic-tac-toe needs a
-        // real evaluation here first (the game is far too deep to solve).
+        // Scored for X, flipped to the side to move at the end. Three
+        // ingredients, weighted so each tier dominates the one below:
+        //   40x  main-board line potential (a won board pair beats anything)
+        //   20x  which small boards are owned (center > corner > edge)
+        //    1x  in-board line threats and positions on the open boards
+        // Worst case |v| = 40*32 + 20*24 + 9*88 = 2552, so dividing by 4096
+        // keeps the result well inside (-1, 1) and below any real terminal.
+        let mx = self.macro_board.x_board;
+        let mo = self.macro_board.o_board;
 
-        0f32
+        // Drawn-but-full boards block main-board lines for both players.
+        let drawn: u16 = (0..9)
+            .filter(|&b| self.boards[b].is_full() && self.macro_board.occupied() & (1 << b) == 0)
+            .fold(0, |mask, b| mask | (1 << b));
+
+        let mut v = 40 * (line_potential(mx, mo | drawn) - line_potential(mo, mx | drawn));
+        v += 20 * (positional(mx) - positional(mo));
+
+        for board in 0..9 {
+            if !self.is_board_open(board) {
+                continue;
+            }
+            let (xb, ob) = (self.boards[board].x_board, self.boards[board].o_board);
+            v += 2 * (line_potential(xb, ob) - line_potential(ob, xb));
+            v += positional(xb) - positional(ob);
+        }
+
+        #[allow(clippy::cast_precision_loss)]
+        let v = v as f32 / 4096.0;
+        match self.current_player {
+            PlayerMask::X => v,
+            PlayerMask::O => -v,
+        }
     }
 
     fn get_game_state_hash(&self) -> u64 {

@@ -9,4 +9,11 @@ use crate::{Game, GameError};
 /// strategies as `Box<dyn Strategy<G>>`.
 pub trait Strategy<G: Game> {
     fn compute_move(&mut self, game: &G) -> Result<G::Move, GameError>;
+
+    /// One-line summary of the last `compute_move`, reprinted by
+    /// `Competition` under the board after every render (which clears the
+    /// screen) so it stays visible while the opponent thinks.
+    fn status_line(&self) -> Option<String> {
+        None
+    }
 }

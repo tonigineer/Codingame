@@ -1,5 +1,5 @@
 # Ultimate tic-tac-toe on the common Game trait: lib = the game state
-# machine, bin = play it in the terminal against a baseline bot.
+# machine, bin = play it in the terminal against minimax.
 
 pkg := 'ultimate-ttt'
 
@@ -7,11 +7,11 @@ pkg := 'ultimate-ttt'
 default:
     @just --list
 
-# Play in the terminal: first-possible-move (X) vs you (O)
+# Play in the terminal: minimax (X) vs you (O)
 play:
     cargo run --release -p {{ pkg }}
 
-# Run all tests (game rules)
+# Run all tests (game rules + minimax integration)
 test:
     cargo test --release -p {{ pkg }}
 

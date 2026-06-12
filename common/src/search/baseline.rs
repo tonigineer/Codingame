@@ -44,9 +44,15 @@ where
             let _ = io::stdout().flush();
 
             let mut s = String::new();
-            if io::stdin().read_line(&mut s).is_err() {
-                println!("Couldn't read input. Try again.");
-                continue;
+            match io::stdin().read_line(&mut s) {
+                // EOF: stdin is closed, no input will ever arrive — error
+                // out instead of spinning on the prompt forever.
+                Ok(0) => return Err(GameError::ParseError("stdin closed".into())),
+                Ok(_) => {}
+                Err(_) => {
+                    println!("Couldn't read input. Try again.");
+                    continue;
+                }
             }
 
             match s.trim().parse::<G::Move>() {

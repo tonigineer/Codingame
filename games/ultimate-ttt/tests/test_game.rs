@@ -1,5 +1,5 @@
 use common::search::baseline::{FirstPossibleMove, RandomMove};
-use common::{Competition, Game};
+use common::{Competition, Game, Player};
 use ultimate_ttt::{PlayerMask, UltimateTicTacToe};
 
 /// X wins small board 4 with cells 0/1/2 while O answers with cell 4 each
@@ -19,10 +19,10 @@ fn test_uttt_always_first_move() {
         .start(false)
         .expect("Game should complete without errors");
 
-    // X's lowest-cell openings keep sending O back to board 0, where O's
-    // own lowest cells line up the middle row — O wins the main board.
+    // With center-first move ordering the deterministic duel plays out to
+    // a full board with no main-board line: a draw.
     assert!(competition.game.is_finished());
-    assert_eq!(competition.game.get_winner(), Some(PlayerMask::O));
+    assert_eq!(competition.game.get_winner(), None);
 }
 
 #[test]
@@ -122,6 +122,38 @@ fn test_uttt_small_board_win_marks_main_board() {
     assert_eq!(game.macro_board.x_board, 1 << 3);
     assert!(!game.is_finished());
     assert_eq!(game.constraint, Some(2));
+}
+
+#[test]
+#[allow(clippy::float_cmp)] // heuristic values are exact multiples of 1/4096
+fn test_uttt_evaluate_is_zero_sum() {
+    let mut game = UltimateTicTacToe::new();
+    assert_eq!(game.evaluate(), 0.0, "the empty position is symmetric");
+
+    for chosen_move in SCRIPT {
+        game.apply_move(chosen_move);
+    }
+
+    let for_mover = game.evaluate();
+    game.current_player = game.current_player.other();
+    let for_other = game.evaluate();
+
+    assert_eq!(for_mover, -for_other);
+}
+
+#[test]
+fn test_uttt_evaluate_rewards_won_boards() {
+    let mut game = UltimateTicTacToe::new();
+
+    for chosen_move in SCRIPT {
+        game.apply_move(chosen_move);
+    }
+
+    // X owns small board 4 and it is X's turn: the position must score
+    // positive for the side to move, and inside the heuristic band.
+    let score = game.evaluate();
+    assert!(score > 0.0);
+    assert!(score < 1.0);
 }
 
 #[test]

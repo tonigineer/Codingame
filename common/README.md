@@ -99,7 +99,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`Minimax::new(depth)` searches `depth` plies. `HumanPlayer` reads moves from
+`Minimax::new(depth)` searches `depth` plies; chain `.with_status_bar()` (or
+set the public `status_bar` field) for a live, colored status line on stderr
+while it computes — sampled ply, root-move progress, best score, nodes,
+prunes, transposition hits and nodes/second. After the move, `Competition`
+keeps the search's final summary visible under the board (see `status_line`
+below). `HumanPlayer` reads moves from
 stdin and additionally needs `Move: Eq + FromStr + Display` (a plain `usize`
 move qualifies). `FirstPossibleMove` and `RandomMove` are baseline opponents
 for tests; `competition.play_turn()` steps a single move when a test wants to
@@ -127,6 +132,12 @@ impl<G: Game> Strategy<G> for MyBot {
 
 Implement it for one concrete game instead (`impl Strategy<MyGame> for MyBot`)
 when the bot needs game-specific knowledge.
+
+`Strategy` has one optional method: `status_line()` returns a one-line
+summary of the last `compute_move` (default `None`). Because every render
+clears the screen, `Competition` reprints each player's line under the board
+after each move — that's how minimax's last evaluation stays visible while
+the human thinks.
 
 ## Testing a new game
 

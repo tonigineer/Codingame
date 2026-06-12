@@ -57,7 +57,7 @@ tic-tac-toe:
 connect-four:
     @just -d games/connect-four -f games/connect-four/Justfile play
 
-# Play ultimate tic-tac-toe in the terminal (human vs baseline bot)
+# Play ultimate tic-tac-toe in the terminal (human vs minimax)
 ultimate-ttt:
     @just -d games/ultimate-ttt -f games/ultimate-ttt/Justfile play
 

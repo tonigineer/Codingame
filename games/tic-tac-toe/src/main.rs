@@ -6,7 +6,7 @@ use tic_tac_toe::TicTacToe;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let game = TicTacToe::new();
 
-    let mut competition = Competition::new(game, Minimax::new(9), HumanPlayer);
+    let mut competition = Competition::new(game, Minimax::new(9).with_status_bar(), HumanPlayer);
     competition.start(true)?;
 
     Ok(())

@@ -90,9 +90,20 @@ impl<G: Game> Competition<G> {
 
             if render_game {
                 self.game.render();
+                self.print_status_lines();
             }
         }
         Ok(())
+    }
+
+    /// Rendering clears the screen, so each player's last-computation
+    /// summary (if any) is reprinted below the board.
+    fn print_status_lines(&self) {
+        for player in &self.players {
+            if let Some(line) = player.status_line() {
+                println!("{line}");
+            }
+        }
     }
 
     /// Play a single turn: the player to move picks a move and it is applied.
