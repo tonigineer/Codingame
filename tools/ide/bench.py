@@ -1,7 +1,7 @@
 """Replay the pinned arena seeds in the IDE against the real arena opponents.
 
 For each entry in the seeds file (`--seeds-file`, default
-bots/<bot>/eval/arena_bench_seeds.json: {"lost": [...], "won": [...]} with
+bots/<game>/eval/arena_bench_seeds.json: {"lost": [...], "won": [...]} with
 `opp`, `seed`, and `result` per entry) it selects the opponent in the PLAYERS
 tab, pins the seed, plays, and records the result. The bot is injected once
 at the start; the editor tail is re-verified before every game and re-pasted
@@ -9,10 +9,10 @@ on mismatch. Results are realistic rather than exactly reproducible —
 opponents may have updated their bots since the original games.
 
 Usage:
-  uv run --project tools tools/ide/bench.py                # submit + paste, all games
-  uv run --project tools tools/ide/bench.py --no-paste     # code already in the editor
-  uv run --project tools tools/ide/bench.py --skip 4       # resume after 4 games
-  uv run --project tools tools/ide/bench.py --limit 2      # quick spot check
+  uv run --project tools tools/ide/bench.py --game trollfarm             # all games
+  uv run --project tools tools/ide/bench.py --game trollfarm --no-paste  # code already in the editor
+  uv run --project tools tools/ide/bench.py --game trollfarm --skip 4    # resume after 4 games
+  uv run --project tools tools/ide/bench.py --game trollfarm --limit 2   # quick spot check
 """
 
 import argparse
@@ -115,7 +115,7 @@ def main() -> int:
     ap.add_argument(
         "--seeds-file",
         default=None,
-        help="pinned-seeds JSON (default: bots/<bot>/eval/arena_bench_seeds.json)",
+        help="pinned-seeds JSON (default: bots/<game>/eval/arena_bench_seeds.json)",
     )
     ap.add_argument(
         "--skip", type=int, default=0, help="skip the first N games (resume)"
@@ -127,7 +127,7 @@ def main() -> int:
     args = ap.parse_args()
 
     seeds_file = Path(
-        args.seeds_file or B.bot_dir(args.bot) / "eval" / "arena_bench_seeds.json"
+        args.seeds_file or B.bot_dir(args.game) / "eval" / "arena_bench_seeds.json"
     )
     cfg = json.loads(seeds_file.read_text())
     games = [dict(e, tag="LOST") for e in cfg["lost"]] + [

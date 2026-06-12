@@ -1,6 +1,6 @@
-"""Shared library for the ide/ tools (no CLI).
+"""Shared library for the ide tools.
 
-Provides the path anchors, the puzzle-id convention, and the browser
+Provides the path anchors, the puzzle registry, and the browser
 primitives: attach to (or launch) a persistent logged-in Brave profile over
 the Chrome debug port, wait for the IDE, inject code into the Monaco editor
 with verification, set game options, play, and fetch results via the
@@ -31,25 +31,35 @@ BROWSER_PROFILE = TOOLS_DIR / ".cg-browser-profile"  # logged-in browser profile
 
 BRAVE = "/usr/bin/brave"
 DEBUG_PORT = 9222
-MY_USER_ID = 4083906  # tonigineer — authorizes access to own sandbox replays
+MY_USER_ID = 4083906
 
-# Convention: bot crates are named after the puzzle's URL slug (the <id> in
-# codingame.com/multiplayer/bot-programming/<id>), so the crate name itself is
-# the puzzle id. This map holds the exceptions; --puzzle overrides both.
-PUZZLE_IDS = {
+# The puzzle URL slug (the <slug> in
+# codingame.com/multiplayer/bot-programming/<slug>) per game. This registry is
+# the single source of truth — crate names deliberately do NOT encode the
+# slug. Adding a game means adding its entry here.
+PUZZLE_SLUGS = {
+    "snakebyte": "winter-challenge-2026-snakebyte",
+    "soak-overflow": "soak-overflow",
     "trollfarm": "spring-challenge-2026-troll-farm",
     "ultimate-tic-tac-toe": "tic-tac-toe",
 }
 
 
-def bot_dir(name: str) -> Path:
-    """Crate directory of an arena bot (bots/<name>)."""
-    return BOTS_DIR / name
+def bot_dir(game: str) -> Path:
+    """Directory of a game's bot (bots/<game>)."""
+    return BOTS_DIR / game
 
 
-def puzzle_id(bot: str, override: str | None = None) -> str:
-    """Resolve a bot name to its puzzle id: override, exception map, or the name."""
-    return override or PUZZLE_IDS.get(bot, bot)
+def puzzle_slug(game: str) -> str:
+    """Look up a game's puzzle URL slug; unknown games are a hard error."""
+    try:
+        return PUZZLE_SLUGS[game]
+    except KeyError:
+        known = ", ".join(sorted(PUZZLE_SLUGS))
+        raise SystemExit(
+            f"unknown game {game!r} — register its puzzle slug in "
+            f"ide/_browser.PUZZLE_SLUGS (known: {known})"
+        ) from None
 
 
 def line_buffer_stdout() -> None:
@@ -66,12 +76,9 @@ def line_buffer_stdout() -> None:
 _LOWER = "translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz')"
 
 
-def add_browser_args(ap, bot_default: str = "trollfarm") -> None:
+def add_browser_args(ap) -> None:
     """Add the argparse options shared by every ide/ CLI."""
-    ap.add_argument("--bot", default=bot_default, help="bot crate in bots/")
-    ap.add_argument(
-        "--puzzle", default=None, help="CodinGame puzzle id (default: from --bot)"
-    )
+    ap.add_argument("--game", required=True, help="game to play (bot crate in bots/)")
     ap.add_argument("--profile", default=str(BROWSER_PROFILE))
     ap.add_argument("--browser-binary", default=BRAVE)
     ap.add_argument("--debug-port", type=int, default=DEBUG_PORT)
@@ -87,17 +94,17 @@ def add_browser_args(ap, bot_default: str = "trollfarm") -> None:
 
 
 def puzzle_url(args) -> str:
-    return f"https://www.codingame.com/ide/puzzle/{puzzle_id(args.bot, args.puzzle)}"
+    return f"https://www.codingame.com/ide/puzzle/{puzzle_slug(args.game)}"
 
 
 def flattened_code(args) -> str:
     """Return the bot's single-file submission (built by `just submit`)."""
-    return (bot_dir(args.bot) / "src" / "main.rs.flattened").read_text()
+    return (bot_dir(args.game) / "src" / "main.rs.flattened").read_text()
 
 
 def run_submit(args) -> None:
     """Run `just submit` in the bot's crate dir (build + flatten)."""
-    bot = bot_dir(args.bot)
+    bot = bot_dir(args.game)
     print(f"Running `just submit` in {bot} ...")
     r = subprocess.run(["just", "submit"], cwd=bot, text=True, capture_output=True)
     for line in (r.stdout + r.stderr).strip().splitlines()[-3:]:

@@ -83,18 +83,18 @@ stop:
 #   just ide 12345    # replay a fixed-seed map (for tuning)
 # Play the current bot in the browser IDE ("Play my code"): submit, paste, play, report.
 ide seed="":
-    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/ide/play.py" --submit {{ if seed == "" { "" } else { "--seed " + seed } }}
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/ide/play.py" --game trollfarm --submit {{ if seed == "" { "" } else { "--seed " + seed } }}
 
 # Quick check: 10 games vs the default roster (validate builds + deploys itself)
 eval-quick:
-    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/local/validate.py" 10 --bot trollfarm --jobs 8
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/local/validate.py" 10 --game trollfarm --jobs 8
 
 # Args: games, base seed (e.g. `just eval 1000 7`).
 # Validate N games per roster opponent (W-L-D / win% / margins)
 eval games="1000" seed="1":
-    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/local/validate.py" "{{ games }}" --bot trollfarm --seed "{{ seed }}" --jobs 16
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/local/validate.py" "{{ games }}" --game trollfarm --seed "{{ seed }}" --jobs 16
 
 # Download all arena replays for a player (e.g. `just get-games tonigineer`).
 # Downloads to replays/<player>/
 get-games player:
-    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/ide/fetch_player_games.py" --bot trollfarm "{{ player }}"
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/ide/fetch_player_games.py" --game trollfarm "{{ player }}"
