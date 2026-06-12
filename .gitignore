@@ -1,5 +1,8 @@
-# Folder
-target/
-
-# Files
+*.flattened
+.cg-browser-profile/
+input.in
+.venv
+.ruff_cache
+__pycache__/
 Cargo.lock
+target/

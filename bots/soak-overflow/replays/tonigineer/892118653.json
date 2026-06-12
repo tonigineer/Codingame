@@ -1,0 +1,429 @@
+{
+  "frames": [
+    {
+      "gameInformation": "",
+      "summary": "",
+      "view": " 0\n{\"global\":{\"graphics\":\"5|12|6|000000000000000000000000020000000010010000000020000000000000000000000000|8|1|0|5|1|4|16|0|1|0|2|0|1|5|6|24|0|0|0|3|0|4|2|2|8|0|3|0|4|0|2|2|4|16|0|2|0|5|11|0|1|4|16|1|1|0|6|11|4|5|6|24|1|0|0|7|11|1|2|2|8|1|3|0|8|11|3|2|4|16|1|2|0\"},\"frame\":{\"graphics\":\"0|000002111111000000111111000000211111000002111111000000111111000000211111|0|0|0\"}}\n",
+      "keyframe": true,
+      "agentId": -1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 1 4; HUNKER_DOWN; MESSAGE M1/4H\n1; MOVE 1 5; HUNKER_DOWN; MESSAGE M1/5H\n4; MOVE 0 2; HUNKER_DOWN; MESSAGE M0/2H\n2; MOVE 1 1; SHOOT 7; MESSAGE M1/1S7\n",
+      "view": " 1\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 10 0;HUNKER_DOWN\n6;MOVE 10 4;SHOOT 1\n7;MOVE 10 1;HUNKER_DOWN\n8;MOVE 11 2;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 2\n{\"duration\":1946,\"graphics\":\"15|0|0|500|0 5|1 5|1|0|0|500|0 1|1 1|2|0|0|500|0 4|1 4|3|0|0|500|11 0|10 0|5|0|0|500|11 4|10 4|6|0|0|500|11 1|10 1|7|0|0|500|11 3|11 2|8|1|500|800|||1|1|500|800|||3|1|500|800|||4|1|500|800|||5|1|500|800|||7|1|500|800|||8|2|800|1942|1 1|10 1|2 7 1 9 5621|2|800|1946|10 4|1 5|6 1 1 9 5636|000002111111000000111111000000111111000000111111000000111111000000211111|0|0|4|1|M1/5H|2|M1/1S7|3|M1/4H|4|M0/2H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 0 1; HUNKER_DOWN; MESSAGE M0/1H\n2; MOVE 2 1; HUNKER_DOWN; MESSAGE M2/1H\n3; MOVE 2 4; HUNKER_DOWN; MESSAGE M2/4H\n1; MOVE 2 5; HUNKER_DOWN; MESSAGE M2/5H\n",
+      "view": " 3\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 9 0;HUNKER_DOWN\n6;MOVE 9 4;HUNKER_DOWN\n7;MOVE 9 1;HUNKER_DOWN\n8;MOVE 11 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 4\n{\"duration\":800,\"graphics\":\"16|0|0|500|1 5|2 5|1|0|0|500|1 1|2 1|2|0|0|500|1 4|2 4|3|0|0|500|0 2|0 1|4|0|0|500|10 0|9 0|5|0|0|500|10 4|9 4|6|0|0|500|10 1|9 1|7|0|0|500|11 2|11 1|8|1|500|800|||1|1|500|800|||2|1|500|800|||3|1|500|800|||4|1|500|800|||5|1|500|800|||6|1|500|800|||7|1|500|800|||8|000002111111000000111111000000111111000000111111000000111111000000211111|0|0|4|1|M2/5H|2|M2/1H|3|M2/4H|4|M0/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 3 4; HUNKER_DOWN; MESSAGE M3/4H\n4; MOVE 1 1; SHOOT 7; MESSAGE M1/1S7\n1; MOVE 3 5; SHOOT 6; MESSAGE M3/5S6\n2; MOVE 2 1; HUNKER_DOWN; MESSAGE M2/1H\n",
+      "view": " 5\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 8 0;SHOOT 2\n6;MOVE 8 4;HUNKER_DOWN\n7;MOVE 9 2;HUNKER_DOWN\n8;MOVE 10 1;SHOOT 2\n",
+      "summary": "\u00a4RED\u00a4$0 agent id 4 cannot shoot id 7, they are too far away\u00a7RED\u00a7\n",
+      "view": " 6\n{\"duration\":1871,\"graphics\":\"14|0|0|500|2 5|3 5|1|0|0|500|2 4|3 4|3|0|0|500|0 1|1 1|4|0|0|500|9 0|8 0|5|0|0|500|9 4|8 4|6|0|0|500|9 1|9 2|7|0|0|500|11 1|10 1|8|1|500|800|||2|1|500|800|||3|1|500|800|||6|1|500|800|||7|2|800|1664|3 5|8 4|1 6 1 6 4212|2|800|1734|8 0|2 1|5 2 1 6 4646|2|800|1871|10 1|2 1|8 2 1 6 5331|000001111111000000111111000002111111000000111111000000111111000000211111|0|2|4|1|M3/5S6|2|M2/1H|3|M3/4H|4|M1/1S7\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 2 1; SHOOT 5; MESSAGE M2/1S5\n3; MOVE 4 4; SHOOT 6; MESSAGE M4/4S6\n1; MOVE 4 5; HUNKER_DOWN; MESSAGE M4/5H\n2; MOVE 2 1; HUNKER_DOWN; MESSAGE M2/1H\n",
+      "view": " 7\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 7 0;HUNKER_DOWN\n6;HUNKER_DOWN\n7;MOVE 8 2;HUNKER_DOWN\n8;MOVE 11 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 8\n{\"duration\":1734,\"graphics\":\"15|5|0|300|1 1|2 1|4|5|0|300|1 1|2 1|4|0|0|500|3 5|4 5|1|0|0|500|3 4|4 4|3|0|0|500|8 0|7 0|5|0|0|500|9 2|8 2|7|0|0|500|10 1|11 1|8|1|500|800|||1|1|500|800|||2|1|500|800|||5|1|500|800|||6|1|500|800|||7|1|500|800|||8|2|800|1585|4 4|8 4|3 6 1 3 3630|2|800|1734|1 1|7 0|4 5 1 6 4646|000021111111000002111111000002111111000000211111000000211111000000011111|0|3|4|1|M4/5H|2|M2/1H|3|M4/4S6|4|M2/1S5\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 3 4; HUNKER_DOWN; MESSAGE M3/4H\n2; MOVE 1 1; HUNKER_DOWN; MESSAGE M1/1H\n1; MOVE 4 5; SHOOT 6; MESSAGE M4/5S6\n4; MOVE 0 1; HUNKER_DOWN; MESSAGE M0/1H\n",
+      "view": " 9\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 6 0;SHOOT 2\n6;MOVE 9 4;HUNKER_DOWN\n7;MOVE 7 2;THROW 5 4\n8;MOVE 10 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 10\n{\"duration\":2342,\"graphics\":\"15|0|0|500|2 1|1 1|2|0|0|500|4 4|3 4|3|0|0|500|1 1|0 1|4|0|0|500|7 0|6 0|5|0|0|500|8 4|9 4|6|0|0|500|8 2|7 2|7|0|0|500|11 1|10 1|8|1|500|800|||2|1|500|800|||3|1|500|800|||4|1|500|800|||6|1|500|800|||8|2|800|1664|4 5|9 4|1 6 1 6 4212|2|800|1664|6 0|1 1|5 2 1 6 4212|4|800|2342|7 2|5 4|7 30 6108 1|000211111111000021111111000021111111000002111111000000211111000000021111|0|11|4|1|M4/5S6|2|M1/1H|3|M3/4H|4|M0/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 0 1; HUNKER_DOWN; MESSAGE M0/1H\n3; MOVE 2 4; HUNKER_DOWN; MESSAGE M2/4H\n2; MOVE 1 0; HUNKER_DOWN; MESSAGE M1/0H\n1; MOVE 3 5; HUNKER_DOWN; MESSAGE M3/5H\n",
+      "view": " 11\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 5 0;THROW 1 0\n6;HUNKER_DOWN\n7;MOVE 6 2;THROW 4 4\n8;MOVE 9 1;SHOOT 2\n",
+      "summary": "\u00a4RED\u00a4$1 agent id 8 cannot shoot id 2, they are too far away\u00a7RED\u00a7\n",
+      "view": " 12\n{\"duration\":2733,\"graphics\":\"13|0|0|500|4 5|3 5|1|0|0|500|1 1|1 0|2|0|0|500|3 4|2 4|3|0|0|500|6 0|5 0|5|0|0|500|7 2|6 2|7|0|0|500|10 1|9 1|8|1|500|800|||1|1|500|800|||2|1|500|800|||3|1|500|800|||4|1|500|800|||6|4|800|2733|5 0|1 0|5 30 6896 2 4|4|800|2342|6 2|4 4|7 30 6108 1|000211111111000211111111000211111111000021111111000002111111000002111111|0|31|4|1|M3/5H|2|M1/0H|3|M2/4H|4|M0/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1; MOVE 4 5; SHOOT 7; MESSAGE M4/5S7\n3; MOVE 3 4; HUNKER_DOWN; MESSAGE M3/4H\n2; MOVE 2 0; SHOOT 7; MESSAGE M2/0S7\n4; MOVE 1 1; SHOOT 7; MESSAGE M1/1S7\n",
+      "view": " 13\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;SHOOT 1\n6;MOVE 9 5;SHOOT 1\n7;MOVE 6 3;THROW 3 4\n8;MOVE 9 0;SHOOT 2\n",
+      "summary": "",
+      "view": " 14\n{\"duration\":2454,\"graphics\":\"15|0|0|500|3 5|4 5|1|0|0|500|1 0|2 0|2|0|0|500|2 4|3 4|3|0|0|500|0 1|1 1|4|0|0|500|9 4|9 5|6|0|0|500|6 2|6 3|7|0|0|500|9 1|9 0|8|1|500|800|||3|2|800|1502|4 5|6 3|1 7 2 16 2877|2|800|1657|2 0|6 3|2 7 1 12 4165|2|800|1684|1 1|6 3|4 7 1 8 4343|2|800|1664|5 0|4 5|5 1 1 8 4212|2|800|1657|9 5|4 5|6 1 2 24 4165|2|800|1800|9 0|2 0|8 2 1 8 5000|4|800|2454|6 3|3 4|7 30 6372 1 3|000211111111000011111111000021111111000021111111000002111111000002111111|0|48|4|1|M4/5S7|2|M2/0S7|3|M3/4H|4|M1/1S7\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 2 1; HUNKER_DOWN; MESSAGE M2/1H\n2; MOVE 2 0; HUNKER_DOWN; MESSAGE M2/0H\n3; MOVE 4 4; SHOOT 7; MESSAGE M4/4S7\n",
+      "view": " 15\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 6 0;HUNKER_DOWN\n6;HUNKER_DOWN\n7;SHOOT 3\n8;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 16\n{\"duration\":1959,\"graphics\":\"11|3|0|1000|4 5||1|0|0|500|3 4|4 4|3|0|0|500|1 1|2 1|4|0|0|500|5 0|6 0|5|1|1000|1300|||2|1|1000|1300|||4|1|1000|1300|||5|1|1000|1300|||6|1|1000|1300|||8|2|1300|1959|4 4|6 3|3 7 1 4 2412|2|1300|1959|6 3|4 4|7 3 1 4 2412|000011111111000001111111000001111111000001111111000000111111000000111111|0|58|3|2|M2/0H|3|M4/4S7|4|M2/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 3 1; HUNKER_DOWN; MESSAGE M3/1H\n3; MOVE 4 4; THROW 6 3; MESSAGE M4/4T6/3\n2; MOVE 1 0; HUNKER_DOWN; MESSAGE M1/0H\n",
+      "view": " 17\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;SHOOT 2\n6;HUNKER_DOWN\n7;MOVE 6 4;HUNKER_DOWN\n8;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 18\n{\"duration\":2145,\"graphics\":\"10|0|0|500|2 0|1 0|2|0|0|500|2 1|3 1|4|0|0|500|6 3|6 4|7|1|500|800|||2|1|500|800|||4|1|500|800|||6|1|500|800|||7|1|500|800|||8|2|800|1657|6 0|1 0|5 2 1 6 4165|4|800|2145|4 4|6 3|3 30 5539 7|000021111111000002111111000002111111000000121111000000111111000000111111|0|62|3|2|M1/0H|3|M4/4T6/3|4|M3/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 3 1; SHOOT 5; MESSAGE M3/1S5\n3; MOVE 4 3; THROW 6 4; MESSAGE M4/3T6/4\n2; MOVE 2 0; HUNKER_DOWN; MESSAGE M2/0H\n",
+      "view": " 19\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;HUNKER_DOWN\n6;HUNKER_DOWN\n7;HUNKER_DOWN\n8;SHOOT 2\n",
+      "summary": "",
+      "view": " 20\n{\"graphics\":\"9|0|0|500|1 0|2 0|2|0|0|500|4 4|4 3|3|1|500|800|||2|1|500|800|||5|1|500|800|||6|1|500|800|||7|2|800|1525|3 1|6 0|4 5 2 12 3103|2|800|1800|9 0|2 0|8 2 1 6 5000|4|800|2145|4 3|6 4|3 30 5539 7|000021111111000002111111000000111111000000001111000000011111000000111111|2|62|3|2|M2/0H|3|M4/3T6/4|4|M3/1S5\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 3 1; HUNKER_DOWN; MESSAGE M3/1H\n2; MOVE 3 1; HUNKER_DOWN; MESSAGE M3/1H\n3; MOVE 5 3; SHOOT 5; MESSAGE M5/3S5\n",
+      "view": " 21\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 7 0;SHOOT 2\n6;MOVE 8 5;HUNKER_DOWN\n8;HUNKER_DOWN\n",
+      "summary": "\u00a4RED\u00a4$0 agent id 3 cannot shoot id 5, they are too far away\u00a7RED\u00a7\n",
+      "view": " 22\n{\"duration\":2085,\"graphics\":\"10|3|0|1000|6 4||7|0|0|500|2 0|3 0|2|0|0|500|4 3|5 3|3|0|0|500|6 0|7 0|5|0|0|500|9 5|8 5|6|1|1000|1300|||2|1|1000|1300|||4|1|1000|1300|||6|1|1000|1300|||8|2|1300|2085|7 0|3 0|5 2 2 12 3630|000001111111000000111111000000011111000000001111000000011111000000111111|8|62|3|2|M3/1H|3|M5/3S5|4|M3/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 5 4; SHOOT 6; MESSAGE M5/4S6\n4; MOVE 2 1; HUNKER_DOWN; MESSAGE M2/1H\n2; MOVE 2 0; HUNKER_DOWN; MESSAGE M2/0H\n",
+      "view": " 23\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 6 0;HUNKER_DOWN\n6;MOVE 7 5;HUNKER_DOWN\n8;MOVE 8 0;THROW 4 0\n",
+      "summary": "",
+      "view": " 24\n{\"duration\":2733,\"graphics\":\"12|0|0|500|3 0|2 0|2|0|0|500|5 3|5 4|3|0|0|500|3 1|2 1|4|0|0|500|7 0|6 0|5|0|0|500|8 5|7 5|6|0|0|500|9 0|8 0|8|1|500|800|||2|1|500|800|||4|1|500|800|||5|1|500|800|||6|2|800|1459|5 4|7 5|3 6 1 3 2412|4|800|2733|8 0|4 0|8 30 6896|000011111111000001111111000000111111000000011111000000011111000000111111|8|64|3|2|M2/0H|3|M5/4S6|4|M2/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 2 1; SHOOT 5; MESSAGE M2/1S5\n2; MOVE 1 0; SHOOT 5; MESSAGE M1/0S5\n3; MOVE 5 4; HUNKER_DOWN; MESSAGE M5/4H\n",
+      "view": " 25\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 7 0;SHOOT 2\n6;MOVE 8 5;SHOOT 2\n8;MOVE 9 0;SHOOT 2\n",
+      "summary": "",
+      "view": " 26\n{\"duration\":1914,\"graphics\":\"10|0|0|500|2 0|1 0|2|0|0|500|6 0|7 0|5|0|0|500|7 5|8 5|6|0|0|500|8 0|9 0|8|1|500|800|||3|2|800|1728|1 0|7 0|2 5 2 24 4612|2|800|1664|2 1|7 0|4 5 1 8 4212|2|800|1728|7 0|1 0|5 2 1 8 4612|2|800|1914|8 5|1 0|6 2 1 12 5511|2|800|1871|9 0|1 0|8 2 1 8 5331|000002111111000000211111000000021111000000021111000000021111000000211111|18|64|3|2|M1/0S5|3|M5/4H|4|M2/1S5\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 6 4; HUNKER_DOWN; MESSAGE M6/4H\n4; MOVE 3 1; HUNKER_DOWN; MESSAGE M3/1H\n",
+      "view": " 27\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;HUNKER_DOWN\n6;MOVE 7 5;HUNKER_DOWN\n8;MOVE 9 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 28\n{\"duration\":1300,\"graphics\":\"10|3|0|1000|1 0||2|0|0|500|5 4|6 4|3|0|0|500|2 1|3 1|4|0|0|500|8 5|7 5|6|0|0|500|9 0|9 1|8|1|1000|1300|||3|1|1000|1300|||4|1|1000|1300|||5|1|1000|1300|||6|1|1000|1300|||8|000000111111000000211111000000021111000000022111000000022222222222211111|28|64|2|3|M6/4H|4|M3/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 3 2; HUNKER_DOWN; MESSAGE M3/2H\n3; MOVE 7 4; SHOOT 6; MESSAGE M7/4S6\n",
+      "view": " 29\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 6 0;SHOOT 3\n6;MOVE 6 5;HUNKER_DOWN\n8;THROW 7 3\n",
+      "summary": "",
+      "view": " 30\n{\"duration\":2342,\"graphics\":\"9|0|0|500|6 4|7 4|3|0|0|500|3 1|3 2|4|0|0|500|7 0|6 0|5|0|0|500|7 5|6 5|6|1|500|800|||4|1|500|800|||6|2|800|1401|7 4|6 5|3 6 2 6 1680|2|800|1594|6 0|7 4|5 3 1 8 3702|4|800|2342|9 1|7 3|8 30 6108 3|000001111111000000111111000000211111000002101111000021100111222211111111|28|71|2|3|M7/4S6|4|M3/2H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 8 4; THROW 9 1; MESSAGE M8/4T9/1\n4; MOVE 4 2; SHOOT 5; MESSAGE M4/2S5\n",
+      "view": " 31\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 5 0;HUNKER_DOWN\n6;HUNKER_DOWN\n8;MOVE 8 1;SHOOT 3\n",
+      "summary": "",
+      "view": " 32\n{\"duration\":2454,\"graphics\":\"9|0|0|500|7 4|8 4|3|0|0|500|3 2|4 2|4|0|0|500|6 0|5 0|5|0|0|500|9 1|8 1|8|1|500|800|||5|1|500|800|||6|2|800|1459|4 2|5 0|4 5 2 12 2412|2|800|1514|8 1|8 4|8 3 2 16 2997|4|800|2454|8 4|9 1|3 30 6372 8|000021111111000002111111000000011111000000112111000001120002111111112111|28|77|2|3|M8/4T9/1|4|M4/2S5\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 9 4; HUNKER_DOWN; MESSAGE M9/4H\n4; MOVE 5 2; THROW 8 1; MESSAGE M5/2T8/1\n",
+      "view": " 33\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 4 0;SHOOT 3\n6;MOVE 6 4;HUNKER_DOWN\n8;MOVE 9 1;HUNKER_DOWN\n",
+      "summary": "\u00a4RED\u00a4$1 agent id 5 cannot shoot id 3, they are too far away\u00a7RED\u00a7\n",
+      "view": " 34\n{\"graphics\":\"9|0|0|500|8 4|9 4|3|0|0|500|4 2|5 2|4|0|0|500|5 0|4 0|5|0|0|500|6 5|6 4|6|0|0|500|8 1|9 1|8|1|500|800|||3|1|500|800|||6|1|500|800|||8|4|800|2454|5 2|8 1|4 30 6372 8|021112001111000020001111000000000112000000111002111111112000111111111002|28|78|2|3|M9/4H|4|M5/2T8/1\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 4 2; THROW 6 4; MESSAGE M4/2T6/4\n3; MOVE 8 4; SHOOT 6; MESSAGE M8/4S6\n",
+      "view": " 35\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 5 0;SHOOT 3\n6;HUNKER_DOWN\n8;MOVE 8 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 36\n{\"duration\":2342,\"graphics\":\"9|0|0|500|9 4|8 4|3|0|0|500|5 2|4 2|4|0|0|500|4 0|5 0|5|0|0|500|9 1|8 1|8|1|500|800|||6|1|500|800|||8|2|800|1442|8 4|6 4|3 6 2 6 2211|2|800|1657|5 0|8 4|5 3 1 8 4165|4|800|2342|4 2|6 4|4 30 6108 6|000021111111000002011111000000001120000000120000000001120000000002120000|57|78|2|3|M8/4S6|4|M4/2T6/4\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "3; MOVE 8 3; HUNKER_DOWN; MESSAGE M8/3H\n4; MOVE 5 2; SHOOT 5; MESSAGE M5/2S5\n",
+      "view": " 37\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 4 0;HUNKER_DOWN\n6;MOVE 7 4;SHOOT 3\n8;MOVE 9 1;SHOOT 3\n",
+      "summary": "",
+      "view": " 38\n{\"duration\":1459,\"graphics\":\"10|0|0|500|8 4|8 3|3|0|0|500|4 2|5 2|4|0|0|500|5 0|4 0|5|0|0|500|6 4|7 4|6|0|0|500|8 1|9 1|8|1|500|800|||3|1|500|800|||5|2|800|1459|5 2|4 0|4 5 2 12 2412|2|800|1401|7 4|8 3|6 3 2 18 1680|2|800|1459|9 1|8 3|8 3 2 12 2412|021112001111000020001111000000000112000000012120000000111112000000211120|74|78|2|3|M8/3H|4|M5/2S5\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 6 2; HUNKER_DOWN; MESSAGE M6/2H\n",
+      "view": " 39\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 3 0;SHOOT 4\n6;HUNKER_DOWN\n8;MOVE 9 2;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 40\n{\"duration\":2057,\"graphics\":\"8|3|0|1000|8 3||3|0|0|500|5 2|6 2|4|0|0|500|4 0|3 0|5|0|0|500|9 1|9 2|8|1|1000|1300|||4|1|1000|1300|||6|1|1000|1300|||8|2|1300|2057|3 0|6 2|5 4 1 6 3394|111110000120021100000112000000002111000000020112000000211120000000011200|97|78|1|4|M6/2H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 7 2; HUNKER_DOWN; MESSAGE M7/2H\n",
+      "view": " 41\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 3 1;HUNKER_DOWN\n6;MOVE 8 4;HUNKER_DOWN\n8;MOVE 9 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 42\n{\"duration\":800,\"graphics\":\"8|0|0|500|6 2|7 2|4|0|0|500|3 0|3 1|5|0|0|500|7 4|8 4|6|0|0|500|9 2|9 1|8|1|500|800|||4|1|500|800|||5|1|500|800|||6|1|500|800|||8|111110000112111110002111021100000200002100002000000200021112000000001120|113|78|1|4|M7/2H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 7 3; SHOOT 8; MESSAGE M7/3S8\n",
+      "view": " 43\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 4 1;SHOOT 4\n6;MOVE 9 4;HUNKER_DOWN\n8;MOVE 8 1;SHOOT 4\n",
+      "summary": "",
+      "view": " 44\n{\"duration\":1557,\"graphics\":\"8|0|0|500|7 2|7 3|4|0|0|500|3 1|4 1|5|0|0|500|8 4|9 4|6|0|0|500|9 1|8 1|8|1|500|800|||6|2|800|1459|7 3|8 1|4 8 2 16 2412|2|800|1557|4 1|7 3|5 4 1 8 3394|2|800|1459|8 1|7 3|8 4 2 16 2412|111111111111111111111111111111001111111110000111111110001111111110001111|113|126|1|4|M7/3S8\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 6 3; HUNKER_DOWN; MESSAGE M6/3H\n",
+      "view": " 45\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 4 2;HUNKER_DOWN\n6;MOVE 8 4;HUNKER_DOWN\n8;MOVE 7 1;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 46\n{\"duration\":800,\"graphics\":\"8|0|0|500|7 3|6 3|4|0|0|500|4 1|4 2|5|0|0|500|9 4|8 4|6|0|0|500|8 1|7 1|8|1|500|800|||4|1|500|800|||5|1|500|800|||6|1|500|800|||8|111111111111111111111111111111011111111110001111111110011111111110011111|113|182|1|4|M6/3H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 5 3; HUNKER_DOWN; MESSAGE M5/3H\n",
+      "view": " 47\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;MOVE 4 3;SHOOT 4\n6;MOVE 7 4;HUNKER_DOWN\n8;HUNKER_DOWN\n",
+      "summary": "",
+      "view": " 48\n{\"duration\":1371,\"graphics\":\"7|0|0|500|6 3|5 3|4|0|0|500|4 2|4 3|5|0|0|500|8 4|7 4|6|1|500|800|||4|1|500|800|||6|1|500|800|||8|2|800|1371|4 3|5 3|5 4 2 12 1243|111112111111111112111111111110211111111110011111111110111111111110111111|113|241|1|4|M5/3H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 4 3; SHOOT 5; MESSAGE M4/3S5\n",
+      "view": " 49\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5;HUNKER_DOWN\n6;SHOOT 4\n8;MOVE 6 1;SHOOT 4\n",
+      "summary": "",
+      "view": " 50\n{\"duration\":1459,\"graphics\":\"7|5|0|300|5 3|4 3|4|5|0|300|5 3|4 3|4|0|0|500|7 1|6 1|8|1|500|800|||5|2|800|1371|5 3|4 3|4 5 2 12 1243|2|800|1459|7 4|5 3|6 4 2 24 2412|2|800|1459|6 1|5 3|8 4 2 16 2412|111111111111111111111111111111111111111111111111111111111111111111111111|113|313|1|4|M4/3S5\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "",
+      "summary": "",
+      "view": " 51\n{\"duration\":1000,\"graphics\":\"1|3|0|1000|5 3||4|222222222222222222222222222222222222222222222222222222222222222222222222|113|313|0\",\"endScreen\":[[-1,313],\"logo.png\",[\"-\",\"313 points\"]]}\n",
+      "keyframe": true,
+      "agentId": 0
+    }
+  ],
+  "gameId": 892118653,
+  "refereeInput": "seed=2021580986426402800\n",
+  "scores": [
+    -1.0,
+    313.0
+  ],
+  "ranks": [
+    1,
+    0
+  ],
+  "agents": [
+    {
+      "index": 0,
+      "codingamer": {
+        "userId": 4083906,
+        "pseudo": "tonigineer",
+        "avatar": 116683604285288
+      },
+      "agentId": 5993031,
+      "score": 15.926548085925415,
+      "valid": true
+    },
+    {
+      "index": 1,
+      "codingamer": {
+        "userId": 7168032,
+        "pseudo": "Williamson91",
+        "avatar": 159187689194203
+      },
+      "agentId": 6496336,
+      "score": 17.478720365476057,
+      "valid": false
+    }
+  ],
+  "metadata": {}
+}

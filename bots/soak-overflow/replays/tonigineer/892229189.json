@@ -1,0 +1,316 @@
+{
+  "frames": [
+    {
+      "gameInformation": "",
+      "summary": "",
+      "view": " 0\n{\"global\":{\"graphics\":\"5|14|7|00000000000000000000000000000021000000120000200000000200002022002202000000000000000000000000000000|6|1|0|1|1|4|16|0|1|0|2|0|3|5|6|24|0|0|0|3|0|5|2|2|8|0|3|0|4|13|1|1|4|16|1|1|0|5|13|3|5|6|24|1|0|0|6|13|5|2|2|8|1|3|0\"},\"frame\":{\"graphics\":\"0|00000001111111000000011111110000000111111100000001111111000000011111110000000111111100000001111111|0|0|0\"}}\n",
+      "keyframe": true,
+      "agentId": -1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 1 1\n2;MOVE 1 3;SHOOT 5\n3;MOVE 1 5\n",
+      "view": " 1\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 12 1; HUNKER_DOWN; MESSAGE M12/1H\n6; MOVE 12 5; HUNKER_DOWN; MESSAGE M12/5H\n5; MOVE 12 3; SHOOT 2; MESSAGE M12/3S2\n",
+      "summary": "",
+      "view": " 2\n{\"duration\":2085,\"graphics\":\"10|0|0|500|0 1|1 1|1|0|0|500|0 3|1 3|2|0|0|500|0 5|1 5|3|0|0|500|13 1|12 1|4|0|0|500|13 3|12 3|5|0|0|500|13 5|12 5|6|1|500|800|||4|1|500|800|||6|2|800|2085|1 3|12 3|2 5 1 3 6108|2|800|2085|12 3|1 3|5 2 1 3 6108|00000001111111000000011111110000000111111100000001111111000000011111110000000111111100000001111111|0|0|3|4|M12/1H|5|M12/3S2|6|M12/5H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 2 1\n2;MOVE 1 3\n3;MOVE 2 5\n",
+      "view": " 3\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 12 3; HUNKER_DOWN; MESSAGE M12/3H\n6; MOVE 11 5; HUNKER_DOWN; MESSAGE M11/5H\n4; MOVE 11 1; HUNKER_DOWN; MESSAGE M11/1H\n",
+      "summary": "",
+      "view": " 4\n{\"duration\":800,\"graphics\":\"7|0|0|500|1 1|2 1|1|0|0|500|1 5|2 5|3|0|0|500|12 1|11 1|4|0|0|500|12 5|11 5|6|1|500|800|||4|1|500|800|||5|1|500|800|||6|00000001111111000000011111110000000111111100000001111111000000011111110000000111111100000001111111|0|0|3|4|M11/1H|5|M12/3H|6|M11/5H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 3 1;SHOOT 4\n2;MOVE 1 3\n3;MOVE 3 5\n",
+      "view": " 5\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 10 1; SHOOT 1; MESSAGE M10/1S1\n6; MOVE 10 5; HUNKER_DOWN; MESSAGE M10/5H\n5; MOVE 12 3; HUNKER_DOWN; MESSAGE M12/3H\n",
+      "summary": "",
+      "view": " 6\n{\"duration\":1800,\"graphics\":\"8|0|0|500|2 1|3 1|1|0|0|500|2 5|3 5|3|0|0|500|11 1|10 1|4|0|0|500|11 5|10 5|6|1|500|800|||5|1|500|800|||6|2|800|1800|3 1|10 1|1 4 1 8 5000|2|800|1800|10 1|3 1|4 1 1 8 5000|00000001111111000000011111110000000111111100000001111111000000011111110000000111111100000001111111|0|0|3|4|M10/1S1|5|M12/3H|6|M10/5H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 4 1\n2;MOVE 1 2\n3;MOVE 3 5\n",
+      "view": " 7\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 10 1; HUNKER_DOWN; MESSAGE M10/1H\n6; MOVE 10 4; HUNKER_DOWN; MESSAGE M10/4H\n4; MOVE 10 1; HUNKER_DOWN; MESSAGE M10/1H\n",
+      "summary": "",
+      "view": " 8\n{\"duration\":800,\"graphics\":\"7|0|0|500|3 1|4 1|1|0|0|500|1 3|1 2|2|0|0|500|12 3|12 2|5|0|0|500|10 5|10 4|6|1|500|800|||4|1|500|800|||5|1|500|800|||6|00000002111111000000021111110000000211111100000001111111000000211111110000000211111100000002111111|4|0|3|4|M10/1H|5|M10/1H|6|M10/4H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 4 1;SHOOT 4\n2;MOVE 1 1\n3;MOVE 3 5\n",
+      "view": " 9\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 12 2; HUNKER_DOWN; MESSAGE M12/2H\n4; MOVE 10 0; SHOOT 1; MESSAGE M10/0S1\n6; MOVE 10 3; HUNKER_DOWN; MESSAGE M10/3H\n",
+      "summary": "",
+      "view": " 10\n{\"duration\":1734,\"graphics\":\"7|0|0|500|1 2|1 1|2|0|0|500|10 1|10 0|4|0|0|500|10 4|10 3|6|1|500|800|||5|1|500|800|||6|2|800|1734|4 1|10 0|1 4 1 8 4646|2|800|1734|10 0|4 1|4 1 1 8 4646|00000001111111000000001111110000000211111100000021111111000000011111110000000011111100000000111111|10|0|3|4|M10/0S1|5|M12/2H|6|M10/3H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 5 1\n2;MOVE 2 1\n3;MOVE 4 5\n",
+      "view": " 11\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 10 0; HUNKER_DOWN; MESSAGE M10/0H\n5; MOVE 10 3; HUNKER_DOWN; MESSAGE M10/3H\n6; MOVE 9 3; HUNKER_DOWN; MESSAGE M9/3H\n",
+      "summary": "",
+      "view": " 12\n{\"duration\":800,\"graphics\":\"8|0|0|500|4 1|5 1|1|0|0|500|1 1|2 1|2|0|0|500|3 5|4 5|3|0|0|500|12 2|12 1|5|0|0|500|10 3|9 3|6|1|500|800|||4|1|500|800|||5|1|500|800|||6|00000002111111000000002111110000000211111100000021111111000000011111110000000011111100000000111111|18|0|3|4|M10/0H|5|M10/3H|6|M9/3H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 5 1;HUNKER_DOWN\n2;MOVE 3 1;SHOOT 4\n3;MOVE 5 5\n",
+      "view": " 13\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 11 1; SHOOT 1; MESSAGE M11/1S1\n6; MOVE 8 3; HUNKER_DOWN; MESSAGE M8/3H\n4; MOVE 11 0; SHOOT 1; MESSAGE M11/0S1\n",
+      "summary": "",
+      "view": " 14\n{\"duration\":1875,\"graphics\":\"10|0|0|500|2 1|3 1|2|0|0|500|4 5|5 5|3|0|0|500|10 0|11 0|4|0|0|500|12 1|11 1|5|0|0|500|9 3|8 3|6|1|500|800|||1|1|500|800|||6|2|800|1875|3 1|11 0|2 4 1 12 5348|2|800|1734|11 0|5 1|4 1 1 6 4646|2|800|1728|11 1|5 1|5 1 2 18 4612|00000000111111000000001111110000000111111100000011111111000000011111110000000011111100000000111111|24|0|3|4|M11/0S1|5|M11/1S1|6|M8/3H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 6 1;THROW 8 3\n2;MOVE 4 1;HUNKER_DOWN\n3;MOVE 6 5;THROW 8 3\n",
+      "view": " 15\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "6; MOVE 7 3; SHOOT 1; MESSAGE M7/3S1\n5; MOVE 11 0; HUNKER_DOWN; MESSAGE M11/0H\n4; MOVE 11 0; HUNKER_DOWN; MESSAGE M11/0H\n",
+      "summary": "",
+      "view": " 16\n{\"duration\":2342,\"graphics\":\"12|5|0|300|11 1|11 0|5|5|0|300|11 1|11 0|5|0|0|500|5 1|6 1|1|0|0|500|3 1|4 1|2|0|0|500|5 5|6 5|3|0|0|500|8 3|7 3|6|1|500|800|||2|1|500|800|||4|1|500|800|||5|2|800|1459|7 3|6 1|6 1 1 4 2412|4|800|2342|6 1|8 3|1 30 6108 6|4|800|2342|6 5|8 3|3 30 6108 6|00000000211111000000000111110000000201111100000021111111000000020011110000000000011100000000000111|54|0|3|4|M11/0H|5|M11/0H|6|M7/3S1\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 7 1;HUNKER_DOWN\n2;MOVE 4 1;HUNKER_DOWN\n3;MOVE 7 5;THROW 7 3\n",
+      "view": " 17\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 10 1; HUNKER_DOWN; MESSAGE M10/1H\n6; MOVE 8 3; THROW 6 1; MESSAGE M8/3T6/1\n4; MOVE 10 0; SHOOT 2; MESSAGE M10/0S2\n",
+      "summary": "",
+      "view": " 18\n{\"graphics\":\"11|0|0|500|6 1|7 1|1|0|0|500|6 5|7 5|3|0|0|500|11 0|10 0|4|0|0|500|11 1|10 1|5|0|0|500|7 3|8 3|6|1|500|800|||1|1|500|800|||2|1|500|800|||5|2|800|1734|10 0|4 1|4 2 1 6 4646|4|800|2066|7 5|7 3|3 30 5260 6|4|800|2342|8 3|6 1|6 30 6108 1|00000000111111000000002111110000000011111100000002111111000000002011110000000000000000000000000000|95|0|3|4|M10/0S2|5|M10/1H|6|M8/3T6/1\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "1;MOVE 7 2;SHOOT 6\n2;MOVE 5 1;HUNKER_DOWN\n3;MOVE 7 5;SHOOT 6\n",
+      "view": " 19\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "6; MOVE 7 3; THROW 7 1; MESSAGE M7/3T7/1\n5; MOVE 11 1; HUNKER_DOWN; MESSAGE M11/1H\n4; MOVE 9 0; THROW 7 1; MESSAGE M9/0T7/1\n",
+      "summary": "",
+      "view": " 20\n{\"duration\":2145,\"graphics\":\"11|0|0|500|7 1|7 2|1|0|0|500|4 1|5 1|2|0|0|500|10 0|9 0|4|0|0|500|10 1|11 1|5|0|0|500|8 3|7 3|6|1|500|800|||2|1|500|800|||5|2|800|1371|7 2|7 3|1 6 2 16 1243|2|800|1442|7 5|7 3|3 6 2 8 2211|4|800|2145|9 0|7 1|4 30 5539 1|4|800|2066|7 3|7 1|6 30 5260 1|00000001111111000000001111110000000011111100000000011111000000000021110000000000022200000000000222|132|0|3|4|M9/0T7/1|5|M11/1H|6|M7/3T7/1\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 6 1;HUNKER_DOWN\n3;MOVE 8 5;HUNKER_DOWN\n",
+      "view": " 21\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 12 1; HUNKER_DOWN; MESSAGE M12/1H\n4; MOVE 9 0; SHOOT 3; MESSAGE M9/0S3\n",
+      "summary": "",
+      "view": " 22\n{\"duration\":2164,\"graphics\":\"9|3|0|1000|7 2||1|3|0|1000|7 3||6|0|0|500|5 1|6 1|2|0|0|500|7 5|8 5|3|0|0|500|11 1|12 1|5|1|1000|1300|||2|1|1000|1300|||3|1|1000|1300|||5|2|1300|2164|9 0|8 5|4 3 1 0 4212|00000002111111000000002111110000000021111100000000022111000000000002110000000000002200000000000022|178|0|2|4|M9/0S3|5|M12/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 7 1;HUNKER_DOWN\n3;MOVE 8 5\n",
+      "view": " 23\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 10 0; HUNKER_DOWN; MESSAGE M10/0H\n5; MOVE 12 2; HUNKER_DOWN; MESSAGE M12/2H\n",
+      "summary": "",
+      "view": " 24\n{\"duration\":800,\"graphics\":\"6|0|0|500|6 1|7 1|2|0|0|500|9 0|10 0|4|0|0|500|12 1|12 2|5|1|500|800|||2|1|500|800|||4|1|500|800|||5|00000000211111000000000211110000000002111100000000001111000000000001110000000000001100000000000011|225|0|2|4|M10/0H|5|M12/2H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 7 1;SHOOT 4\n3;MOVE 9 5;HUNKER_DOWN\n",
+      "view": " 25\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 10 0; SHOOT 2; MESSAGE M10/0S2\n5; MOVE 12 2; SHOOT 2; MESSAGE M12/2S2\n",
+      "summary": "",
+      "view": " 26\n{\"duration\":1664,\"graphics\":\"5|0|0|500|8 5|9 5|3|1|500|800|||3|2|800|1525|7 1|10 0|2 4 2 24 3103|2|800|1525|10 0|7 1|4 2 2 16 3103|2|800|1664|12 2|7 1|5 2 2 24 4212|00000000011111000000000011110000000002111100000000002111000000000002110000000000002200000000000022|280|0|2|4|M10/0S2|5|M12/2S2\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 7 1;HUNKER_DOWN\n3;MOVE 10 5;HUNKER_DOWN\n",
+      "view": " 27\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 13 2; HUNKER_DOWN; MESSAGE M13/2H\n4; MOVE 11 0; HUNKER_DOWN; MESSAGE M11/0H\n",
+      "summary": "",
+      "view": " 28\n{\"duration\":800,\"graphics\":\"7|0|0|500|9 5|10 5|3|0|0|500|10 0|11 0|4|0|0|500|12 2|13 2|5|1|500|800|||2|1|500|800|||3|1|500|800|||4|1|500|800|||5|00000000001111000000000001110000000000211100000000000211000000000000210000000000000200000000000002|347|0|2|4|M11/0H|5|M13/2H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 8 1;HUNKER_DOWN\n3;MOVE 11 5;HUNKER_DOWN\n",
+      "view": " 29\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 12 0; SHOOT 3; MESSAGE M12/0S3\n5; MOVE 13 1; HUNKER_DOWN; MESSAGE M13/1H\n",
+      "summary": "",
+      "view": " 30\n{\"duration\":1664,\"graphics\":\"8|0|0|500|7 1|8 1|2|0|0|500|10 5|11 5|3|0|0|500|11 0|12 0|4|0|0|500|13 2|13 1|5|1|500|800|||2|1|500|800|||3|1|500|800|||5|2|800|1664|12 0|11 5|4 3 1 0 4212|00000000000111000000000001110000000000021100000000000021000000000000020000000000000000000000000000|424|0|2|4|M12/0S3|5|M13/1H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 8 1;HUNKER_DOWN\n3;MOVE 11 5;HUNKER_DOWN\n",
+      "view": " 31\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "5; MOVE 13 0; HUNKER_DOWN; MESSAGE M13/0H\n4; MOVE 13 0; HUNKER_DOWN; MESSAGE M13/0H\n",
+      "summary": "",
+      "view": " 32\n{\"duration\":600,\"graphics\":\"6|5|0|300|13 1|13 0|5|5|0|300|12 0|13 0|4|1|300|600|||2|1|300|600|||3|1|300|600|||4|1|300|600|||5|00000000000111000000000001110000000000021100000000000021000000000000020000000000000000000000000000|501|0|2|4|M13/0H|5|M13/0H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 7 1;HUNKER_DOWN\n3;MOVE 11 5;HUNKER_DOWN\n",
+      "view": " 33\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 13 0; SHOOT 2; MESSAGE M13/0S2\n5; MOVE 13 0; HUNKER_DOWN; MESSAGE M13/0H\n",
+      "summary": "",
+      "view": " 34\n{\"duration\":1664,\"graphics\":\"7|5|0|300|13 1|13 0|5|5|0|300|12 0|13 0|4|0|0|500|8 1|7 1|2|1|500|800|||2|1|500|800|||3|1|500|800|||5|2|800|1664|12 0|7 1|4 2 1 6 4212|11200000011111120000000211112220000002221100000000000021000000000000020000000000000000000000000000|558|0|2|4|M13/0S2|5|M13/0H\"}\n",
+      "keyframe": true,
+      "agentId": 1
+    },
+    {
+      "gameInformation": "",
+      "stdout": "2;MOVE 6 1;HUNKER_DOWN\n3;MOVE 11 5;HUNKER_DOWN\n",
+      "view": " 35\n",
+      "keyframe": false,
+      "agentId": 0
+    },
+    {
+      "gameInformation": "",
+      "stdout": "4; MOVE 13 0; HUNKER_DOWN; MESSAGE M13/0H\n5; MOVE 13 0; HUNKER_DOWN; MESSAGE M13/0H\n",
+      "summary": "",
+      "view": " 36\n{\"duration\":800,\"graphics\":\"7|5|0|300|13 1|13 0|5|5|0|300|12 0|13 0|4|0|0|500|7 1|6 1|2|1|500|800|||2|1|500|800|||3|1|500|800|||4|1|500|800|||5|20000000211111000000000111112000000022221100000000000021000000000000020000000000000000000000000000|621|0|2|4|M13/0H|5|M13/0H\",\"endScreen\":[[621,0],\"logo.png\",[\"621 points\",\"0 point\"]]}\n",
+      "keyframe": true,
+      "agentId": 1
+    }
+  ],
+  "gameId": 892229189,
+  "refereeInput": "seed=7799590976454205000\n",
+  "scores": [
+    621.0,
+    0.0
+  ],
+  "ranks": [
+    0,
+    1
+  ],
+  "agents": [
+    {
+      "index": 0,
+      "codingamer": {
+        "userId": 1551719,
+        "pseudo": "pinieb",
+        "avatar": 11484009251585
+      },
+      "agentId": 6497862,
+      "score": 17.2464502226271,
+      "valid": true
+    },
+    {
+      "index": 1,
+      "codingamer": {
+        "userId": 4083906,
+        "pseudo": "tonigineer",
+        "avatar": 116683604285288
+      },
+      "agentId": 5993031,
+      "score": 15.926548085925415,
+      "valid": true
+    }
+  ],
+  "metadata": {}
+}

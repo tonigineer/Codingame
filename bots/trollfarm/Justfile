@@ -1,0 +1,100 @@
+# ---------------------------------------------------------------------------
+# Troll Farm bot — dedicated tasks. Run `just` from this directory.
+# (Workspace-wide fmt/lint/build/test/ci live in the root Justfile.)
+# ---------------------------------------------------------------------------
+
+repo_dir := "../.."
+tools_dir := repo_dir / "tools"
+target_dir := repo_dir / "target"
+game_dir := "codingame"
+jar := "troll-farm-1.0-SNAPSHOT.jar"
+opponent := "trollfarm-ref-gold-X"
+
+# List available recipes
+default:
+    @just --list
+
+# Format this crate
+fmt:
+    cargo fmt -p trollfarm
+
+# Verify formatting without modifying files
+fmt-check:
+    cargo fmt -p trollfarm --check
+
+# Clippy with warnings as errors
+lint pkg='trollfarm':
+    cargo clippy -p {{ pkg }} --all-targets --all-features -- --deny warnings
+
+# Release build
+build pkg='trollfarm':
+    cargo build --release -p {{ pkg }}
+
+# Run ALL tests including doc tests.
+# NOTE: no `--all-targets` here on purpose — it silently skips doc tests.
+test pkg='trollfarm':
+    cargo test --release -p {{ pkg }}
+
+# Full pipeline: format check, lint, build, test
+ci: fmt-check lint build test
+
+# ---------------------------------------------------------------------------
+# CodinGame workflow
+#
+# `submit`  builds + flattens the bot into a single-file CG submission
+# `play`    play & WATCH one game in the browser (referee server)
+# `eval`    benchmark N games vs the reference bot (harness.py: stats + plots)
+# `ide`     play the current bot in the browser IDE via selenium
+# ---------------------------------------------------------------------------
+
+# Inline a modular bot crate into one submittable file
+_flatten pkg="trollfarm":
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/flatten.py" "{{ pkg }}"
+
+# Copy the freshly built bot binary into the game dir
+_deploy pkg="trollfarm": (build pkg)
+    cp "{{ target_dir }}/release/{{ pkg }}" "{{ game_dir }}/"
+
+# Compile-check the flattened single file exactly as CodinGame will see it.
+# Catches flattener bugs (it once silently dropped rustfmt's leading-`/`
+# division continuation lines -> compile error -> score -2 in the IDE).
+_flatcheck pkg="trollfarm":
+    rustc --edition 2024 -O --crate-name answer src/main.rs.flattened -o /tmp/flatcheck_{{ pkg }} \
+        -L dependency="{{ target_dir }}/release/deps" \
+        --extern itertools=$(ls "{{ target_dir }}"/release/deps/libitertools-*.rlib | head -1)
+    @echo "flattened file compiles ✓"
+
+# Build and flatten a bot for submission (incl. flattened-file compile check)
+submit pkg="trollfarm": (_deploy pkg) (_flatten pkg) (_flatcheck pkg)
+
+# Args: seed, opponent binary in the game dir (e.g. `just play 7 trollfarm-ref-gold-3`).
+# Play one game detached; watch at http://localhost:8888 (`just stop` to end)
+play seed="$RANDOM" opp=opponent: (_deploy "trollfarm")
+    -pkill -f "{{ jar }}"
+    cd "{{ game_dir }}" && nohup java -jar ./{{ jar }} -p1 ./trollfarm -p2 ./{{ opp }} -s -seed "{{ seed }}" >/tmp/trollfarm-play.log 2>&1 &
+    @sleep 1 && echo "▶ seed {{ seed }} vs {{ opp }} — watch at http://localhost:8888/test.html  (logs: /tmp/trollfarm-play.log, stop: just stop)"
+
+# Stop a detached `just play` game server
+stop:
+    -pkill -f "{{ jar }}"
+
+# Needs a logged-in Brave profile (../../tools/README.md); deps come via uv.
+#   just ide          # play my code on a fresh RANDOM map
+#   just ide 12345    # replay a fixed-seed map (for tuning)
+# Play the current bot in the browser IDE ("Play my code"): submit, paste, play, report.
+ide seed="":
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/ide/play.py" --submit {{ if seed == "" { "" } else { "--seed " + seed } }}
+
+# Quick check: 10 games vs the default roster (validate builds + deploys itself)
+eval-quick:
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/local/validate.py" 10 --bot trollfarm --jobs 8
+
+# Args: games, base seed (e.g. `just eval 1000 7`).
+# Validate N games per roster opponent (W-L-D / win% / margins)
+eval games="1000" seed="1":
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/local/validate.py" "{{ games }}" --bot trollfarm --seed "{{ seed }}" --jobs 16
+
+# Download all arena replays for a player (e.g. `just get-games tonigineer`).
+# Downloads to replays/<player>/
+get-games player:
+    uv run --project "{{ tools_dir }}" "{{ tools_dir }}/ide/fetch_player_games.py" --bot trollfarm "{{ player }}"

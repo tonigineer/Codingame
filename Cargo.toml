@@ -1,12 +1,17 @@
 [workspace]
 members = [
+    "common",
+    "games/connect-four",
+    "games/tic-tac-toe",
+    "bots/snakebyte",
+    "bots/trollfarm",
+    "bots/ultimate-tic-tac-toe",
     "puzzles/one-billion-rows",
-    "game-lib",
-    "bot-programming/ultimate-tic-tac-toe",
 ]
 resolver = "3"
 
 [workspace.dependencies]
+itertools = "0.12"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
