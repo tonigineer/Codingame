@@ -3,12 +3,6 @@ name = "trollfarm"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-# Local-only: override early/mid-game hyperparameters from TF_* environment
-# variables at runtime (see src/bot/params.rs). Off by default, so the
-# CodinGame submission uses the compile-time defaults with zero overhead.
-tuning = []
-
 [dependencies]
 itertools.workspace = true
 

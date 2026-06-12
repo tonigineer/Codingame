@@ -12,8 +12,7 @@
 //!    denial bonus for trees near the enemy shack ([`Bot::score_chop`]), and
 //!    bank cargo when carrying wood ([`Bot::score_return`]).
 //!
-//! All magic numbers live in [`crate::bot::params`] (`TF_HARASS_*` env vars) so
-//! they can be swept by the tuning harness without recompiling.
+//! All magic numbers live in [`crate::bot::params`].
 
 use crate::bot::core::tree_occupied_by_others;
 use crate::bot::params;

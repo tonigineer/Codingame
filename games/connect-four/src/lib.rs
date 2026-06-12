@@ -150,6 +150,7 @@ impl<const W: usize, const H: usize> Default for ConnectFour<W, H> {
 }
 
 impl<const W: usize, const H: usize> ConnectFour<W, H> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             board: Board::new(),
@@ -304,7 +305,7 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
                 line.push(' ');
             }
 
-            println!("{}|", line);
+            println!("{line}|");
         }
 
         let bottom_line = (0..W)

@@ -1,0 +1,20 @@
+name: Tooling checks
+
+on:
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "tools/**"
+      - ".github/workflows/tooling-checks.yml"
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "tools/uv.lock"
+      - run: uv run --project tools ruff check tools/
+      - run: uv run --project tools ruff format --check tools/

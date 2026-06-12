@@ -1,14 +1,7 @@
 //! Tunable hyperparameters for the early- and mid-game heuristics.
 //!
-//! By default these are compile-time constants ([`DEFAULT`]) with zero runtime
-//! cost — the exact values that ship to the bot. Building with the `tuning`
-//! feature instead makes [`get`] read overrides from environment variables
-//! once on first use (falling back to the default for any unset or
-//! unparseable var), so an external search script can probe parameter settings
-//! without recompiling.
-//!
-//! Env var names are the field name upper-cased with a `TF_` prefix, e.g.
-//! `early_max_turns` → `TF_EARLY_MAX_TURNS`, `lemon_bonus` → `TF_LEMON_BONUS`.
+//! Compile-time constants ([`DEFAULT`]) with zero runtime cost, read through
+//! [`get`] so every call site shares one source of truth.
 
 /// All tunable knobs in one place. Read it via [`get`]; never construct ad-hoc.
 #[derive(Debug, Clone)]
@@ -204,7 +197,7 @@ pub struct Params {
     pub harass_opp_cap: f32,
 }
 
-/// The shipped defaults — the values used when the `tuning` feature is off.
+/// The shipped defaults.
 pub const DEFAULT: Params = Params {
     early_max_turns: 24,
     gather_best: 10,
@@ -256,7 +249,7 @@ pub const DEFAULT: Params = Params {
     harass_chop_scale_apple: 1.25,
     harass_chop_scale_banana: 1.00,
     harass_home_scale: 1.0,
-    // Net-negative vs every clean (non-tuning) ref opponent in sweeps (gold-X /
+    // Net-negative vs every clean ref opponent in sweeps (gold-X /
     // gold-3 / gold-70: WR falls monotonically as this rises), so off by
     // default. Kept as an opt-in knob — untested against a clean strong-economy
     // bot, the regime where denying a training bottleneck might actually pay.
@@ -275,129 +268,10 @@ pub const DEFAULT: Params = Params {
     harass_opp_cap: 150.0,
 };
 
-/// The active parameters. Without the `tuning` feature this is just a
-/// reference to the compile-time [`DEFAULT`] (inlined, free).
-#[cfg(not(feature = "tuning"))]
+/// The active parameters: a reference to the compile-time [`DEFAULT`]
+/// (inlined, free).
 #[inline]
 #[must_use]
 pub fn get() -> &'static Params {
     &DEFAULT
-}
-
-/// The active parameters, with environment-variable overrides applied once on
-/// first call (the `tuning` feature).
-#[cfg(feature = "tuning")]
-#[must_use]
-pub fn get() -> &'static Params {
-    use std::sync::OnceLock;
-    static PARAMS: OnceLock<Params> = OnceLock::new();
-    PARAMS.get_or_init(load_from_env)
-}
-
-#[cfg(feature = "tuning")]
-fn load_from_env() -> Params {
-    let p = Params {
-        early_max_turns: env_i32("TF_EARLY_MAX_TURNS", DEFAULT.early_max_turns),
-        gather_best: env_i32("TF_GATHER_BEST", DEFAULT.gather_best),
-        gather_good: env_i32("TF_GATHER_GOOD", DEFAULT.gather_good),
-        gather_least: env_i32("TF_GATHER_LEAST", DEFAULT.gather_least),
-        cost_pick_drop: env_i32("TF_COST_PICK_DROP", DEFAULT.cost_pick_drop),
-        min_movement_speed: env_i32("TF_MIN_MOVEMENT_SPEED", DEFAULT.min_movement_speed),
-        min_carry_capacity: env_i32("TF_MIN_CARRY_CAPACITY", DEFAULT.min_carry_capacity),
-        min_chop_power: env_i32("TF_MIN_CHOP_POWER", DEFAULT.min_chop_power),
-        relax_movement_speed: env_i32("TF_RELAX_MOVEMENT_SPEED", DEFAULT.relax_movement_speed),
-        relax_carry_capacity: env_i32("TF_RELAX_CARRY_CAPACITY", DEFAULT.relax_carry_capacity),
-        relax_chop_power: env_i32("TF_RELAX_CHOP_POWER", DEFAULT.relax_chop_power),
-        stuck_horizon: env_i32("TF_STUCK_HORIZON", DEFAULT.stuck_horizon),
-        lemon_bonus: env_f32("TF_LEMON_BONUS", DEFAULT.lemon_bonus),
-        banana_bonus: env_f32("TF_BANANA_BONUS", DEFAULT.banana_bonus),
-        denial_bonus: env_f32("TF_DENIAL_BONUS", DEFAULT.denial_bonus),
-        denial_weight_economy: env_f32("TF_DENIAL_WEIGHT_ECONOMY", DEFAULT.denial_weight_economy),
-        opp_denial_radius: env_i32("TF_OPP_DENIAL_RADIUS", DEFAULT.opp_denial_radius),
-        score_scale: env_f32("TF_SCORE_SCALE", DEFAULT.score_scale),
-        return_weight_economy: env_f32("TF_RETURN_WEIGHT_ECONOMY", DEFAULT.return_weight_economy),
-        return_weight_harasser: env_f32(
-            "TF_RETURN_WEIGHT_HARASSER",
-            DEFAULT.return_weight_harasser,
-        ),
-        return_full_boost: env_f32("TF_RETURN_FULL_BOOST", DEFAULT.return_full_boost),
-        grove_value: env_f32("TF_GROVE_VALUE", DEFAULT.grove_value),
-        grove_cap: env_i32("TF_GROVE_CAP", DEFAULT.grove_cap),
-        econ_pick_weight: env_f32("TF_ECON_PICK_WEIGHT", DEFAULT.econ_pick_weight),
-        econ_harvest_weight: env_f32("TF_ECON_HARVEST_WEIGHT", DEFAULT.econ_harvest_weight),
-        econ_chop_weight: env_f32("TF_ECON_CHOP_WEIGHT", DEFAULT.econ_chop_weight),
-        econ_pick_early_boost: env_f32("TF_ECON_PICK_EARLY_BOOST", DEFAULT.econ_pick_early_boost),
-        econ_pick_boost_turns: env_f32("TF_ECON_PICK_BOOST_TURNS", DEFAULT.econ_pick_boost_turns),
-        plant_decay_turns: env_i32("TF_PLANT_DECAY_TURNS", DEFAULT.plant_decay_turns),
-        endgame_liquidate_turns: env_i32(
-            "TF_ENDGAME_LIQUIDATE_TURNS",
-            DEFAULT.endgame_liquidate_turns,
-        ),
-        endgame_liquidate_boost: env_f32(
-            "TF_ENDGAME_LIQUIDATE_BOOST",
-            DEFAULT.endgame_liquidate_boost,
-        ),
-        third_troll_opp_trolls: env_i32(
-            "TF_THIRD_TROLL_OPP_TROLLS",
-            DEFAULT.third_troll_opp_trolls,
-        ),
-        third_troll_lead: env_i32("TF_THIRD_TROLL_LEAD", DEFAULT.third_troll_lead),
-        third_troll_min_turns: env_i32("TF_THIRD_TROLL_MIN_TURNS", DEFAULT.third_troll_min_turns),
-        third_troll_deadline: env_i32("TF_THIRD_TROLL_DEADLINE", DEFAULT.third_troll_deadline),
-        third_troll_reach: env_i32("TF_THIRD_TROLL_REACH", DEFAULT.third_troll_reach),
-        harass_seed_plant_score: env_f32(
-            "TF_HARASS_SEED_PLANT_SCORE",
-            DEFAULT.harass_seed_plant_score,
-        ),
-        harass_seed_fetch_score: env_f32(
-            "TF_HARASS_SEED_FETCH_SCORE",
-            DEFAULT.harass_seed_fetch_score,
-        ),
-        harass_camp_score: env_f32("TF_HARASS_CAMP_SCORE", DEFAULT.harass_camp_score),
-        harass_denial_weight: env_f32("TF_HARASS_DENIAL_WEIGHT", DEFAULT.harass_denial_weight),
-        harass_chop_scale_lemon: env_f32(
-            "TF_HARASS_CHOP_SCALE_LEMON",
-            DEFAULT.harass_chop_scale_lemon,
-        ),
-        harass_chop_scale_plum: env_f32(
-            "TF_HARASS_CHOP_SCALE_PLUM",
-            DEFAULT.harass_chop_scale_plum,
-        ),
-        harass_chop_scale_apple: env_f32(
-            "TF_HARASS_CHOP_SCALE_APPLE",
-            DEFAULT.harass_chop_scale_apple,
-        ),
-        harass_chop_scale_banana: env_f32(
-            "TF_HARASS_CHOP_SCALE_BANANA",
-            DEFAULT.harass_chop_scale_banana,
-        ),
-        harass_home_scale: env_f32("TF_HARASS_HOME_SCALE", DEFAULT.harass_home_scale),
-        harass_squat_weight: env_f32("TF_HARASS_SQUAT_WEIGHT", DEFAULT.harass_squat_weight),
-        harass_bottleneck_weight: env_f32(
-            "TF_HARASS_BOTTLENECK_WEIGHT",
-            DEFAULT.harass_bottleneck_weight,
-        ),
-        harass_train_min_stat: env_i32("TF_HARASS_TRAIN_MIN_STAT", DEFAULT.harass_train_min_stat),
-        harass_return_weight: env_f32("TF_HARASS_RETURN_WEIGHT", DEFAULT.harass_return_weight),
-        harass_turn_decay: env_f32("TF_HARASS_TURN_DECAY", DEFAULT.harass_turn_decay),
-        harass_opp_cap: env_f32("TF_HARASS_OPP_CAP", DEFAULT.harass_opp_cap),
-    };
-    eprintln!("[PARAMS] {p:?}");
-    p
-}
-
-#[cfg(feature = "tuning")]
-fn env_i32(key: &str, default: i32) -> i32 {
-    std::env::var(key)
-        .ok()
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(default)
-}
-
-#[cfg(feature = "tuning")]
-fn env_f32(key: &str, default: f32) -> f32 {
-    std::env::var(key)
-        .ok()
-        .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(default)
 }
