@@ -31,14 +31,18 @@ pub trait Player {
 }
 
 pub trait Game {
-    type PlayerMask;
+    type PlayerMask: Player;
     type Move: Copy + Clone;
 
-    fn get_current_player_index(&self) -> usize;
-
-    fn get_current_player_symbol(&self) -> char;
-
     fn get_current_player(&self) -> Self::PlayerMask;
+
+    fn get_current_player_index(&self) -> usize {
+        self.get_current_player().index()
+    }
+
+    fn get_current_player_symbol(&self) -> char {
+        self.get_current_player().symbol()
+    }
 
     fn apply_move(&mut self, chosen_move: Self::Move);
 
@@ -93,22 +97,25 @@ where
         }
 
         while !self.game.is_finished() {
-            let game_ref = &self.game;
-            let player_index = self.determine_player_index();
-            let player = if player_index == 0 {
-                &mut self.first_player
-            } else {
-                &mut self.second_player
-            };
-            let chosen_move = Self::get_move_for_player(player, game_ref)?;
-            self.game.apply_move(chosen_move);
-
-            self.turn += 1;
+            self.play_turn()?;
 
             if render_game {
                 self.game.render();
             }
         }
+        Ok(())
+    }
+
+    /// Play a single turn: the player to move picks a move and it is applied.
+    pub fn play_turn(&mut self) -> Result<(), GameError> {
+        let player = if self.determine_player_index() == 0 {
+            &mut self.first_player
+        } else {
+            &mut self.second_player
+        };
+        let chosen_move = Self::get_move_for_player(player, &self.game)?;
+        self.game.apply_move(chosen_move);
+        self.turn += 1;
         Ok(())
     }
 

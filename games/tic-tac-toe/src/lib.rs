@@ -38,21 +38,21 @@ pub enum PlayerMask {
 
 impl common::Player for PlayerMask {
     fn other(&self) -> Self {
-        match &self {
+        match self {
             PlayerMask::X => PlayerMask::O,
             PlayerMask::O => PlayerMask::X,
         }
     }
 
     fn index(&self) -> usize {
-        match &self {
+        match self {
             PlayerMask::X => 0,
             PlayerMask::O => 1,
         }
     }
 
     fn symbol(&self) -> char {
-        match &self {
+        match self {
             PlayerMask::X => 'X',
             PlayerMask::O => 'O',
         }
@@ -147,14 +147,6 @@ impl Game for TicTacToe {
             PlayerMask::X => self.board.x_board &= !(1 << chosen_move),
             PlayerMask::O => self.board.o_board &= !(1 << chosen_move),
         }
-    }
-
-    fn get_current_player_index(&self) -> usize {
-        self.current_player.index()
-    }
-
-    fn get_current_player_symbol(&self) -> char {
-        self.current_player.symbol()
     }
 
     fn get_current_player(&self) -> Self::PlayerMask {
