@@ -1,5 +1,6 @@
 use common::Game;
 use common::Player;
+use std::fmt::Write as _;
 use std::io::{self, Write};
 
 pub const ZOBRIST_SIDE_TO_MOVE: u64 = 0x8A24_B6DF_19E4_7C90;
@@ -308,17 +309,14 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
             println!("{line}|");
         }
 
-        let bottom_line = (0..W)
-            .map(|i| {
-                format!(
-                    " {} +",
-                    std::char::from_u32(0xFF10 + i as u32).unwrap_or('?')
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("");
+        let mut bottom_line = String::with_capacity(W * 4);
+        for i in 0..W {
+            #[allow(clippy::cast_possible_truncation)]
+            let digit = char::from_u32(0xFF10 + i as u32).unwrap_or('?');
+            let _ = write!(bottom_line, " {digit} +");
+        }
 
-        println!("+{}", bottom_line);
+        println!("+{bottom_line}");
 
         if let Some(w) = self.get_winner() {
             println!(" Winner: {}", w.symbol());
@@ -328,6 +326,9 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
     }
 
     fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+        const TWO_WEIGHT: f32 = 1.0 / 3.0;
+        const THREE_WEIGHT: f32 = 2.0 / 3.0;
+
         fn count_sequences(p: u64, h: usize) -> (u32, u32) {
             let mut n_two = 0u32;
             let mut n_three = 0u32;
@@ -358,12 +359,7 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
             (n_two, n_three)
         }
 
-        let (n_two, n_three) = count_sequences(self.board.single, H);
-        let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single, H);
-
-        const TWO_WEIGHT: f32 = 1.0 / 3.0;
-        const THREE_WEIGHT: f32 = 2.0 / 3.0;
-
+        #[allow(clippy::cast_precision_loss)]
         fn normalized_diff(player: u32, other: u32) -> f32 {
             let total = player + other;
             if total == 0 {
@@ -372,6 +368,9 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
                 (player as f32 - other as f32) / total as f32
             }
         }
+
+        let (n_two, n_three) = count_sequences(self.board.single, H);
+        let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single, H);
 
         let n_two_score = normalized_diff(n_two, n_two_other);
         let n_three_score = normalized_diff(n_three, n_three_other);

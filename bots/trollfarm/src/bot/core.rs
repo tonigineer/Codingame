@@ -322,6 +322,7 @@ impl Bot {
     /// // Off the grid (or genuinely unreachable) stays MAX.
     /// assert_eq!(Bot::dist(&game, &map, Position::new(99, 99)), i32::MAX);
     /// ```
+    #[must_use]
     pub fn dist(game: &Game, map: &HashMap<Position, (i32, Position)>, pos: Position) -> i32 {
         if let Some((d, _)) = map.get(&pos) {
             return *d;
@@ -442,6 +443,7 @@ impl Bot {
     /// assert!(n.iter().all(|&(_, d)| d == 2));
     /// assert!(!n.iter().any(|&(c, _)| c == Position::new(1, 1)));
     /// ```
+    #[must_use]
     pub fn nearest_free_cell(game: &Game, troll: &Troll) -> Option<(Position, i32)> {
         Self::nearest_free_cells(game, troll, 1).into_iter().next()
     }
@@ -455,6 +457,7 @@ impl Bot {
     /// from the opponent shack, then by water adjacency (faster regrowth).
     /// Returns up to `n` cells as `(cell, dist)`; the ordering is exercised by
     /// the [`Bot::nearest_free_cell`] doc examples.
+    #[must_use]
     pub fn nearest_free_cells(game: &Game, troll: &Troll, n: usize) -> Vec<(Position, i32)> {
         let shack = game.shack(Side::Me);
 

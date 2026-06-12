@@ -438,6 +438,7 @@ impl Bot {
     /// normal economy never stocks. Scores sit far above the regular harasser
     /// candidates (which the caller pushes as fallback), so mission work wins
     /// whenever any is available and the troll never idles when none is.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn train_gather_candidates(troll: &Troll, game: &Game, out: &mut Vec<Candidate>) {
         let p = params::get();
         let scale = p.score_scale * 30.0;

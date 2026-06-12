@@ -175,7 +175,7 @@ impl Bot {
         // the enemy is tapped out, switch to planting our own fruit.
         if let Some(candidate) = Bot::last_resort(troll, game, hf) {
             out.push(candidate);
-        };
+        }
 
         // Determine score for delivering current cargo.
         // Never drop only fruits, plant them.
@@ -256,8 +256,6 @@ impl Bot {
     /// candidates `harasser_candidates` also pushes rank fairly against this
     /// fallback.
     fn seed_workflow(troll: &Troll, game: &Game) -> Option<Candidate> {
-        let p = params::get();
-
         // Seed priority: banana first (renewable, fast-regrowing), then apple,
         // lemon, plum — used both for what to plant and what to fetch.
         const SEED_PRIORITY: [TreeType; 4] = [
@@ -266,6 +264,9 @@ impl Bot {
             TreeType::Lemon,
             TreeType::Plum,
         ];
+
+        let p = params::get();
+
         let carried = SEED_PRIORITY
             .iter()
             .copied()
@@ -335,9 +336,9 @@ impl Bot {
         let p = params::get();
 
         // Score for gathering.
-        let travel = Bot::dist(&game, &troll.dist_map, tree.position) / troll.movement_speed;
+        let travel = Bot::dist(game, &troll.dist_map, tree.position) / troll.movement_speed;
         let chop = tree.health / troll.chop_power;
-        let ret = Bot::dist(&game, &game.shack_dist_map, troll.position) / troll.movement_speed;
+        let ret = Bot::dist(game, &game.shack_dist_map, troll.position) / troll.movement_speed;
 
         #[allow(clippy::cast_precision_loss)]
         let collectible = tree.size.min(troll.free_capacity()) as f32;
@@ -348,6 +349,7 @@ impl Bot {
         // economy, independent of our carry capacity, so a full harasser still
         // chops it. Faded by `hf` so it tapers off with the turn count / when the
         // opponent is ahead. Only harassers chase denial; the economy troll = 0.
+        #[allow(clippy::cast_precision_loss)]
         let denial_weight = p.harass_denial_weight * tree.size as f32 / 4.0 * hf;
         let opp_dist = game
             .opp_shack_dist_map
@@ -370,8 +372,9 @@ impl Bot {
             score += p.harass_squat_weight * hf / period.max(1.0);
         }
 
-        let shack_span = game.shack(Side::Me).manhattan(game.shack(Side::Opp));
-        if opp_dist <= shack_span as i32 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let shack_span = game.shack(Side::Me).manhattan(game.shack(Side::Opp)) as i32;
+        if opp_dist <= shack_span {
             // How deep in THEIR territory the tree stands, normalized 0..1 by
             // the shack-to-shack span. The old form divided by (ret + 1) — our
             // OWN return distance — which zeroed denial exactly at the enemy
@@ -379,11 +382,13 @@ impl Bot {
             // (denial wood doesn't need to come home; travel already prices
             // the trip in the divisor below).
             #[allow(clippy::cast_precision_loss)]
-            let proximity = (shack_span as i32 - opp_dist + 1) as f32 / (shack_span + 1) as f32;
+            let proximity = (shack_span - opp_dist + 1) as f32 / (shack_span + 1) as f32;
             // Sharpen denial onto the fruit that actually gates their next troll:
             // banana and resources they already have score no boost.
             let bottleneck = 1.0 + p.harass_bottleneck_weight * opp_train_deficit(game, tree.typ);
-            score += denial_weight * proximity / (travel + chop).max(1) as f32 * bottleneck;
+            #[allow(clippy::cast_precision_loss)]
+            let trip = (travel + chop).max(1) as f32;
+            score += denial_weight * proximity / trip * bottleneck;
         }
 
         // Static tie-break toward the fruit whose denial hurts training most
@@ -426,8 +431,9 @@ impl Bot {
         let p = params::get();
 
         let ret_turns =
-            Bot::dist(&game, &game.shack_dist_map, troll.position) / troll.movement_speed.max(1);
+            Bot::dist(game, &game.shack_dist_map, troll.position) / troll.movement_speed.max(1);
 
+        #[allow(clippy::cast_precision_loss)]
         let score = troll.carry_wood as f32 / ret_turns.max(1) as f32;
 
         let action = if game.is_adjacent_to_shack(troll) {

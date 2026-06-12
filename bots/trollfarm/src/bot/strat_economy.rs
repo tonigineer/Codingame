@@ -12,6 +12,21 @@ const PLANT_CANDIDATES: usize = 6;
 
 impl Bot {
     pub fn economy_candidates(troll: &Troll, game: &Game, out: &mut Vec<Candidate>) {
+        // Seed priority: banana first (fast-regrowing), then apple, lemon, plum.
+        // Drives both which carried seed to plant and which stocked seed to
+        // fetch — the highest-priority type available wins. Replanting carried
+        // fruit (apple included — a water apple re-fruits every 2 turns)
+        // compounds far better than banking it for 1 pt: a banana-only
+        // restriction halved total production in a 5-seed probe. The price is
+        // tanky trees at the end (a size-4 apple = 20 health), which the
+        // liquidation window pays down instead.
+        const SEED_PRIORITY: [TreeType; 4] = [
+            TreeType::Banana,
+            TreeType::Apple,
+            TreeType::Lemon,
+            TreeType::Plum,
+        ];
+
         // Grove-size cap: once the grove is full, stop expanding it (no seed
         // fetch, no new planting) so one troll can actually service it. Harvest,
         // chop and banking still run, and any held seed gets dropped (banked).
@@ -54,20 +69,6 @@ impl Bot {
             }
         }
 
-        // Seed priority: banana first (fast-regrowing), then apple, lemon, plum.
-        // Drives both which carried seed to plant and which stocked seed to
-        // fetch — the highest-priority type available wins. Replanting carried
-        // fruit (apple included — a water apple re-fruits every 2 turns)
-        // compounds far better than banking it for 1 pt: a banana-only
-        // restriction halved total production in a 5-seed probe. The price is
-        // tanky trees at the end (a size-4 apple = 20 health), which the
-        // liquidation window pays down instead.
-        const SEED_PRIORITY: [TreeType; 4] = [
-            TreeType::Banana,
-            TreeType::Apple,
-            TreeType::Lemon,
-            TreeType::Plum,
-        ];
         // NB engine selection is deliberately SOFT: `plant_candidate` already
         // prefers water cells via the regrowth factor (apple: 9 dry → 2 wet).
         // A hard "apples only on water" gate measured -9 to -12 margin — even
@@ -138,6 +139,7 @@ impl Bot {
         let p = params::get();
 
         let speed = troll.movement_speed.max(1);
+        #[allow(clippy::cast_sign_loss)]
         let to_shack =
             (Bot::dist(game, &game.shack_dist_map, troll.position) as u32).div_ceil(speed as u32);
 
@@ -230,7 +232,7 @@ impl Bot {
         if p.endgame_liquidate_boost > 1.0
             && Bot::on_our_side(tree, game)
             && game.turns_remaining() <= p.endgame_liquidate_turns
-            && travel + chop + ret + 1 <= game.turns_remaining()
+            && travel + chop + ret < game.turns_remaining()
         {
             score *= p.endgame_liquidate_boost;
         }
@@ -309,12 +311,12 @@ impl Bot {
             return None;
         }
 
-        let speed = troll.movement_speed.max(1);
+        let move_speed = troll.movement_speed.max(1);
         let (_, cell_dist) = Bot::nearest_free_cell(game, troll)?;
-        let to_shack = Bot::dist(game, &game.shack_dist_map, troll.position) / speed;
+        let to_shack = Bot::dist(game, &game.shack_dist_map, troll.position) / move_speed;
 
         // walk-to-shack + pick + walk-to-cell + plant
-        let cost = (to_shack + cell_dist / speed + 2).max(1);
+        let cost = (to_shack + cell_dist / move_speed + 2).max(1);
         // Expanding the grove pays off most early (a planted tree has time to
         // compound), so boost picking up front and let it fade with the turn.
         let early = 1.0
@@ -362,7 +364,8 @@ impl Bot {
             return None;
         }
 
-        let speed = troll.movement_speed.max(1) as f32;
+        #[allow(clippy::cast_precision_loss)]
+        let move_speed = troll.movement_speed.max(1) as f32;
 
         // Re-fruit period for this seed on dry ground vs. beside water; a
         // water-adjacent planting yields `dry / wet` times more often.
@@ -381,7 +384,7 @@ impl Bot {
                 };
                 #[allow(clippy::cast_precision_loss)]
                 let cost =
-                    (cell_dist as f32 + Bot::dist(game, &troll.dist_map, cell) as f32) / speed;
+                    (cell_dist as f32 + Bot::dist(game, &troll.dist_map, cell) as f32) / move_speed;
                 let score = p.grove_value * regrowth / cost.max(1.0);
                 (cell, score)
             })

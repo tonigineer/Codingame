@@ -27,31 +27,9 @@ pub struct Params {
     /// How long we wait for a deficit fruit before training a weaker troll.
     pub stuck_horizon: i32,
 
-    // ---- mid game (src/bot/mid_game.rs) ----
-    /// Tie-break bonuses added to a tree's wood-per-turn score, by fruit type.
-    pub lemon_bonus: f32,
-    pub banana_bonus: f32,
-    /// Harasser's denial weight: per-turn value of felling a tree near the
-    /// opponent shack to stump their economy. Independent of carry capacity, so
-    /// a full harasser still chops it (wood wasted on purpose).
-    pub denial_bonus: f32,
-    /// Denial weight for the home economy troll — it should ignore enemy trees,
-    /// so this is normally zero.
-    pub denial_weight_economy: f32,
-    /// BFS radius around the opponent shack counted as "denial range".
-    pub opp_denial_radius: i32,
+    // ---- candidate scoring (src/bot/late_game.rs) ----
     /// Float-to-int scale for the sortable candidate score.
     pub score_scale: f32,
-
-    // ---- returning home (src/bot/mid_game.rs) ----
-    /// Per-role pull toward banking cargo at the shack, on the same
-    /// wood-per-turn scale as chopping. The home economy troll values banking;
-    /// a roaming harasser's wood is incidental, so it rarely returns.
-    pub return_weight_economy: f32,
-    pub return_weight_harasser: f32,
-    /// Extra multiplier on the return pull when the troll is full — it can
-    /// collect nothing more, so loitering is pure waste.
-    pub return_full_boost: f32,
 
     // ---- economy grove (src/bot/strat_economy.rs) ----
     /// Value (points) of adding one more tree to the home banana grove. Scored
@@ -139,13 +117,12 @@ pub struct Params {
     /// while the opponent still has resources worth denying.
     pub harass_camp_score: f32,
     /// Per-turn value of felling a tree near the opponent shack (denial),
-    /// folded into a harasser's chop score. Local to the harasser and distinct
-    /// from the economy-side [`Params::denial_bonus`] /
-    /// [`Params::denial_weight_economy`].
+    /// folded into a harasser's chop score. Only harassers chase denial; the
+    /// economy troll ignores enemy trees entirely.
     pub harass_denial_weight: f32,
     /// Per-tree-type multipliers on a harasser's chop score, a mild lean toward
     /// the training fruits (lemon→carry, plum→speed, apple→harvest) over banana.
-    /// Keep the spread SMALL. Empirically (vs OldJohn, an economy/wood opponent),
+    /// Keep the spread SMALL. Empirically (vs `OldJohn`, an economy/wood opponent),
     /// the harasser's real value is denying *wood* — chopping whatever tree sits
     /// nearest the enemy before they fell it — so being picky about fruit type
     /// backfires: lemon=plum=2.0/banana=0.25 made it skip near-enemy bananas and
@@ -211,15 +188,7 @@ pub const DEFAULT: Params = Params {
     relax_carry_capacity: 1,
     relax_chop_power: 1,
     stuck_horizon: 20,
-    lemon_bonus: 0.01,
-    banana_bonus: 0.005,
-    denial_bonus: 8.0,
-    denial_weight_economy: 0.0,
-    opp_denial_radius: 6,
     score_scale: 1000.0,
-    return_weight_economy: 1.0,
-    return_weight_harasser: 0.3,
-    return_full_boost: 4.0,
     grove_value: 4.0,
     grove_cap: 6,
     econ_pick_weight: 2.0,

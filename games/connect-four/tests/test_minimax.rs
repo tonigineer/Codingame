@@ -27,7 +27,7 @@ mod tests {
         assert!(
             competition.game.board.both & 1 << 21 > 0,
             "First move of first player must be in the center (3) column."
-        )
+        );
     }
 
     #[test]

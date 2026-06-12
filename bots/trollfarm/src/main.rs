@@ -5,7 +5,7 @@ mod utils;
 use std::time::Instant;
 
 /// Build stamp. `flatten.py` rewrites this string to the flatten timestamp for
-/// CodinGame submissions; it stays `"dev"` for local builds. Printed once during
+/// `CodinGame` submissions; it stays `"dev"` for local builds. Printed once during
 /// init so a replay's stderr shows exactly which build is running.
 const FLATTENED_AT: &str = "dev";
 

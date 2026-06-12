@@ -104,6 +104,11 @@ impl Bot {
     /// terminal actions are committed as-is. Planting also records the cell in
     /// [`Bot::planted_cells`] so the harasser leaves the home grove alone.
     ///
+    /// # Panics
+    ///
+    /// Panics if a tree-targeted candidate names a troll id not present in
+    /// `trolls`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -150,10 +155,10 @@ impl Bot {
         let mut claimed_trees: Vec<Position> = Vec::with_capacity(trolls.len());
 
         for c in candidates.iter().filter(|c| c.troll_id == 0).take(3) {
-            eprintln!("{:?}", c);
+            eprintln!("{c:?}");
         }
         for c in candidates.iter().filter(|c| c.troll_id == 2).take(3) {
-            eprintln!("{:?}", c);
+            eprintln!("{c:?}");
         }
         for mut candidate in candidates {
             if busy_trolls.contains(&candidate.troll_id) {

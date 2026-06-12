@@ -112,6 +112,7 @@ impl Default for TicTacToe {
 }
 
 impl TicTacToe {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             board: Board::new(),
@@ -215,7 +216,7 @@ impl Game for TicTacToe {
                 }
             }
 
-            println!("{}", line);
+            println!("{line}");
 
             if r < 2 {
                 println!("---+---+---");

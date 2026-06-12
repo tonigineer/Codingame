@@ -275,6 +275,7 @@ impl Game {
         // Manual update of tree positions (remove and add)
         for y in 0..self.height {
             for x in 0..self.width {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 let p = Position::new(x as i32, y as i32);
                 if matches!(self.grid[p], b'A' | b'P' | b'B' | b'L') {
                     self.grid[p] = b'.';
