@@ -1,6 +1,6 @@
 use common::search::baseline::{FirstPossibleMove, RandomMove};
 use common::search::minimax::Minimax;
-use common::{Competition, Game, PlayerType};
+use common::{Competition, Game};
 use tic_tac_toe::{PlayerMask, TicTacToe};
 
 /// The corners and the center: the only optimal opening squares.
@@ -12,8 +12,8 @@ fn minimax_tictactoe_first_two_moves() {
     let game = TicTacToe::new();
     let depth = 9;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::Minimax(Minimax::new(depth));
+    let first_player = Minimax::new(depth);
+    let second_player = Minimax::new(depth);
 
     let mut competition = Competition::new(game, first_player, second_player);
 
@@ -44,8 +44,8 @@ fn minimax_tictactoe_draw() {
     let game = TicTacToe::new();
     let depth = 9;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::Minimax(Minimax::new(depth));
+    let first_player = Minimax::new(depth);
+    let second_player = Minimax::new(depth);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition
@@ -63,8 +63,8 @@ fn minimax_tictactoe_beat_first_possible_move() {
     let game = TicTacToe::new();
     let depth = 9;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
+    let first_player = Minimax::new(depth);
+    let second_player = FirstPossibleMove;
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition
@@ -85,8 +85,8 @@ fn minimax_tictactoe_never_loses_to_random() {
     let game = TicTacToe::new();
     let depth = 9;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::RandomMove(RandomMove);
+    let first_player = Minimax::new(depth);
+    let second_player = RandomMove;
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition

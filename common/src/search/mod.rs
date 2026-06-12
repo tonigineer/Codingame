@@ -3,10 +3,10 @@ pub mod minimax;
 
 use crate::{Game, GameError};
 
-pub trait Strategy {
-    fn compute_move<G>(&mut self, game: &G) -> Result<G::Move, GameError>
-    where
-        G: Game + Clone,
-        G::Move: Clone,
-        <G as Game>::PlayerMask: Eq;
+/// Anything that can pick a move for the player currently to move.
+///
+/// The trait is object-safe, so a `Competition` can hold any mix of
+/// strategies as `Box<dyn Strategy<G>>`.
+pub trait Strategy<G: Game> {
+    fn compute_move(&mut self, game: &G) -> Result<G::Move, GameError>;
 }

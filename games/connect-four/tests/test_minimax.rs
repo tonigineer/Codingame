@@ -1,6 +1,6 @@
 use common::search::baseline::{FirstPossibleMove, RandomMove};
 use common::search::minimax::Minimax;
-use common::{Competition, Game, PlayerType};
+use common::{Competition, Game};
 use connect_four::{ConnectFour, PlayerMask};
 
 /// The bottom cell of the center column (column 3 of 7, stride H+1 = 7).
@@ -11,8 +11,8 @@ fn minimax_connect_four_first_move() {
     let game = ConnectFour::<7, 6>::new();
     let depth = 15; // 10 moves are not enough to predict center move
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::Minimax(Minimax::new(depth));
+    let first_player = Minimax::new(depth);
+    let second_player = Minimax::new(depth);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition
@@ -33,8 +33,8 @@ fn minimax_connect_four_no_draw() {
     let game = ConnectFour::<7, 6>::new();
     let depth = 10;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::Minimax(Minimax::new(depth));
+    let first_player = Minimax::new(depth);
+    let second_player = Minimax::new(depth);
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition
@@ -52,8 +52,8 @@ fn minimax_connect_four_beat_first_possible_move() {
     let game = ConnectFour::<7, 6>::new();
     let depth = 10;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::FirstPossibleMove(FirstPossibleMove);
+    let first_player = Minimax::new(depth);
+    let second_player = FirstPossibleMove;
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition
@@ -72,8 +72,8 @@ fn minimax_connect_four_beat_random() {
     let game = ConnectFour::<7, 6>::new();
     let depth = 10;
 
-    let first_player = PlayerType::Minimax(Minimax::new(depth));
-    let second_player = PlayerType::RandomMove(RandomMove);
+    let first_player = Minimax::new(depth);
+    let second_player = RandomMove;
 
     let mut competition = Competition::new(game, first_player, second_player);
     competition

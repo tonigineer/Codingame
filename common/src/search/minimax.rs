@@ -9,22 +9,30 @@ pub enum TranspositionType {
     LowerBound,
 }
 
-pub struct Minimax {
-    pub max_depth: u64,
-    pub transpositions: AHashMap<u64, (f32, u64, TranspositionType)>,
+/// Depth-limited negamax with alpha-beta pruning and a transposition table.
+///
+/// All scores are from the perspective of the player to move at the node
+/// being evaluated, so the game's `evaluate` must be zero-sum.
+pub struct Minimax<G: Game> {
+    pub max_depth: usize,
+    pub transpositions: AHashMap<u64, (f32, usize, TranspositionType)>,
     pub move_score: f32,
+    /// One reusable move buffer per ply, so the hot loop neither clones the
+    /// game nor allocates.
+    move_buffers: Vec<Vec<G::Move>>,
     n_cached_transposition: u64,
     n_eval_terminal_state: u64,
     n_eval_game_state: u64,
     compute_time_ns: u128,
 }
 
-impl Minimax {
-    pub fn new(max_depth: u64) -> Self {
+impl<G: Game> Minimax<G> {
+    pub fn new(max_depth: usize) -> Self {
         Minimax {
             max_depth,
             transpositions: AHashMap::new(),
             move_score: 0.0,
+            move_buffers: Vec::new(),
             n_cached_transposition: 0,
             n_eval_terminal_state: 0,
             n_eval_game_state: 0,
@@ -32,43 +40,31 @@ impl Minimax {
         }
     }
 
-    pub fn get_move<G>(&mut self, game: &mut G, side: G::PlayerMask) -> Result<G::Move, GameError>
-    where
-        G: Game + Clone,
-        G::Move: Clone,
-        <G as Game>::PlayerMask: Eq,
-    {
-        let mut best_score: Option<(f32, G::Move)> = None;
-        let alpha = f32::MIN;
-        let beta = f32::MAX;
-
+    pub fn get_move(&mut self, game: &mut G) -> Result<G::Move, GameError> {
         self.transpositions.clear();
         self.n_cached_transposition = 0;
         self.n_eval_terminal_state = 0;
         self.n_eval_game_state = 0;
 
+        let mut alpha = f32::MIN;
+        let beta = f32::MAX;
+        let mut best: Option<(f32, G::Move)> = None;
+
         let start = std::time::Instant::now();
-        for mv in game.get_possible_moves() {
-            let mut next_game = game.clone();
-            next_game.apply_move(mv);
+        let moves: Vec<G::Move> = game.get_possible_moves().collect();
+        for mv in moves {
+            game.apply_move(mv);
+            let score = -self.negamax(game, 1, -beta, -alpha);
+            game.undo_move(mv);
 
-            let score = self.minimax(&mut next_game, &side, 1, alpha, beta);
-
-            best_score = Some(match best_score {
-                None => (score, mv),
-                Some((best_score, best_mv)) => {
-                    if score > best_score {
-                        (score, mv)
-                    } else {
-                        (best_score, best_mv)
-                    }
-                }
-            });
+            if best.is_none_or(|(best_score, _)| score > best_score) {
+                best = Some((score, mv));
+            }
+            alpha = alpha.max(score);
         }
-
         self.compute_time_ns = start.elapsed().as_nanos();
 
-        if let Some((score, mv)) = best_score {
+        if let Some((score, mv)) = best {
             self.move_score = score;
             Ok(mv)
         } else {
@@ -76,73 +72,31 @@ impl Minimax {
         }
     }
 
-    fn game_state_score<G>(&mut self, game: &G, side: &G::PlayerMask) -> f32
-    where
-        G: Game + Clone,
-    {
-        game.get_game_state_score(side)
-    }
-
-    fn terminal_score<G>(&mut self, game: &G, my_side: &G::PlayerMask, depth: u64) -> Option<f32>
-    where
-        G: Game + Clone,
-        <G as Game>::PlayerMask: Eq,
-    {
-        if let Some(winner) = game.get_winner() {
-            if winner == *my_side {
-                return Some(1.0 / (depth as f32));
-            } else {
-                return Some(-1.0 / (depth as f32));
-            }
-        }
-
-        if game.is_finished() {
-            return Some(0.0);
-        }
-
-        None
-    }
-
-    fn minimax<G>(
-        &mut self,
-        game: &mut G,
-        my_side: &G::PlayerMask,
-        depth: u64,
-        mut alpha: f32,
-        mut beta: f32,
-    ) -> f32
-    where
-        G: Game + Clone,
-        <G as Game>::PlayerMask: Eq,
-    {
-        if depth > self.max_depth {
-            self.n_eval_game_state += 1;
-            let score = self.game_state_score(game, my_side);
-            return score;
-        }
-
-        if let Some(score) = self.terminal_score(game, my_side, depth) {
+    fn negamax(&mut self, game: &mut G, depth: usize, mut alpha: f32, mut beta: f32) -> f32 {
+        if let Some(score) = self.terminal_score(game, depth) {
             self.n_eval_terminal_state += 1;
             return score;
+        }
+
+        if depth > self.max_depth {
+            self.n_eval_game_state += 1;
+            return game.evaluate();
         }
 
         let game_state_hash = game.get_game_state_hash();
         if let Some((score_seen, depth_seen, transposition_type)) =
             self.transpositions.get(&game_state_hash)
         {
-            if *depth_seen >= depth {
+            // The search horizon is an absolute ply count, so an entry is
+            // only as deep as ours if it was searched from the same or an
+            // earlier ply.
+            if *depth_seen <= depth {
                 self.n_cached_transposition += 1;
 
                 match transposition_type {
-                    TranspositionType::Exact => {
-                        return *score_seen;
-                    }
-                    TranspositionType::LowerBound => {
-                        alpha = alpha.max(*score_seen);
-                    }
-                    TranspositionType::UpperBound => {
-                        beta = beta.min(*score_seen);
-                    }
+                    TranspositionType::Exact => return *score_seen,
+                    TranspositionType::LowerBound => alpha = alpha.max(*score_seen),
+                    TranspositionType::UpperBound => beta = beta.min(*score_seen),
                 }
 
                 if alpha >= beta {
@@ -151,37 +105,38 @@ impl Minimax {
             }
         }
 
-        let maximizing = *my_side == game.get_current_player();
+        let alpha_original = alpha;
 
-        let mut best_score = match maximizing {
-            true => f32::MIN,
-            false => f32::MAX,
-        };
+        // Take this ply's buffer out of `self` so it can be iterated while
+        // `self.negamax` recurses (each deeper ply uses its own buffer).
+        if self.move_buffers.len() <= depth {
+            self.move_buffers.resize_with(depth + 1, Vec::new);
+        }
+        let mut moves = std::mem::take(&mut self.move_buffers[depth]);
+        moves.clear();
+        moves.extend(game.get_possible_moves());
 
-        for mv in game.clone().get_possible_moves() {
+        let mut best_score = f32::MIN;
+        for &mv in &moves {
             game.apply_move(mv);
-            let score = self.minimax(game, my_side, depth + 1, alpha, beta);
+            let score = -self.negamax(game, depth + 1, -beta, -alpha);
             game.undo_move(mv);
 
-            if maximizing {
-                best_score = best_score.max(score);
-                if best_score >= beta {
-                    break;
-                }
-                alpha = alpha.max(best_score);
-            } else {
-                best_score = best_score.min(score);
-                if best_score <= alpha {
-                    break;
-                }
-                beta = beta.min(best_score);
-            };
+            best_score = best_score.max(score);
+            alpha = alpha.max(best_score);
+            if alpha >= beta {
+                break;
+            }
         }
 
-        let transposition_type = match (best_score <= alpha, best_score >= beta) {
-            (true, _) => TranspositionType::UpperBound,
-            (_, true) => TranspositionType::LowerBound,
-            _ => TranspositionType::Exact,
+        self.move_buffers[depth] = moves;
+
+        let transposition_type = if best_score <= alpha_original {
+            TranspositionType::UpperBound
+        } else if best_score >= beta {
+            TranspositionType::LowerBound
+        } else {
+            TranspositionType::Exact
         };
 
         self.transpositions
@@ -189,18 +144,28 @@ impl Minimax {
 
         best_score
     }
+
+    fn terminal_score(&self, game: &G, depth: usize) -> Option<f32> {
+        #[allow(clippy::cast_precision_loss)]
+        let depth = depth as f32;
+
+        if game.get_winner().is_some() {
+            // Whoever won made the previous move, so from the player to
+            // move's perspective the position is lost; scaling by depth makes
+            // near results outweigh distant ones.
+            return Some(-1.0 / depth);
+        }
+
+        if game.is_finished() {
+            return Some(0.0);
+        }
+
+        None
+    }
 }
 
-impl Strategy for Minimax {
-    fn compute_move<G>(&mut self, game: &G) -> Result<G::Move, GameError>
-    where
-        G: Game + Clone,
-        G::Move: Clone,
-        <G as Game>::PlayerMask: Eq,
-    {
-        let mut new_game = game.clone();
-        let side = game.get_current_player();
-
-        self.get_move(&mut new_game, side)
+impl<G: Game> Strategy<G> for Minimax<G> {
+    fn compute_move(&mut self, game: &G) -> Result<G::Move, GameError> {
+        self.get_move(&mut game.clone())
     }
 }

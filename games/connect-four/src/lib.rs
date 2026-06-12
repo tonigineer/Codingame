@@ -357,7 +357,7 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
         let _ = io::stdout().flush();
     }
 
-    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+    fn evaluate(&self) -> f32 {
         const TWO_WEIGHT: f32 = 1.0 / 3.0;
         const THREE_WEIGHT: f32 = 2.0 / 3.0;
 

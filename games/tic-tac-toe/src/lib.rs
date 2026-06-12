@@ -223,7 +223,7 @@ impl Game for TicTacToe {
         let _ = io::stdout().flush();
     }
 
-    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+    fn evaluate(&self) -> f32 {
         // INFO: Tic-Tac-Toe is a solved game where perfect play can be achieved through
         // exhaustive search. Therefore, heuristic evaluation of intermediate states
         // is unnecessary, and we return a neutral score.

@@ -1,7 +1,4 @@
-use crate::search::baseline::prompt_user_move;
 use crate::search::Strategy;
-use std::fmt::Display;
-use std::str::FromStr;
 
 pub mod search;
 
@@ -30,9 +27,9 @@ pub trait Player {
     fn symbol(&self) -> char;
 }
 
-pub trait Game {
-    type PlayerMask: Player;
-    type Move: Copy + Clone;
+pub trait Game: Clone {
+    type PlayerMask: Player + Eq;
+    type Move: Copy;
 
     fn get_current_player(&self) -> Self::PlayerMask;
 
@@ -56,37 +53,29 @@ pub trait Game {
 
     fn render(&self);
 
-    fn get_game_state_score(&self, player: &Self::PlayerMask) -> f32;
+    /// Heuristic score of this position from the perspective of the player
+    /// to move. Must be zero-sum: a position scoring `s` for one player
+    /// scores `-s` for the other.
+    fn evaluate(&self) -> f32;
 
     fn get_game_state_hash(&self) -> u64;
 }
 
-pub enum PlayerType {
-    Human,
-    Minimax(search::minimax::Minimax),
-    FirstPossibleMove(search::baseline::FirstPossibleMove),
-    RandomMove(search::baseline::RandomMove),
-}
-
 pub struct Competition<G: Game> {
     pub game: G,
-    pub first_player: PlayerType,
-    pub second_player: PlayerType,
+    players: [Box<dyn Strategy<G>>; 2],
     pub turn: u32,
 }
 
-impl<G: Game> Competition<G>
-where
-    G: Clone,
-    <G as Game>::PlayerMask: Eq,
-    G::Move: Clone + Eq + FromStr + Display,
-    <G::Move as FromStr>::Err: Display,
-{
-    pub fn new(game: G, first_player: PlayerType, second_player: PlayerType) -> Self {
+impl<G: Game> Competition<G> {
+    pub fn new(
+        game: G,
+        first_player: impl Strategy<G> + 'static,
+        second_player: impl Strategy<G> + 'static,
+    ) -> Self {
         Competition {
             game,
-            first_player,
-            second_player,
+            players: [Box::new(first_player), Box::new(second_player)],
             turn: 0,
         }
     }
@@ -108,27 +97,10 @@ where
 
     /// Play a single turn: the player to move picks a move and it is applied.
     pub fn play_turn(&mut self) -> Result<(), GameError> {
-        let player = if self.determine_player_index() == 0 {
-            &mut self.first_player
-        } else {
-            &mut self.second_player
-        };
-        let chosen_move = Self::get_move_for_player(player, &self.game)?;
+        let player = &mut self.players[self.game.get_current_player_index()];
+        let chosen_move = player.compute_move(&self.game)?;
         self.game.apply_move(chosen_move);
         self.turn += 1;
         Ok(())
-    }
-
-    pub fn determine_player_index(&self) -> usize {
-        self.game.get_current_player_index()
-    }
-
-    pub fn get_move_for_player(player: &mut PlayerType, game: &G) -> Result<G::Move, GameError> {
-        match player {
-            PlayerType::Minimax(ref mut strategy) => strategy.compute_move(game),
-            PlayerType::FirstPossibleMove(ref mut strategy) => strategy.compute_move(game),
-            PlayerType::RandomMove(ref mut strategy) => strategy.compute_move(game),
-            PlayerType::Human => Ok(prompt_user_move(game)),
-        }
     }
 }

@@ -12,6 +12,7 @@ adding a game means adding its entry there.
 ```text
 tools/
 ├── flatten.py            # inline a bot crate into one submittable file
+├── extract_minimax.py    # single-file minimax harness from common/ — just define the game
 ├── local/                # 1. LOCAL — offline games vs the referee jar
 │   └── validate.py       #    N reproducible games vs a roster of local opponents
 └── ide/                  # 2. CODINGAME — the IDE & replay toolbox
@@ -50,6 +51,20 @@ Crates are resolved as `bots/<game>` relative to the repo root.
 
 ```bash
 python tools/flatten.py trollfarm        # or: just flatten trollfarm
+```
+
+## `extract_minimax.py` — minimax starter for a new puzzle
+
+Extracts the search harness from `common/src` (`GameError`, the
+`Player`/`Game`/`Strategy` traits, the negamax `Minimax` with ahash swapped
+for std `HashMap`) into one dependency-free Rust file, followed by a skeleton
+game: fill in the `todo!()`s (see `common/README.md` for the method
+contracts), parse the referee input in `main()`, and the file is a complete
+CodinGame submission. This is the route for bots that would otherwise depend
+on `common` — which flatten.py can't inline yet. Stdlib-only, no uv needed.
+
+```bash
+python tools/extract_minimax.py    # rustc-typecheck, then copy to clipboard
 ```
 
 ## 1. `local/` — offline games vs the referee jar

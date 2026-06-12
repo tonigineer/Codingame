@@ -7,7 +7,7 @@ in `Rust`, organized as one cargo workspace.
 
 | Crate | What it is |
 |-------|------------|
-| [`common/`](common/) | Shared library: `Game`/`Player` traits, `Competition` runner, search strategies (minimax + baselines) |
+| [`common/`](common/README.md) | Shared library: `Game`/`Player` traits, `Competition` runner, search strategies (minimax + baselines) — see its README for how to add a game |
 | [`games/tic-tac-toe/`](games/tic-tac-toe/) | Tic-tac-toe on the `common` traits — playable in the terminal vs minimax |
 | [`games/connect-four/`](games/connect-four/) | Connect Four (bitboards) on the `common` traits — playable in the terminal vs minimax |
 | [`bots/trollfarm/`](bots/trollfarm/) | [Troll Farm](https://www.codingame.com/multiplayer/bot-programming/spring-challenge-2026-troll-farm) arena bot — **Legend** league |
