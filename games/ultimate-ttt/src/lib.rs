@@ -113,6 +113,16 @@ impl PlayerMask {
             PlayerMask::O => format!("\x1b[32m{}\x1b[0m", self.symbol()),
         }
     }
+
+    /// The colored symbol in bold, for the single mark that stands in for a
+    /// small board once it has been won.
+    #[must_use]
+    pub fn bold_symbol(&self) -> String {
+        match self {
+            PlayerMask::X => format!("\x1b[1;34m{}\x1b[0m", self.symbol()),
+            PlayerMask::O => format!("\x1b[1;32m{}\x1b[0m", self.symbol()),
+        }
+    }
 }
 
 /// One 3x3 tic-tac-toe board as a pair of bitmasks. Doubles as the main
@@ -314,6 +324,14 @@ impl Game for UltimateTicTacToe {
                 let mut line = String::new();
                 for big_col in 0..3 {
                     let board = big_row * 3 + big_col;
+                    let board_won = if self.macro_board.x_board & (1 << board) != 0 {
+                        Some(PlayerMask::X)
+                    } else if self.macro_board.o_board & (1 << board) != 0 {
+                        Some(PlayerMask::O)
+                    } else {
+                        None
+                    };
+
                     for small_col in 0..3 {
                         let cell = small_row * 3 + small_col;
                         let idx = board * 9 + cell;
@@ -321,7 +339,16 @@ impl Game for UltimateTicTacToe {
 
                         line.push(' ');
 
-                        if self.boards[board].x_board & bit != 0 {
+                        if let Some(w) = board_won {
+                            // A won board collapses to one bold mark in its
+                            // center cell; the rest of its 3x3 stays blank.
+                            if cell == 4 {
+                                line.push(' ');
+                                line.push_str(&w.bold_symbol());
+                            } else {
+                                line.push_str("  ");
+                            }
+                        } else if self.boards[board].x_board & bit != 0 {
                             line.push(' ');
                             line.push_str(&PlayerMask::X.colored_symbol());
                         } else if self.boards[board].o_board & bit != 0 {
@@ -346,22 +373,6 @@ impl Game for UltimateTicTacToe {
             }
         }
         println!();
-
-        let mut main = String::from(" Main board: ");
-        for board in 0..9 {
-            let bit = 1 << board;
-            if self.macro_board.x_board & bit != 0 {
-                main.push_str(&PlayerMask::X.colored_symbol());
-            } else if self.macro_board.o_board & bit != 0 {
-                main.push_str(&PlayerMask::O.colored_symbol());
-            } else {
-                main.push('·');
-            }
-            if board % 3 == 2 && board < 8 {
-                main.push_str(" / ");
-            }
-        }
-        println!("{main}");
 
         if let Some(w) = self.get_winner() {
             println!(" Winner: {}", w.colored_symbol());

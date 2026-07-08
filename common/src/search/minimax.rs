@@ -1,6 +1,11 @@
 use crate::search::Strategy;
 use crate::{Game, GameError};
 use ahash::AHashMap;
+use rand::seq::SliceRandom;
+
+/// Root moves scoring within this of the best are treated as ties and
+/// sampled between, so equal positions don't replay the same game every time.
+const TIE_EPS: f32 = 1e-6;
 
 const LABEL: &str = "\x1b[1;36mminimax\x1b[0m";
 const SEP: &str = " \x1b[2m|\x1b[0m ";
@@ -73,25 +78,28 @@ impl<G: Game> Minimax<G> {
         self.move_score = 0.0;
         self.search_start = std::time::Instant::now();
 
-        let mut alpha = f32::MIN;
+        // A full window for every root move, unlike the narrowing alpha used
+        // deeper: raising alpha across the root loop lets alpha-beta return a
+        // mere bound for later moves, which would corrupt the set of true ties
+        // we sample from below. Deeper cutoffs still narrow within each child.
+        let alpha = f32::MIN;
         let beta = f32::MAX;
-        let mut best: Option<(f32, G::Move)> = None;
 
         let moves: Vec<G::Move> = game.get_possible_moves().collect();
         self.root_done = 0;
         self.root_total = moves.len();
         self.draw_status(0);
 
+        let mut best_score = f32::MIN;
+        let mut scored: Vec<(f32, G::Move)> = Vec::with_capacity(moves.len());
         for mv in moves {
             game.apply_move(mv);
             let score = -self.negamax(game, 1, -beta, -alpha);
             game.undo_move(mv);
 
-            if best.is_none_or(|(best_score, _)| score > best_score) {
-                best = Some((score, mv));
-                self.move_score = score;
-            }
-            alpha = alpha.max(score);
+            best_score = best_score.max(score);
+            self.move_score = best_score;
+            scored.push((score, mv));
 
             self.root_done += 1;
             self.draw_status(0);
@@ -99,12 +107,17 @@ impl<G: Game> Minimax<G> {
         self.compute_time_ns = self.search_start.elapsed().as_nanos();
         self.clear_status();
 
-        if let Some((score, mv)) = best {
-            self.move_score = score;
-            Ok(mv)
-        } else {
-            Err(GameError::NoMovesAvailable)
-        }
+        self.move_score = best_score;
+
+        // Sample uniformly among the equally-best moves.
+        scored
+            .iter()
+            .filter(|(score, _)| best_score - score <= TIE_EPS)
+            .map(|(_, mv)| *mv)
+            .collect::<Vec<_>>()
+            .choose(&mut rand::thread_rng())
+            .copied()
+            .ok_or(GameError::NoMovesAvailable)
     }
 
     fn negamax(&mut self, game: &mut G, depth: usize, mut alpha: f32, mut beta: f32) -> f32 {

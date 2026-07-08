@@ -6,7 +6,12 @@ use ultimate_ttt::UltimateTicTacToe;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let game = UltimateTicTacToe::new();
 
-    let mut competition = Competition::new(game, Minimax::new(11).with_status_bar(), HumanPlayer);
+    // let mut competition = Competition::new(game, Minimax::new(11).with_status_bar(), HumanPlayer);
+    let mut competition = Competition::new(
+        game,
+        Minimax::new(8).with_status_bar(),
+        Minimax::new(8).with_status_bar(),
+    );
     competition.start(true)?;
 
     Ok(())
