@@ -38,21 +38,21 @@ pub enum PlayerMask {
 
 impl common::Player for PlayerMask {
     fn other(&self) -> Self {
-        match &self {
+        match self {
             PlayerMask::X => PlayerMask::O,
             PlayerMask::O => PlayerMask::X,
         }
     }
 
     fn index(&self) -> usize {
-        match &self {
+        match self {
             PlayerMask::X => 0,
             PlayerMask::O => 1,
         }
     }
 
     fn symbol(&self) -> char {
-        match &self {
+        match self {
             PlayerMask::X => 'X',
             PlayerMask::O => 'O',
         }
@@ -149,14 +149,6 @@ impl Game for TicTacToe {
         }
     }
 
-    fn get_current_player_index(&self) -> usize {
-        self.current_player.index()
-    }
-
-    fn get_current_player_symbol(&self) -> char {
-        self.current_player.symbol()
-    }
-
     fn get_current_player(&self) -> Self::PlayerMask {
         self.current_player
     }
@@ -231,7 +223,7 @@ impl Game for TicTacToe {
         let _ = io::stdout().flush();
     }
 
-    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+    fn evaluate(&self) -> f32 {
         // INFO: Tic-Tac-Toe is a solved game where perfect play can be achieved through
         // exhaustive search. Therefore, heuristic evaluation of intermediate states
         // is unnecessary, and we return a neutral score.

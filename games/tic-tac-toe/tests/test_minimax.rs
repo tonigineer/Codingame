@@ -1,70 +1,101 @@
-#[cfg(test)]
-mod tests {
-    use common::search::minimax::Minimax;
-    use common::{Competition, Game, PlayerType};
-    use tic_tac_toe::TicTacToe;
+use common::search::baseline::{FirstPossibleMove, RandomMove};
+use common::search::minimax::Minimax;
+use common::{Competition, Game};
+use tic_tac_toe::{PlayerMask, TicTacToe};
 
-    #[test]
-    fn minimax_tictactoe_first_two_moves() {
-        let game = TicTacToe::new();
-        let depths = 9;
+/// The corners and the center: the only optimal opening squares.
+const CORNERS_AND_CENTER: u16 = 0b1_0101_0101;
+const CENTER: u16 = 0b0_0001_0000;
 
-        let first_player = PlayerType::Minimax(Minimax::new(depths));
-        let second_player = PlayerType::Minimax(Minimax::new(depths));
+#[test]
+fn minimax_tictactoe_first_two_moves() {
+    let game = TicTacToe::new();
+    let depth = 9;
 
-        let mut competition = Competition::new(game, first_player, second_player);
+    let first_player = Minimax::new(depth);
+    let second_player = Minimax::new(depth);
 
-        let player_index = competition.determine_player_index();
-        let player = if player_index == 0 {
-            &mut competition.first_player
-        } else {
-            &mut competition.second_player
-        };
-        let mut chosen_move = Competition::get_move_for_player(player, &competition.game)
-            .expect("Should be able to get a move");
-        competition.game.apply_move(chosen_move);
+    let mut competition = Competition::new(game, first_player, second_player);
 
-        assert!(
-            competition.game.board.x_board & (1 + 4 + 16 + 64 + 256) > 0,
-            "First move of first player must be either a corner or the center."
-        );
+    competition
+        .play_turn()
+        .expect("Should be able to get a move");
+    assert!(
+        competition.game.board.x_board & CORNERS_AND_CENTER > 0,
+        "First move of first player must be either a corner or the center."
+    );
 
-        let player_index = competition.determine_player_index();
-        let player = if player_index == 0 {
-            &mut competition.first_player
-        } else {
-            &mut competition.second_player
-        };
-        chosen_move = Competition::get_move_for_player(player, &competition.game).unwrap();
-        competition.game.apply_move(chosen_move);
+    competition
+        .play_turn()
+        .expect("Should be able to get a move");
+    assert!(
+        competition.game.board.o_board & CORNERS_AND_CENTER > 0,
+        "First move of second player must be either a corner or the center."
+    );
 
-        assert!(
-            competition.game.board.o_board & (1 + 4 + 16 + 64 + 256) > 0,
-            "First move of second player must be either a corner or the center."
-        );
+    assert!(
+        (competition.game.board.x_board | competition.game.board.o_board) & CENTER > 0,
+        "One of first two moves must be in the center."
+    );
+}
 
-        assert!(
-            competition.game.board.x_board & 16 > 0 || competition.game.board.o_board & 16 > 0,
-            "One of first two moves must be in the center."
-        );
-    }
+#[test]
+fn minimax_tictactoe_draw() {
+    let game = TicTacToe::new();
+    let depth = 9;
 
-    #[test]
-    fn minimax_tictactoe_draw() {
-        let game = TicTacToe::new();
-        let depths = 9;
+    let first_player = Minimax::new(depth);
+    let second_player = Minimax::new(depth);
 
-        let first_player = PlayerType::Minimax(Minimax::new(depths));
-        let second_player = PlayerType::Minimax(Minimax::new(depths));
+    let mut competition = Competition::new(game, first_player, second_player);
+    competition
+        .start(false)
+        .expect("Game should complete without errors");
 
-        let mut competition = Competition::new(game, first_player, second_player);
-        competition
-            .start(false)
-            .expect("Game should complete without errors");
+    assert!(
+        competition.game.get_winner().is_none(),
+        "A Minimax duel must result in a draw."
+    );
+}
 
-        assert!(
-            competition.game.get_winner().is_none(),
-            "A Minimax duel must result in a draw."
-        );
-    }
+#[test]
+fn minimax_tictactoe_beat_first_possible_move() {
+    let game = TicTacToe::new();
+    let depth = 9;
+
+    let first_player = Minimax::new(depth);
+    let second_player = FirstPossibleMove;
+
+    let mut competition = Competition::new(game, first_player, second_player);
+    competition
+        .start(false)
+        .expect("Game should complete without errors");
+
+    assert_eq!(
+        competition.game.get_winner(),
+        Some(PlayerMask::X),
+        "Minimax must beat bot that always plays first possible move."
+    );
+}
+
+#[test]
+fn minimax_tictactoe_never_loses_to_random() {
+    // Tic-tac-toe is a draw under perfect play, so against an (unseeded)
+    // random opponent only a non-loss is guaranteed.
+    let game = TicTacToe::new();
+    let depth = 9;
+
+    let first_player = Minimax::new(depth);
+    let second_player = RandomMove;
+
+    let mut competition = Competition::new(game, first_player, second_player);
+    competition
+        .start(false)
+        .expect("Game should complete without errors");
+
+    assert_ne!(
+        competition.game.get_winner(),
+        Some(PlayerMask::O),
+        "Minimax must never lose to random play."
+    );
 }

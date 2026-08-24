@@ -1,6 +1,6 @@
 """Flatten a bot crate into a single CodinGame submission file.
 
-Recursively replaces every `mod foo;` in bots/<pkg>/src/main.rs with the
+Recursively replaces every `mod foo;` in bots/<game>/src/main.rs with the
 inlined module source (comment lines stripped, indentation compacted),
 stamps the build time, writes src/main.rs.flattened, and copies the result
 to the clipboard (wl-copy).
@@ -79,10 +79,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("pkg", help="bot crate in bots/")
+    ap.add_argument("game", help="game to flatten (bot crate in bots/)")
     args = ap.parse_args()
 
-    src_dir = BOTS_DIR / args.pkg / "src"
+    src_dir = BOTS_DIR / args.game / "src"
     flat = inline(src_dir / "main.rs")
     flat = "\n".join(line.replace("    ", " ") for line in flat.splitlines()) + "\n"
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

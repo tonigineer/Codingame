@@ -57,6 +57,10 @@ tic-tac-toe:
 connect-four:
     @just -d games/connect-four -f games/connect-four/Justfile play
 
+# Play ultimate tic-tac-toe in the terminal (human vs minimax)
+ultimate-ttt:
+    @just -d games/ultimate-ttt -f games/ultimate-ttt/Justfile play
+
 # Troll Farm bot: test, then build + flatten + compile-check for the CG editor
 trollfarm: (test 'trollfarm')
     @just -d bots/trollfarm -f bots/trollfarm/Justfile submit

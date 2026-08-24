@@ -7,12 +7,12 @@ Two mutually exclusive modes:
             play one first with the current bot (the play.py flow).
 
 The full JSON (frames, stderr, summaries) is saved to
-bots/<bot>/replays/replay_<id>.json.
+bots/<game>/replays/replay_<id>.json.
 
 Usage:
-  uv run --project tools tools/ide/fetch_replay.py 891040557
-  uv run --project tools tools/ide/fetch_replay.py https://www.codingame.com/replay/891040557
-  uv run --project tools tools/ide/fetch_replay.py --ide
+  uv run --project tools tools/ide/fetch_replay.py --game trollfarm 891040557
+  uv run --project tools tools/ide/fetch_replay.py --game trollfarm https://www.codingame.com/replay/891040557
+  uv run --project tools tools/ide/fetch_replay.py --game trollfarm --ide
 """
 
 import argparse
@@ -145,7 +145,7 @@ def main() -> int:
 
     summarize(data)
 
-    out_dir = B.bot_dir(args.bot) / "replays"
+    out_dir = B.bot_dir(args.game) / "replays"
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"replay_{game_id}.json"
     out.write_text(json.dumps(data, indent=1))

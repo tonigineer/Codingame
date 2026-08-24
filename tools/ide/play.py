@@ -1,6 +1,6 @@
 """Play one game with the current bot in the CodinGame IDE and report it.
 
-Injects bots/<bot>/src/main.rs.flattened into the editor (verified), clicks
+Injects bots/<game>/src/main.rs.flattened into the editor (verified), clicks
 PLAY MY CODE, and fetches the result. This runs the IDE test match; it does
 not submit to the arena. `--seed` pins the map (OPTIONS -> Manual); `--submit`
 runs `just submit` in the bot crate first. On a new puzzle, set the editor
@@ -8,9 +8,8 @@ language to Rust once by hand — CodinGame remembers it per puzzle.
 Equivalent: `just ide [seed]` from the bot dir.
 
 Usage:
-  uv run --project tools tools/ide/play.py
-  uv run --project tools tools/ide/play.py --seed 12345 --submit
-  uv run --project tools tools/ide/play.py --bot soak-overflow
+  uv run --project tools tools/ide/play.py --game trollfarm
+  uv run --project tools tools/ide/play.py --game trollfarm --seed 12345 --submit
 """
 
 import argparse

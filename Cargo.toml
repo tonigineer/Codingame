@@ -3,6 +3,7 @@ members = [
     "common",
     "games/connect-four",
     "games/tic-tac-toe",
+    "games/ultimate-ttt",
     "bots/snakebyte",
     "bots/trollfarm",
     "bots/ultimate-tic-tac-toe",

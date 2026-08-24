@@ -3,9 +3,9 @@ use common::Player;
 use std::fmt::Write as _;
 use std::io::{self, Write};
 
-pub const ZOBRIST_SIDE_TO_MOVE: u64 = 0x8A24_B6DF_19E4_7C90;
+const ZOBRIST_SIDE_TO_MOVE: u64 = 0x8A24_B6DF_19E4_7C90;
 
-pub const ZOBRIST: [[u64; 42]; 2] = [
+const ZOBRIST: [[u64; 42]; 2] = [
     [
         0x950E_87D7_F560_6615,
         0x2C61_275C_9E6B_6CF8,
@@ -104,41 +104,62 @@ pub enum PlayerMask {
 
 impl common::Player for PlayerMask {
     fn other(&self) -> Self {
-        match &self {
+        match self {
             PlayerMask::Red => PlayerMask::Yellow,
             PlayerMask::Yellow => PlayerMask::Red,
         }
     }
 
     fn index(&self) -> usize {
-        match &self {
+        match self {
             PlayerMask::Red => 0,
             PlayerMask::Yellow => 1,
         }
     }
 
     fn symbol(&self) -> char {
-        match &self {
-            //  '🔴', '🟡'
-            PlayerMask::Red => '\u{FF32}',
-            PlayerMask::Yellow => '\u{FF33}',
+        // Fullwidth letters so stones line up with the fullwidth column digits.
+        match self {
+            PlayerMask::Red => '\u{FF32}',    // Ｒ
+            PlayerMask::Yellow => '\u{FF39}', // Ｙ
         }
     }
 }
 
-#[derive(Clone)]
+impl PlayerMask {
+    #[must_use]
+    pub fn colored_symbol(&self) -> String {
+        match self {
+            PlayerMask::Red => format!("\x1b[31m{}\x1b[0m", self.symbol()),
+            PlayerMask::Yellow => format!("\x1b[33m{}\x1b[0m", self.symbol()),
+        }
+    }
+}
+
+/// Bitboard, column-major with one sentinel bit above each column
+/// (bit `col * (H + 1) + row`).
+#[derive(Debug, Clone, Copy)]
 pub struct Board {
+    /// Every stone on the board, both colors.
     pub both: u64,
+    /// The stones of the player to move (flips meaning every ply).
     pub single: u64,
 }
 
+impl Default for Board {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Board {
-    fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self { both: 0, single: 0 }
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ConnectFour<const W: usize, const H: usize> {
     pub board: Board,
     pub current_player: PlayerMask,
@@ -151,8 +172,19 @@ impl<const W: usize, const H: usize> Default for ConnectFour<W, H> {
 }
 
 impl<const W: usize, const H: usize> ConnectFour<W, H> {
+    /// Columns in center-out order — the strongest-first ordering for move
+    /// generation, which is what makes alpha-beta cut early.
+    const MOVE_ORDER: [usize; W] = Self::move_order();
+
+    /// The top cell of every column; all set ⇒ the board is full.
+    const TOP_MASK_ALL: u64 = Self::top_mask_all();
+
     #[must_use]
     pub fn new() -> Self {
+        const {
+            assert!((H + 1) * W <= 64, "bitboard must fit in a u64");
+            assert!(W * H <= 42, "ZOBRIST table only covers 42 cells");
+        }
         Self {
             board: Board::new(),
             current_player: PlayerMask::Red,
@@ -171,8 +203,61 @@ impl<const W: usize, const H: usize> ConnectFour<W, H> {
         ((1u64 << H) - 1) << (col * (H + 1))
     }
 
-    fn top_mask_all() -> u64 {
-        (0..W).fold(0, |acc, col| acc | Self::top_mask(col))
+    const fn move_order() -> [usize; W] {
+        let mut order = [0; W];
+        let center = (W - 1) / 2;
+        let mut i = 0;
+        while i < W {
+            order[i] = if i % 2 == 0 {
+                center - i / 2
+            } else {
+                center + i.div_ceil(2)
+            };
+            i += 1;
+        }
+        order
+    }
+
+    const fn top_mask_all() -> u64 {
+        let mut acc = 0;
+        let mut col = 0;
+        while col < W {
+            acc |= Self::top_mask(col);
+            col += 1;
+        }
+        acc
+    }
+
+    /// Whether `stones` (one player's stones) contain four in a row.
+    fn has_won(stones: u64) -> bool {
+        // The four line directions as bit strides: vertical neighbours are 1
+        // apart, horizontal ones H+1 (a column plus its sentinel bit),
+        // diagonals H and H+2.
+        let strides = [1, H + 1, H + 2, H];
+        strides.into_iter().any(|s| {
+            let m = stones & (stones >> s);
+            m & (m >> (2 * s)) != 0
+        })
+    }
+
+    /// Map a board bit index to a 0-based cell id, skipping sentinel bits.
+    fn cell_id(bit_index: usize) -> Option<usize> {
+        let col = bit_index / (H + 1);
+        let row = bit_index % (H + 1);
+        (col < W && row < H).then_some(col * H + row)
+    }
+
+    /// XOR the Zobrist keys of every stone in `stones`.
+    fn hash_stones(mut stones: u64, keys: &[u64; 42]) -> u64 {
+        let mut h = 0;
+        while stones != 0 {
+            let idx = stones.trailing_zeros() as usize;
+            stones &= stones - 1;
+            if let Some(cell) = Self::cell_id(idx) {
+                h ^= keys[cell];
+            }
+        }
+        h
     }
 }
 
@@ -181,24 +266,9 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
     type Move = usize;
 
     fn get_possible_moves(&self) -> impl Iterator<Item = Self::Move> {
-        fn center_out_order(w: usize) -> Vec<usize> {
-            let mut arr = vec![];
-            let center = w / 2;
-            let mut i = 0;
-            while i < w {
-                arr.push(if i % 2 == 0 {
-                    center - (i / 2)
-                } else {
-                    center + i.div_ceil(2)
-                });
-                i += 1;
-            }
-            arr
-        }
-
-        center_out_order(W)
+        Self::MOVE_ORDER
             .into_iter()
-            .filter(move |idx| self.board.both & Self::top_mask(*idx) == 0)
+            .filter(move |&col| self.board.both & Self::top_mask(col) == 0)
     }
 
     fn apply_move(&mut self, chosen_move: Self::Move) {
@@ -225,57 +295,20 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
         self.current_player = self.current_player.other();
     }
 
-    fn get_current_player_index(&self) -> usize {
-        self.current_player.index()
-    }
-
-    fn get_current_player_symbol(&self) -> char {
-        self.current_player.symbol()
-    }
-
     fn get_current_player(&self) -> Self::PlayerMask {
         self.current_player
     }
 
     fn is_finished(&self) -> bool {
-        (self.board.both & Self::top_mask_all()) == Self::top_mask_all()
-            || self.get_winner().is_some()
+        (self.board.both & Self::TOP_MASK_ALL) == Self::TOP_MASK_ALL || self.get_winner().is_some()
     }
 
     fn get_winner(&self) -> Option<PlayerMask> {
-        fn has_won(p: u64, h: usize) -> bool {
-            // vertical (↑)
-            let mut m = p & (p >> 1);
-            if (m & (m >> 2)) != 0 {
-                return true;
-            }
-
-            // horizontal (→) : shift by (7)
-            m = p & (p >> (h + 1));
-            if (m & (m >> (2 * (h + 1)))) != 0 {
-                return true;
-            }
-
-            // diagonal (↗) : shift by (8)
-            m = p & (p >> (h + 2));
-            if (m & (m >> (2 * (h + 2)))) != 0 {
-                return true;
-            }
-
-            // diagonal (↘) : shift by (6)
-            m = p & (p >> h);
-            if (m & (m >> (2 * h))) != 0 {
-                return true;
-            }
-
-            false
-        }
-
-        if has_won(self.board.single, H) {
+        if Self::has_won(self.board.single) {
             return Some(self.current_player);
         }
 
-        if has_won(self.board.both ^ self.board.single, H) {
+        if Self::has_won(self.board.both ^ self.board.single) {
             return Some(self.current_player.other());
         }
 
@@ -294,15 +327,14 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
 
                 let bit = 1u64 << (c * (H + 1) + r);
 
-                let chr = if (self.board.both & bit) == 0 {
-                    '\u{3000}'
+                if (self.board.both & bit) == 0 {
+                    line.push('\u{3000}');
                 } else if (self.board.single & bit) != 0 {
-                    self.current_player.symbol()
+                    line.push_str(&self.current_player.colored_symbol());
                 } else {
-                    self.current_player.other().symbol()
-                };
+                    line.push_str(&self.current_player.other().colored_symbol());
+                }
 
-                line.push(chr);
                 line.push(' ');
             }
 
@@ -319,43 +351,28 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
         println!("+{bottom_line}");
 
         if let Some(w) = self.get_winner() {
-            println!(" Winner: {}", w.symbol());
+            println!(" Winner: {}", w.colored_symbol());
         }
 
         let _ = io::stdout().flush();
     }
 
-    fn get_game_state_score(&self, _player: &Self::PlayerMask) -> f32 {
+    fn evaluate(&self) -> f32 {
         const TWO_WEIGHT: f32 = 1.0 / 3.0;
         const THREE_WEIGHT: f32 = 2.0 / 3.0;
 
-        fn count_sequences(p: u64, h: usize) -> (u32, u32) {
+        /// Count 2-in-a-rows and 3-in-a-rows over the same bit strides as
+        /// `has_won`: 1 (vertical), H+1 (horizontal), H+2 and H (diagonals).
+        fn count_sequences<const H: usize>(stones: u64) -> (u32, u32) {
             let mut n_two = 0u32;
             let mut n_three = 0u32;
 
-            // vertical (↑)
-            let m = p & (p >> 1);
-            n_two += m.count_ones();
-            let n = m & (m >> 1);
-            n_three += n.count_ones();
+            for s in [1, H + 1, H + 2, H] {
+                let m = stones & (stones >> s);
+                n_two += m.count_ones();
+                n_three += (m & (m >> s)).count_ones();
+            }
 
-            // horizontal (→) : shift by (7)
-            let m = p & (p >> (h + 1));
-            n_two += m.count_ones();
-            let n = m & (m >> (h + 1));
-            n_three += n.count_ones();
-
-            // diagonal (↗) : shift by (8)
-            let m = p & (p >> (h + 2));
-            n_two += m.count_ones();
-            let n = m & (m >> (h + 2));
-            n_three += n.count_ones();
-
-            // Diagonal ↘ (shift by 6)
-            let m = p & (p >> h);
-            n_two += m.count_ones();
-            let n = m & (m >> h);
-            n_three += n.count_ones();
             (n_two, n_three)
         }
 
@@ -369,8 +386,9 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
             }
         }
 
-        let (n_two, n_three) = count_sequences(self.board.single, H);
-        let (n_two_other, n_three_other) = count_sequences(self.board.both ^ self.board.single, H);
+        let (n_two, n_three) = count_sequences::<H>(self.board.single);
+        let (n_two_other, n_three_other) =
+            count_sequences::<H>(self.board.both ^ self.board.single);
 
         let n_two_score = normalized_diff(n_two, n_two_other);
         let n_three_score = normalized_diff(n_three, n_three_other);
@@ -380,45 +398,14 @@ impl<const W: usize, const H: usize> Game for ConnectFour<W, H> {
     }
 
     fn get_game_state_hash(&self) -> u64 {
-        fn bit_to_cell_id(bit_index: usize, h: usize, w: usize) -> Option<usize> {
-            let col = bit_index / (h + 1);
-            let row = bit_index % (h + 1);
+        let me = self.current_player;
+        let mut h = Self::hash_stones(self.board.single, &ZOBRIST[me.index()])
+            ^ Self::hash_stones(
+                self.board.both ^ self.board.single,
+                &ZOBRIST[me.other().index()],
+            );
 
-            if col < w && row < h {
-                Some(col * h + row)
-            } else {
-                None // sentinel row or out of bounds
-            }
-        }
-
-        let mut side_to_check = self.current_player;
-        let mut h = 0u64;
-
-        let mut a = self.board.single;
-        while a != 0 {
-            let b = a & (!a + 1);
-            let idx = b.trailing_zeros() as usize;
-
-            if let Some(cell) = bit_to_cell_id(idx, H, W) {
-                h ^= ZOBRIST[side_to_check.index()][cell];
-            }
-            a ^= b;
-        }
-
-        side_to_check = side_to_check.other();
-
-        let mut o = self.board.both ^ self.board.single;
-        while o != 0 {
-            let b = o & (!o + 1);
-            let idx = b.trailing_zeros() as usize;
-
-            if let Some(cell) = bit_to_cell_id(idx, H, W) {
-                h ^= ZOBRIST[side_to_check.index()][cell];
-            }
-            o ^= b;
-        }
-
-        if matches!(side_to_check, PlayerMask::Red) {
+        if matches!(me, PlayerMask::Red) {
             h ^= ZOBRIST_SIDE_TO_MOVE;
         }
 

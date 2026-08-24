@@ -2,7 +2,7 @@
 """Benchmark the current bot locally against a roster of opponent binaries.
 
 Runs N games per opponent through the game's referee jar and reports W-L-D,
-win rate, and score margins. Everything lives in bots/<bot>/codingame/: the
+win rate, and score margins. Everything lives in bots/<game>/codingame/: the
 referee jar (auto-discovered) and the opponent binaries. CodinGame SDK
 referees share the same CLI (`-p1 -p2 -seed -l`); run with `-l` (log file),
 never `-s` (starts a web server that never exits). Games are deterministic
@@ -11,9 +11,8 @@ replays the same maps for every opponent. The bot is rebuilt and deployed
 first unless `--no-build` is given.
 
 Usage:
-  uv run --project tools tools/local/validate.py 200 --seed 7 --jobs 16
-  uv run --project tools tools/local/validate.py --bot soak-overflow --opponents ./some-ref
-  uv run --project tools tools/local/validate.py --opponents ./trollfarm-ref-gold-X,./trollfarm-spar-v1
+  uv run --project tools tools/local/validate.py --game trollfarm 200 --seed 7 --jobs 16
+  uv run --project tools tools/local/validate.py --game trollfarm --opponents ./trollfarm-ref-gold-X,./trollfarm-spar-v1
 """
 
 import argparse
@@ -31,7 +30,7 @@ from pathlib import Path
 WORKSPACE_DIR = Path(__file__).resolve().parents[2]  # cargo workspace root
 BOTS_DIR = WORKSPACE_DIR / "bots"
 
-# Default sparring roster per bot (binaries in bots/<bot>/codingame/),
+# Default sparring roster per game (binaries in bots/<game>/codingame/),
 # used when --opponents is not given.
 DEFAULT_OPPONENTS = {
     "trollfarm": ["./trollfarm-ref-gold-X"],
@@ -55,13 +54,13 @@ def find_jar(game_dir: Path) -> str:
     return jars[0].name
 
 
-def build_and_deploy(bot: str, game_dir: Path) -> None:
-    print(f"Building {bot} (release) ...")
+def build_and_deploy(game: str, game_dir: Path) -> None:
+    print(f"Building {game} (release) ...")
     subprocess.run(
-        ["cargo", "build", "--release", "-p", bot], cwd=WORKSPACE_DIR, check=True
+        ["cargo", "build", "--release", "-p", game], cwd=WORKSPACE_DIR, check=True
     )
-    src = WORKSPACE_DIR / "target" / "release" / bot
-    dst = game_dir / bot
+    src = WORKSPACE_DIR / "target" / "release" / game
+    dst = game_dir / game
     dst.write_bytes(src.read_bytes())
     dst.chmod(0o755)
     print(f"Deployed {dst}")
@@ -128,31 +127,31 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("games", nargs="?", type=int, default=100, help="games/opponent")
-    ap.add_argument("--bot", default="trollfarm", help="bot crate in bots/")
+    ap.add_argument("--game", required=True, help="game to bench (bot crate in bots/)")
     ap.add_argument(
         "--opponents",
         default=None,
         help="comma-separated opponent binaries in codingame/ "
-        "(default: DEFAULT_OPPONENTS[bot])",
+        "(default: DEFAULT_OPPONENTS[game])",
     )
-    ap.add_argument("--p1", default=None, help="our binary (default ./<bot>)")
+    ap.add_argument("--p1", default=None, help="our binary (default ./<game>)")
     ap.add_argument("--seed", type=int, default=1, help="base seed for the map draw")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--no-build", action="store_true", help="skip build + deploy")
     args = ap.parse_args()
 
-    game_dir = BOTS_DIR / args.bot / "codingame"
+    game_dir = BOTS_DIR / args.game / "codingame"
     jar = find_jar(game_dir)
-    p1 = args.p1 or f"./{args.bot}"
+    p1 = args.p1 or f"./{args.game}"
     if args.opponents:
         opponents = [o for o in args.opponents.split(",") if o]
     else:
-        opponents = DEFAULT_OPPONENTS.get(args.bot) or []
+        opponents = DEFAULT_OPPONENTS.get(args.game) or []
         if not opponents:
-            ap.error(f"no default roster for {args.bot!r} — pass --opponents")
+            ap.error(f"no default roster for {args.game!r} — pass --opponents")
 
     if not args.no_build:
-        build_and_deploy(args.bot, game_dir)
+        build_and_deploy(args.game, game_dir)
 
     seeds = make_seeds(args.games, args.seed)
     print(
