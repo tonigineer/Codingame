@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use common::Competition;
-use common::search::baseline::HumanPlayer;
+// use common::search::baseline::HumanPlayer;
 use common::search::minimax::Minimax;
 use ultimate_ttt::UltimateTicTacToe;
 
@@ -15,8 +15,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let mut competition = Competition::new(game, Minimax::new(20).with_time_budget(TURN_BUDGET).with_status_bar(), HumanPlayer);
     let mut competition = Competition::new(
         game,
-        Minimax::new(20).with_time_budget(TURN_BUDGET).with_status_bar(),
-        Minimax::new(20).with_time_budget(TURN_BUDGET).with_status_bar(),
+        Minimax::new(20)
+            .with_time_budget(TURN_BUDGET)
+            .with_status_bar(),
+        Minimax::new(20)
+            .with_time_budget(TURN_BUDGET)
+            .with_status_bar(),
     );
     competition.start(true)?;
 

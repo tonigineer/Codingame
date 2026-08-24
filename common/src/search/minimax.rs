@@ -134,7 +134,11 @@ impl<G: Game> Minimax<G> {
         // No budget: one search straight to max_depth. With a budget: deepen
         // one ply at a time, keeping the last iteration that finished in full
         // and discarding whichever one the clock interrupts.
-        let start_depth = if self.deadline.is_some() { 1 } else { self.max_depth };
+        let start_depth = if self.deadline.is_some() {
+            1
+        } else {
+            self.max_depth
+        };
         for limit in start_depth..=self.max_depth {
             self.depth_limit = limit;
             self.draw_status(0);
