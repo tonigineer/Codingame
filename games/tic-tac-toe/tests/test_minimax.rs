@@ -1,42 +1,47 @@
+use common::search::Strategy;
 use common::search::baseline::{FirstPossibleMove, RandomMove};
 use common::search::minimax::Minimax;
 use common::{Competition, Game};
 use tic_tac_toe::{PlayerMask, TicTacToe};
 
-/// The corners and the center: the only optimal opening squares.
-const CORNERS_AND_CENTER: u16 = 0b1_0101_0101;
-const CENTER: u16 = 0b0_0001_0000;
+/// Scores are floats, and a drawn line is a sum of exact zeros, but compare
+/// with a tolerance rather than betting on that staying true.
+const DRAW_EPS: f32 = 1e-6;
 
+/// Tic-tac-toe is a draw under perfect play, and that holds for *every*
+/// opening square — corners, center and edges alike. Edges are only weaker
+/// against a fallible opponent, which a full-depth search is not. So the
+/// invariant is the score, not the move: the root and all nine replies to it
+/// must evaluate to zero. The search breaks ties at random, so which of the
+/// nine it actually plays is deliberately not fixed.
 #[test]
-fn minimax_tictactoe_first_two_moves() {
+fn minimax_tictactoe_opening_is_drawn() {
     let game = TicTacToe::new();
     let depth = 9;
 
-    let first_player = Minimax::new(depth);
-    let second_player = Minimax::new(depth);
-
-    let mut competition = Competition::new(game, first_player, second_player);
-
-    competition
-        .play_turn()
+    let mut root = Minimax::new(depth);
+    root.compute_move(&game)
         .expect("Should be able to get a move");
     assert!(
-        competition.game.board.x_board & CORNERS_AND_CENTER > 0,
-        "First move of first player must be either a corner or the center."
+        root.move_score.abs() <= DRAW_EPS,
+        "The empty board must evaluate as a draw, got {}.",
+        root.move_score
     );
 
-    competition
-        .play_turn()
-        .expect("Should be able to get a move");
-    assert!(
-        competition.game.board.o_board & CORNERS_AND_CENTER > 0,
-        "First move of second player must be either a corner or the center."
-    );
+    for opening in game.get_possible_moves() {
+        let mut opened = game.clone();
+        opened.apply_move(opening);
 
-    assert!(
-        (competition.game.board.x_board | competition.game.board.o_board) & CENTER > 0,
-        "One of first two moves must be in the center."
-    );
+        let mut reply = Minimax::new(depth);
+        reply
+            .compute_move(&opened)
+            .expect("Should be able to get a move");
+        assert!(
+            reply.move_score.abs() <= DRAW_EPS,
+            "Opening on square {opening} must still be a draw, got {}.",
+            reply.move_score
+        );
+    }
 }
 
 #[test]
