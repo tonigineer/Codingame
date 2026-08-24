@@ -22,8 +22,6 @@ Supporting directories (not crates):
   submissions) plus the trollfarm benchmark / arena-replay / browser-IDE
   automation scripts.
 - [`bots/README.md`](bots/README.md) — bot overview and submission notes.
-- [`docs/`](docs/) — guides: [MCTS for tic-tac-toe](docs/mcts-tic-tac-toe.md)
-  (also as [PDF](docs/mcts-tic-tac-toe.pdf)).
 
 ## Usage
 
